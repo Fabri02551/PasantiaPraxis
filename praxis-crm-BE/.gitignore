@@ -1,0 +1,28 @@
+# Entornos
+.env
+.env.*
+!.env.example
+
+# Binarios
+Api/bin/
+Etl/bin/
+*.exe
+*.out
+
+# Go
+vendor/
+
+# Logs
+*.log
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+
+# Docker
+*.pid
