@@ -1,0 +1,278 @@
+.visitador-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #f4f6f9;
+  display: flex;
+  flex-direction: column;
+}
+
+.visitador-header {
+  height: 56px;
+  background: #1b2a4e;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.header-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: 0.2px;
+  color: #fff;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.visitador-content {
+  flex: 1;
+  padding: 16px;
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Force leaflet to respect card */
+.map-card {
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(27, 42, 78, 0.08);
+  border: 1px solid #e8ecf1;
+  position: relative;
+}
+
+.map-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 500;
+  background: #f9b233;
+  color: #1b2a4e;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.badge-dot {
+  width: 8px;
+  height: 8px;
+  background: #fff;
+  border-radius: 50%;
+  display: inline-block;
+  border: 1.5px solid #1b2a4e;
+}
+
+.map-wrapper {
+  height: 220px;
+  width: 100%;
+}
+
+.osm-map {
+  height: 100%;
+  width: 100%;
+}
+
+.action-row {
+  display: grid;
+  grid-template-columns: 1.35fr 0.85fr;
+  gap: 12px;
+}
+
+.btn-visit {
+  height: 44px;
+  background: #f9b233;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.btn-visit:hover {
+  background: #f0a820;
+}
+
+.btn-calendar {
+  height: 44px;
+  background: #fff;
+  color: #2d9c9c;
+  border: 1px solid #d8e6e6;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.visits-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(27, 42, 78, 0.06);
+  border: 1px solid #e8ecf1;
+}
+
+.visits-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.visits-header h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1b2a4e;
+  margin: 0;
+}
+
+.view-all {
+  font-size: 13px;
+  color: #2d9c9c;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.visits-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.visit-item {
+  display: grid;
+  grid-template-columns: 72px 1fr 16px;
+  align-items: center;
+  border: 1px solid #e8ecf1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  gap: 8px;
+  background: #fff;
+  transition: box-shadow 0.15s;
+}
+
+.visit-item:hover {
+  box-shadow: 0 2px 8px rgba(27, 42, 78, 0.08);
+}
+
+.visit-date {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border-right: 1px solid #eef2f6;
+  padding-right: 10px;
+  min-width: 0;
+}
+
+.visit-date-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2d9c9c;
+  line-height: 1;
+}
+
+.visit-time {
+  font-size: 12px;
+  color: #6b7a99;
+  font-weight: 500;
+}
+
+.visit-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.visit-company {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1b2a4e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.visit-detail {
+  font-size: 12px;
+  color: #6b7a99;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.visit-chevron {
+  color: #c3cdda;
+  font-size: 18px;
+  text-align: center;
+  line-height: 1;
+}
+
+/* Responsive: web scaling */
+@media (min-width: 768px) {
+  .visitador-content {
+    max-width: 720px;
+    padding: 24px;
+    gap: 18px;
+  }
+  .map-wrapper {
+    height: 300px;
+  }
+  .visits-card {
+    padding: 20px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .visitador-page {
+    background: #eef1f5;
+  }
+  .visitador-content {
+    max-width: 760px;
+  }
+}
+
+.custom-marker {
+  background: transparent;
+  border: none;
+}

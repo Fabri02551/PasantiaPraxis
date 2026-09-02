@@ -1,0 +1,218 @@
+.registro-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #f4f6f9;
+  display: flex;
+  flex-direction: column;
+}
+
+.registro-header {
+  height: 56px;
+  background: #1b2a4e;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.notification-btn {
+  position: relative;
+}
+
+.notification-dot {
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  width: 8px;
+  height: 8px;
+  background: #f9b233;
+  border: 2px solid #1b2a4e;
+  border-radius: 50%;
+}
+
+.header-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.registro-content {
+  flex: 1;
+  max-width: 560px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.registro-form {
+  background: #fff;
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 4px 16px rgba(27, 42, 78, 0.06);
+  border: 1px solid #e8ecf1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.form-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1b2a4e;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.form-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid #e2e6ed;
+  border-radius: 10px;
+  font-size: 13.5px;
+  color: #1b2a4e;
+  outline: none;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.form-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #e2e6ed;
+  border-radius: 10px;
+  font-size: 13.5px;
+  color: #1b2a4e;
+  outline: none;
+  resize: vertical;
+  min-height: 76px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+  color: #a0aec0;
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  border-color: #1b2a4e;
+  box-shadow: 0 0 0 3px rgba(27, 42, 78, 0.08);
+}
+
+.signature-wrapper {
+  position: relative;
+  border: 1px solid #e2e6ed;
+  border-radius: 10px;
+  background: #fcfcfd;
+  height: 140px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.signature-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+  z-index: 2;
+}
+
+.signature-placeholder {
+  font-size: 12px;
+  color: #8a9ab5;
+  z-index: 1;
+  pointer-events: none;
+  margin-top: 18px;
+}
+
+.signature-line {
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  top: 56%;
+  height: 1px;
+  background: #cbd5e1;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.signature-clear {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  background: #fff;
+  border: 1px solid #e2e6ed;
+  color: #1b2a4e;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-photo {
+  height: 44px;
+  background: #fff;
+  border: 1px solid #d8e6e6;
+  border-radius: 10px;
+  color: #2d9c9c;
+  font-weight: 600;
+  font-size: 13.5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.btn-submit {
+  height: 46px;
+  background: #f9b233;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn-submit:hover {
+  background: #f0a820;
+}
+
+@media (min-width: 768px) {
+  .registro-content {
+    padding: 24px;
+  }
+  .registro-form {
+    padding: 24px;
+  }
+}
