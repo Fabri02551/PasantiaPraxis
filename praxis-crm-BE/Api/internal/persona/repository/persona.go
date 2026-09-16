@@ -18,7 +18,7 @@ func NewPersonaRepository(pool *pgxpool.Pool) *PersonaRepository {
 
 func (r *PersonaRepository) GetAll(ctx context.Context) ([]models.Persona, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, nombres, apellidos, sexo, correo, telefono, nacimiento, ci, ciudad_id, status 
+		`SELECT id, nombre, primer_apellido, segundo_apellido, sexo, correo, telefono, nacimiento, ci, ciudad_id, status 
 		 FROM persona ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -28,7 +28,7 @@ func (r *PersonaRepository) GetAll(ctx context.Context) ([]models.Persona, error
 	var personas []models.Persona
 	for rows.Next() {
 		var p models.Persona
-		if err := rows.Scan(&p.ID, &p.Nombres, &p.Apellidos, &p.Sexo, &p.Correo,
+		if err := rows.Scan(&p.ID, &p.Nombre, &p.PrimerApellido, &p.SegundoApellido, &p.Sexo, &p.Correo,
 			&p.Telefono, &p.Nacimiento, &p.CI, &p.CiudadID, &p.Status); err != nil {
 			return nil, err
 		}
@@ -40,9 +40,9 @@ func (r *PersonaRepository) GetAll(ctx context.Context) ([]models.Persona, error
 func (r *PersonaRepository) GetByID(ctx context.Context, id int) (*models.Persona, error) {
 	var p models.Persona
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, nombres, apellidos, sexo, correo, telefono, nacimiento, ci, ciudad_id, status 
+		`SELECT id, nombre, primer_apellido, segundo_apellido, sexo, correo, telefono, nacimiento, ci, ciudad_id, status 
 		 FROM persona WHERE id = $1`, id,
-	).Scan(&p.ID, &p.Nombres, &p.Apellidos, &p.Sexo, &p.Correo,
+	).Scan(&p.ID, &p.Nombre, &p.PrimerApellido, &p.SegundoApellido, &p.Sexo, &p.Correo,
 		&p.Telefono, &p.Nacimiento, &p.CI, &p.CiudadID, &p.Status)
 	if err != nil {
 		return nil, fmt.Errorf("persona no encontrada")
@@ -53,12 +53,12 @@ func (r *PersonaRepository) GetByID(ctx context.Context, id int) (*models.Person
 func (r *PersonaRepository) Create(ctx context.Context, req models.CreatePersonaRequest) (*models.Persona, error) {
 	var p models.Persona
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO persona (nombres, apellidos, sexo, correo, telefono, nacimiento, ci, ciudad_id) 
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-		 RETURNING id, nombres, apellidos, sexo, correo, telefono, nacimiento, ci, ciudad_id, status`,
-		req.Nombres, req.Apellidos, req.Sexo, req.Correo, req.Telefono,
+		`INSERT INTO persona (nombre, primer_apellido, segundo_apellido, sexo, correo, telefono, nacimiento, ci, ciudad_id) 
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+		 RETURNING id, nombre, primer_apellido, segundo_apellido, sexo, correo, telefono, nacimiento, ci, ciudad_id, status`,
+		req.Nombre, req.PrimerApellido, req.SegundoApellido, req.Sexo, req.Correo, req.Telefono,
 		req.Nacimiento, req.CI, req.CiudadID,
-	).Scan(&p.ID, &p.Nombres, &p.Apellidos, &p.Sexo, &p.Correo,
+	).Scan(&p.ID, &p.Nombre, &p.PrimerApellido, &p.SegundoApellido, &p.Sexo, &p.Correo,
 		&p.Telefono, &p.Nacimiento, &p.CI, &p.CiudadID, &p.Status)
 	if err != nil {
 		return nil, err
@@ -69,13 +69,13 @@ func (r *PersonaRepository) Create(ctx context.Context, req models.CreatePersona
 func (r *PersonaRepository) Update(ctx context.Context, id int, req models.UpdatePersonaRequest) (*models.Persona, error) {
 	var p models.Persona
 	err := r.pool.QueryRow(ctx,
-		`UPDATE persona SET nombres = $1, apellidos = $2, sexo = $3, correo = $4, telefono = $5, 
-		 nacimiento = $6, ci = $7, ciudad_id = $8, status = $9 
-		 WHERE id = $10 
-		 RETURNING id, nombres, apellidos, sexo, correo, telefono, nacimiento, ci, ciudad_id, status`,
-		req.Nombres, req.Apellidos, req.Sexo, req.Correo, req.Telefono,
+		`UPDATE persona SET nombre = $1, primer_apellido = $2, segundo_apellido = $3, sexo = $4, correo = $5, telefono = $6, 
+		 nacimiento = $7, ci = $8, ciudad_id = $9, status = $10 
+		 WHERE id = $11 
+		 RETURNING id, nombre, primer_apellido, segundo_apellido, sexo, correo, telefono, nacimiento, ci, ciudad_id, status`,
+		req.Nombre, req.PrimerApellido, req.SegundoApellido, req.Sexo, req.Correo, req.Telefono,
 		req.Nacimiento, req.CI, req.CiudadID, req.Status, id,
-	).Scan(&p.ID, &p.Nombres, &p.Apellidos, &p.Sexo, &p.Correo,
+	).Scan(&p.ID, &p.Nombre, &p.PrimerApellido, &p.SegundoApellido, &p.Sexo, &p.Correo,
 		&p.Telefono, &p.Nacimiento, &p.CI, &p.CiudadID, &p.Status)
 	if err != nil {
 		return nil, fmt.Errorf("persona no encontrada")

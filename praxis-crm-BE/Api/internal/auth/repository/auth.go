@@ -25,9 +25,9 @@ func (r *AuthRepository) CreateWithPersona(ctx context.Context, user *models.Use
 
 	var personaID int
 	err = tx.QueryRow(ctx,
-		`INSERT INTO persona (nombres, apellidos, sexo, correo, telefono, ci)
-		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-		persona.Nombres, persona.Apellidos, persona.Sexo, persona.Correo, persona.Telefono, persona.CI,
+		`INSERT INTO persona (nombre, primer_apellido, segundo_apellido, sexo, correo, telefono, ci)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+		persona.Nombre, persona.PrimerApellido, persona.SegundoApellido, persona.Sexo, persona.Correo, persona.Telefono, persona.CI,
 	).Scan(&personaID)
 	if err != nil {
 		return fmt.Errorf("error creating persona: %w", err)
@@ -48,13 +48,13 @@ func (r *AuthRepository) GetByEmail(ctx context.Context, email string) (*models.
 	up := &models.UserWithPersona{}
 	err := r.pool.QueryRow(ctx,
 		`SELECT u.id, u.persona_id, u.email, u.password_hash, u.role, u.created_at, u.updated_at,
-		        p.id, p.nombres, p.apellidos, p.sexo, p.correo, p.telefono, p.nacimiento, p.ci, p.ciudad_id, p.created_at
+		        p.id, p.nombre, p.primer_apellido, p.segundo_apellido, p.sexo, p.correo, p.telefono, p.nacimiento, p.ci, p.ciudad_id, p.created_at
 		 FROM users u
 		 LEFT JOIN persona p ON p.id = u.persona_id
 		 WHERE u.email = $1`, email,
 	).Scan(
 		&up.User.ID, &up.User.PersonaID, &up.User.Email, &up.User.PasswordHash, &up.User.Role, &up.User.CreatedAt, &up.User.UpdatedAt,
-		&up.Persona.ID, &up.Persona.Nombres, &up.Persona.Apellidos, &up.Persona.Sexo, &up.Persona.Correo, &up.Persona.Telefono, &up.Persona.Nacimiento, &up.Persona.CI, &up.Persona.CiudadID, &up.Persona.CreatedAt,
+		&up.Persona.ID, &up.Persona.Nombre, &up.Persona.PrimerApellido, &up.Persona.SegundoApellido, &up.Persona.Sexo, &up.Persona.Correo, &up.Persona.Telefono, &up.Persona.Nacimiento, &up.Persona.CI, &up.Persona.CiudadID, &up.Persona.CreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
@@ -66,13 +66,13 @@ func (r *AuthRepository) GetByID(ctx context.Context, id string) (*models.UserWi
 	up := &models.UserWithPersona{}
 	err := r.pool.QueryRow(ctx,
 		`SELECT u.id, u.persona_id, u.email, u.password_hash, u.role, u.created_at, u.updated_at,
-		        p.id, p.nombres, p.apellidos, p.sexo, p.correo, p.telefono, p.nacimiento, p.ci, p.ciudad_id, p.created_at
+		        p.id, p.nombre, p.primer_apellido, p.segundo_apellido, p.sexo, p.correo, p.telefono, p.nacimiento, p.ci, p.ciudad_id, p.created_at
 		 FROM users u
 		 LEFT JOIN persona p ON p.id = u.persona_id
 		 WHERE u.id = $1`, id,
 	).Scan(
 		&up.User.ID, &up.User.PersonaID, &up.User.Email, &up.User.PasswordHash, &up.User.Role, &up.User.CreatedAt, &up.User.UpdatedAt,
-		&up.Persona.ID, &up.Persona.Nombres, &up.Persona.Apellidos, &up.Persona.Sexo, &up.Persona.Correo, &up.Persona.Telefono, &up.Persona.Nacimiento, &up.Persona.CI, &up.Persona.CiudadID, &up.Persona.CreatedAt,
+		&up.Persona.ID, &up.Persona.Nombre, &up.Persona.PrimerApellido, &up.Persona.SegundoApellido, &up.Persona.Sexo, &up.Persona.Correo, &up.Persona.Telefono, &up.Persona.Nacimiento, &up.Persona.CI, &up.Persona.CiudadID, &up.Persona.CreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)

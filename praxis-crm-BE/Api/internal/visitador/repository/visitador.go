@@ -25,9 +25,9 @@ func (r *VisitadorRepository) Create(ctx context.Context, v *models.Visitador) e
 
 	var personaID int
 	err = tx.QueryRow(ctx,
-		`INSERT INTO persona (nombres, apellidos, sexo, correo, telefono, ci)
-		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-		v.Nombres, v.Apellidos, v.Sexo, v.Correo, v.Telefono, v.CI,
+		`INSERT INTO persona (nombre, primer_apellido, segundo_apellido, sexo, correo, telefono, ci)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+		v.Nombre, v.PrimerApellido, v.SegundoApellido, v.Sexo, v.Correo, v.Telefono, v.CI,
 	).Scan(&personaID)
 	if err != nil {
 		return fmt.Errorf("error creating persona: %w", err)
@@ -46,7 +46,7 @@ func (r *VisitadorRepository) Create(ctx context.Context, v *models.Visitador) e
 
 func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT v.persona_id, p.nombres, p.apellidos, p.sexo, p.correo, p.telefono, p.ci, v.activo, v.created_at
+		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, p.sexo, p.correo, p.telefono, p.ci, v.activo, v.created_at
 		 FROM visitador v
 		 JOIN persona p ON p.id = v.persona_id
 		 ORDER BY v.created_at DESC`,
@@ -59,7 +59,7 @@ func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, err
 	var visitadores []models.Visitador
 	for rows.Next() {
 		var v models.Visitador
-		if err := rows.Scan(&v.PersonaID, &v.Nombres, &v.Apellidos, &v.Sexo, &v.Correo, &v.Telefono, &v.CI, &v.Activo, &v.CreatedAt); err != nil {
+		if err := rows.Scan(&v.PersonaID, &v.Nombre, &v.PrimerApellido, &v.SegundoApellido, &v.Sexo, &v.Correo, &v.Telefono, &v.CI, &v.Activo, &v.CreatedAt); err != nil {
 			return nil, err
 		}
 		visitadores = append(visitadores, v)
@@ -70,11 +70,11 @@ func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, err
 func (r *VisitadorRepository) GetByID(ctx context.Context, id int) (*models.Visitador, error) {
 	v := &models.Visitador{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT v.persona_id, p.nombres, p.apellidos, p.sexo, p.correo, p.telefono, p.ci, v.activo, v.created_at
+		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, p.sexo, p.correo, p.telefono, p.ci, v.activo, v.created_at
 		 FROM visitador v
 		 JOIN persona p ON p.id = v.persona_id
 		 WHERE v.persona_id = $1`, id,
-	).Scan(&v.PersonaID, &v.Nombres, &v.Apellidos, &v.Sexo, &v.Correo, &v.Telefono, &v.CI, &v.Activo, &v.CreatedAt)
+	).Scan(&v.PersonaID, &v.Nombre, &v.PrimerApellido, &v.SegundoApellido, &v.Sexo, &v.Correo, &v.Telefono, &v.CI, &v.Activo, &v.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("visitador not found: %w", err)
 	}
@@ -88,14 +88,14 @@ func (r *VisitadorRepository) Update(ctx context.Context, id int, v *models.Upda
 	}
 	defer tx.Rollback(ctx)
 
-	if v.Nombres != "" || v.Apellidos != "" || v.Telefono != "" {
+	if v.Nombre != "" || v.PrimerApellido != "" || v.Telefono != "" {
 		_, err = tx.Exec(ctx,
 			`UPDATE persona SET
-				nombres = COALESCE(NULLIF($1, ''), nombres),
-				apellidos = COALESCE(NULLIF($2, ''), apellidos),
+				nombre = COALESCE(NULLIF($1, ''), nombre),
+				primer_apellido = COALESCE(NULLIF($2, ''), primer_apellido),
 				telefono = COALESCE(NULLIF($3, ''), telefono)
 			 WHERE id = $4`,
-			v.Nombres, v.Apellidos, v.Telefono, id,
+			v.Nombre, v.PrimerApellido, v.Telefono, id,
 		)
 		if err != nil {
 			return fmt.Errorf("error updating persona: %w", err)

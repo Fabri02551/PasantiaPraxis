@@ -44,12 +44,12 @@ func (s *AuthService) Register(ctx context.Context, req models.RegisterRequest) 
 	}
 
 	persona := &models.Persona{
-		Nombres:   req.Nombres,
-		Apellidos: req.Apellidos,
-		Sexo:      req.Sexo,
-		Correo:    req.Email,
-		Telefono:  req.Telefono,
-		CI:        req.CI,
+		Nombre:         req.Nombre,
+		PrimerApellido: req.PrimerApellido,
+		Sexo:           req.Sexo,
+		Correo:         req.Email,
+		Telefono:       req.Telefono,
+		CI:             req.CI,
 	}
 
 	if err := s.repo.CreateWithPersona(ctx, user, string(hash), persona); err != nil {

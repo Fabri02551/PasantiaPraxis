@@ -19,8 +19,9 @@ CREATE TABLE ciudad (
 -- ============================================================
 CREATE TABLE persona (
     id SERIAL PRIMARY KEY,
-    nombres VARCHAR(255) NOT NULL,
-    apellidos VARCHAR(255) NOT NULL,
+    nombre VARCHAR(255) NOT NULL,
+    primer_apellido VARCHAR(255) NOT NULL,
+    segundo_apellido VARCHAR(255),
     sexo VARCHAR(20) DEFAULT '',
     correo VARCHAR(255),
     telefono VARCHAR(50),
@@ -44,6 +45,34 @@ CREATE TABLE especialidad (
     codigo VARCHAR(50) UNIQUE NOT NULL,
     status BOOLEAN DEFAULT true
 );
+
+-- ============================================================
+-- Laboratorio (pruebas de laboratorio / estudios)
+-- ============================================================
+CREATE TABLE laboratorio (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(255) NOT NULL,
+    area VARCHAR(150) NOT NULL,
+    precio NUMERIC(10,2) NOT NULL DEFAULT 0,
+    comision_extra NUMERIC(5,2) NOT NULL DEFAULT 0,
+    status BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_laboratorio_area ON laboratorio(area);
+
+-- ============================================================
+-- costo por ciudad (intersección laboratorio <-> ciudad)
+-- 0 = no disponible en esa ciudad
+-- ============================================================
+CREATE TABLE laboratorio_ciudad (
+    laboratorio_id INTEGER NOT NULL REFERENCES laboratorio(id) ON DELETE CASCADE,
+    ciudad_id INTEGER NOT NULL REFERENCES ciudad(id) ON DELETE CASCADE,
+    costo NUMERIC(10,2) NOT NULL DEFAULT 0,
+    PRIMARY KEY (laboratorio_id, ciudad_id)
+);
+
+CREATE INDEX idx_lab_ciudad_ciudad ON laboratorio_ciudad(ciudad_id);
 
 -- ============================================================
 -- Medico (extiende Persona)

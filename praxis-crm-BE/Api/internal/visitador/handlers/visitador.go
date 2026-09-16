@@ -26,19 +26,20 @@ func (h *VisitadorHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Nombres == "" || req.Apellidos == "" {
-		response.Error(w, http.StatusBadRequest, "nombres y apellidos son requeridos")
+	if req.Nombre == "" || req.PrimerApellido == "" {
+		response.Error(w, http.StatusBadRequest, "nombre y primer apellido son requeridos")
 		return
 	}
 
 	v := &models.Visitador{
-		Nombres:   req.Nombres,
-		Apellidos: req.Apellidos,
-		Sexo:      req.Sexo,
-		Correo:    req.Correo,
-		Telefono:  req.Telefono,
-		CI:        req.CI,
-		Activo:    true,
+		Nombre:          req.Nombre,
+		PrimerApellido:  req.PrimerApellido,
+		SegundoApellido: req.SegundoApellido,
+		Sexo:            req.Sexo,
+		Correo:          req.Correo,
+		Telefono:        req.Telefono,
+		CI:              req.CI,
+		Activo:          true,
 	}
 
 	if err := h.svc.Create(r.Context(), v); err != nil {

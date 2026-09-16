@@ -13,16 +13,17 @@ type User struct {
 }
 
 type Persona struct {
-	ID         int        `json:"id"`
-	Nombres    string     `json:"nombres"`
-	Apellidos  string     `json:"apellidos"`
-	Sexo       string     `json:"sexo"`
-	Correo     string     `json:"correo"`
-	Telefono   string     `json:"telefono"`
-	Nacimiento *time.Time `json:"nacimiento,omitempty"`
-	CI         string     `json:"ci"`
-	CiudadID   *int       `json:"ciudad_id,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
+	ID              int        `json:"id"`
+	Nombre          string     `json:"nombre"`
+	PrimerApellido  string     `json:"primer_apellido"`
+	SegundoApellido *string    `json:"segundo_apellido,omitempty"`
+	Sexo            string     `json:"sexo"`
+	Correo          string     `json:"correo"`
+	Telefono        string     `json:"telefono"`
+	Nacimiento      *time.Time `json:"nacimiento,omitempty"`
+	CI              string     `json:"ci"`
+	CiudadID        *int       `json:"ciudad_id,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
 }
 
 type UserWithPersona struct {
@@ -36,14 +37,15 @@ type LoginRequest struct {
 }
 
 type RegisterRequest struct {
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	Role      string `json:"role"`
-	Nombres   string `json:"nombres"`
-	Apellidos string `json:"apellidos"`
-	Sexo      string `json:"sexo"`
-	Telefono  string `json:"telefono"`
-	CI        string `json:"ci"`
+	Email           string `json:"email"`
+	Password        string `json:"password"`
+	Role            string `json:"role"`
+	Nombre          string `json:"nombre"`
+	PrimerApellido  string `json:"primer_apellido"`
+	SegundoApellido string `json:"segundo_apellido"`
+	Sexo            string `json:"sexo"`
+	Telefono        string `json:"telefono"`
+	CI              string `json:"ci"`
 }
 
 type TokenResponse struct {
