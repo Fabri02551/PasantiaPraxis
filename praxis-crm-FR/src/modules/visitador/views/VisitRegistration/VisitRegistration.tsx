@@ -1,8 +1,9 @@
 import { useRef, useState, useEffect } from 'react'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
+import { medicoService } from '../../../core/services/medico.service'
 import './VisitRegistration.css'
 
-type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos'
+type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
 
 interface Props {
   onNavigate: (view: View) => void
@@ -10,13 +11,28 @@ interface Props {
   onLogout: () => void
 }
 
+type MedicoExtra = {
+  id: string
+  nombre: string
+  especialidad: string
+  hospital: string
+  visitadorAsignado: string | null
+  ubicaciones: { id: string; direccion: string; detalle: string }[]
+}
+
+const MEDICOS_EXTRA: MedicoExtra[] = []
+
 export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView, onLogout }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [hasSignature, setHasSignature] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [photoName, setPhotoName] = useState<string | null>(null)
+  const [searchMedico, setSearchMedico] = useState('')
+  const [selectedMedicoId, setSelectedMedicoId] = useState<string>('')
+  const [selectedUbicacionId, setSelectedUbicacionId] = useState<string>('')
+  const [observaciones, setObservaciones] = useState('')
+  const [exigencias, setExigencias] = useState('')
+  const [medicos, setMedicos] = useState<MedicoExtra[]>(MEDICOS_EXTRA)
 
   // Setup canvas for HiDPI
   useEffect(() => {
@@ -34,6 +50,47 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
     ctx.lineWidth = 1.8
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    medicoService
+      .list()
+      .then((data) => {
+        if (cancelled) return
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped: MedicoExtra[] = data.map((b, idx) => ({
+            id: String((b as unknown as { persona_id?: number }).persona_id || idx + 1),
+            nombre: (b as unknown as { nombre?: string }).nombre || `Médico ${(b as unknown as { codigo?: string }).codigo || idx + 1}`,
+            especialidad: String((b as unknown as { especialidad?: string }).especialidad || (b as unknown as { especialidad_id?: number }).especialidad_id || 'General'),
+            hospital: (b as unknown as { institucion?: string }).institucion || 'Sin institución',
+            visitadorAsignado: (b as unknown as { visitadorAsignado?: string | null }).visitadorAsignado ?? null,
+            ubicaciones: (() => {
+              try {
+                const d = (b as unknown as { direccion?: unknown }).direccion
+                if (typeof d === 'string') {
+                  const p = JSON.parse(d)
+                  if (Array.isArray(p)) return p as { id: string; direccion: string; detalle: string }[]
+                  return [{ id: 'u1', direccion: String(d), detalle: '' }]
+                }
+                if (Array.isArray(d)) return d as { id: string; direccion: string; detalle: string }[]
+              } catch {
+                // ignore
+              }
+              return [{ id: 'u1', direccion: (b as unknown as { institucion?: string }).institucion || 'Sin dirección', detalle: '' }]
+            })(),
+          }))
+          if (!cancelled) setMedicos(mapped)
+        } else {
+          if (!cancelled) setMedicos([])
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setMedicos([])
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const getPos = (e: React.MouseEvent | React.TouchEvent) => {
@@ -88,9 +145,35 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
     setHasSignature(false)
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) setPhotoName(file.name)
+  const filteredMedicos = (() => {
+    const q = searchMedico.trim().toLowerCase()
+    if (!q) return medicos
+    return medicos.filter((m) => m.nombre.toLowerCase().includes(q) || m.especialidad.toLowerCase().includes(q) || m.hospital.toLowerCase().includes(q))
+  })()
+
+  const selectedMedico = medicos.find((m) => m.id === selectedMedicoId) || null
+  const ubicaciones = selectedMedico?.ubicaciones || []
+
+  const handleSelectMedico = (id: string) => {
+    setSelectedMedicoId(id)
+    const m = medicos.find((x) => x.id === id)
+    if (m) setSelectedUbicacionId(m.ubicaciones[0]?.id || '')
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const medico = selectedMedico
+    const ubic = ubicaciones.find(u => u.id === selectedUbicacionId)
+    // Cliente y Dirección se obtienen automáticamente del médico/ubicación seleccionada
+    console.log('[Visita Extraordinaria] payload', {
+      medico,
+      ubicacion: ubic,
+      cartera: medico?.visitadorAsignado,
+      observaciones,
+      exigencias,
+      fecha: new Date().toISOString(),
+    })
+    alert(`Visita extraordinaria registrada${medico ? ` para ${medico.nombre}` : ''}${ubic ? ` en ${ubic.direccion}` : ''}`)
   }
 
   return (
@@ -101,7 +184,7 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
             <path d="M3 6h18M3 12h18M3 18h18" />
           </svg>
         </button>
-        <h1 className="header-title">Registro de Visita</h1>
+        <h1 className="header-title">Visita Extraordinaria</h1>
         <button className="icon-btn notification-btn" aria-label="Notificaciones" onClick={() => onNavigate('notificaciones')}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
             <path d="M6 8a6 6 0 0 1 12 0c0 7-6 11-6 11s-6-4-6-11" />
@@ -114,25 +197,64 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
       <SidebarMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={onNavigate} currentView={currentView} onLogout={onLogout} />
 
       <div className="registro-content">
-        <form className="registro-form" onSubmit={(e) => e.preventDefault()}>
+        <form className="registro-form" onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label">Cliente</label>
-            <input className="form-input" placeholder="Nombre de la empresa o contacto" />
+            <label className="form-label">Buscar médico</label>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <svg style={{ position: 'absolute', left: 12 }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a9ab5" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+              <input className="form-input" style={{ paddingLeft: 36 }} placeholder="Buscar por nombre o especialidad..." value={searchMedico} onChange={e => setSearchMedico(e.target.value)} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8, maxHeight: 180, overflowY: 'auto' }}>
+              {filteredMedicos.map(m => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => handleSelectMedico(m.id)}
+                  className="form-input"
+                  style={{
+                    height: 'auto',
+                    padding: '8px 12px',
+                    textAlign: 'left',
+                    background: selectedMedicoId === m.id ? '#1B2A4E' : '#fff',
+                    color: selectedMedicoId === m.id ? '#fff' : '#1B2A4E',
+                    borderColor: selectedMedicoId === m.id ? '#1B2A4E' : '#e2e6ed',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
+                  }}
+                >
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>{m.nombre}</span>
+                  <span style={{ fontSize: 11, opacity: 0.8 }}>{m.especialidad} · {m.hospital}</span>
+                </button>
+              ))}
+              {filteredMedicos.length === 0 && <span style={{ fontSize: 12, color: '#8a9ab5', padding: 8 }}>{medicos.length === 0 ? 'Sin médicos en la base de datos - sin datos en BD' : 'Sin resultados'}</span>}
+            </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Dirección</label>
-            <input className="form-input" placeholder="Av. Principal #123, Oficina 402" />
-          </div>
+          {selectedMedico && (
+            <>
+              <div className="form-group">
+                <label className="form-label">Ubicación</label>
+                <select className="form-input" value={selectedUbicacionId} onChange={e => setSelectedUbicacionId(e.target.value)}>
+                  {ubicaciones.map(u => (
+                    <option key={u.id} value={u.id}>{u.direccion} {u.detalle ? `— ${u.detalle}` : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ background: '#f8f9fb', border: '1px solid #eef1f5', borderRadius: 10, padding: 10, fontSize: 12, color: '#1B2A4E' }}>
+                <span style={{ fontWeight: 700 }}>Cartera:</span> {selectedMedico.visitadorAsignado ? `${selectedMedico.visitadorAsignado}` : 'Sin asignar (visita fuera de cartera)'}
+              </div>
+            </>
+          )}
 
           <div className="form-group">
             <label className="form-label">Observaciones</label>
-            <textarea className="form-textarea" rows={3} placeholder="Detalle los puntos clave discutidos en la reunión..." />
+            <textarea className="form-textarea" rows={3} placeholder="Detalle los puntos clave discutidos en la reunión..." value={observaciones} onChange={e => setObservaciones(e.target.value)} />
           </div>
 
           <div className="form-group">
             <label className="form-label">Exigencias / Acuerdos</label>
-            <textarea className="form-textarea" rows={3} placeholder="Plazos de entrega, cotizaciones adicionales requeridas..." />
+            <textarea className="form-textarea" rows={3} placeholder="Plazos de entrega, cotizaciones adicionales requeridas..." value={exigencias} onChange={e => setExigencias(e.target.value)} />
           </div>
 
           <div className="form-group">
@@ -158,16 +280,6 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
               <div className="signature-line" />
             </div>
           </div>
-
-          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} hidden />
-
-          <button type="button" className="btn-photo" onClick={() => fileInputRef.current?.click()}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2D9C9C" strokeWidth="1.8">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-              <circle cx="12" cy="13" r="4" />
-            </svg>
-            {photoName ? photoName : 'Subir Foto de Respaldo'}
-          </button>
 
           <button type="submit" className="btn-submit">
             Enviar Reporte

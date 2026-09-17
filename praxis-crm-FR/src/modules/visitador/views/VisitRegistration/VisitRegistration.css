@@ -110,6 +110,7 @@
   min-height: 76px;
   font-family: inherit;
   box-sizing: border-box;
+  background: #fff;
 }
 
 .form-input::placeholder,

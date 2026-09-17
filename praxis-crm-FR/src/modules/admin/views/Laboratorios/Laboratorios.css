@@ -1,0 +1,27 @@
+.pruebas-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.pruebas-title { font-size: 14px; font-weight: 700; color: #1B2A4E; margin: 0; letter-spacing: 0.3px; }
+.pruebas-sub { font-size: 11.5px; color: #7e8aa6; margin: 4px 0 0; }
+.pruebas-card { background: #fff; border: 1px solid #e8ecf1; border-radius: 12px; overflow: hidden; }
+.pruebas-table-wrap { overflow-x: auto; }
+.pruebas-table { width: 100%; border-collapse: collapse; min-width: 760px; }
+.pruebas-table th {
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #7e8aa6;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 10px 14px;
+  background: #f8f9fb;
+  border-bottom: 1px solid #e8ecf1;
+  white-space: nowrap;
+}
+.pruebas-table td { padding: 10px 14px; font-size: 12px; color: #1B2A4E; border-bottom: 1px solid #f1f4f8; vertical-align: middle; }
+.pruebas-codigo { font-weight: 700; background: #eef1f5; padding: 3px 7px; border-radius: 6px; font-size: 11px; }
+.pruebas-tipo { font-weight: 600; font-size: 12px; }
+.pruebas-depto { font-size: 11px; color: #1B2A4E; background: #e6f7f7; padding: 3px 7px; border-radius: 10px; font-weight: 600; }
+.pruebas-precio { font-weight: 700; color: #0e7490; white-space: nowrap; }
+.pruebas-actions { display: flex; gap: 6px; }
+
+/* reuse vt-* styles from Visitadores.css – ensure imported */
+.vt-delete-icon--minimal { display: grid; place-items: center; margin-bottom: 10px; }

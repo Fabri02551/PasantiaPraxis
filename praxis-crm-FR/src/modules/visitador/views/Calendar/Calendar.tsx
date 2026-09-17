@@ -3,17 +3,17 @@ import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
 import { VisitDetailExpanded, type ExpandedVisit } from '../../components/VisitDetailExpanded'
 import './Calendar.css'
 
-type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos'
+type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
 
 interface Props {
   onNavigate: (view: View) => void
   currentView: View
   onLogout: () => void
+  onCompletar?: (visita: { id: string; company: string; detail: string; addr: string; time: string; dateLabel?: string; medico: { nombre: string; especialidad: string; hospital: string; phone: string }; contact?: string; phone?: string; status?: string }) => void
 }
 
-// Octubre 2026 data based on image: highlights 2, 8, 12, 18
-const HIGHLIGHTED_ORANGE = new Set([2, 12, 18])
-const HIGHLIGHTED_BLUE = new Set([8])
+const HIGHLIGHTED_ORANGE = new Set<number>([])
+const HIGHLIGHTED_BLUE = new Set<number>([])
 
 type VisitDetail = {
   time: string
@@ -27,71 +27,7 @@ type VisitDetail = {
   medico: { nombre: string; especialidad: string; hospital: string; phone: string }
 }
 
-const VISITS_BY_DATE: Record<number, VisitDetail[]> = {
-  12: [
-    {
-      time: '09:30 AM',
-      title: 'Distribuidora del Norte',
-      addr: 'Km 14 Vía Transístmica, Galpón C',
-      contact: 'Ing. Roberto Vega',
-      phone: '+507 6670-1234',
-      description: 'Entrega de muestras y revisión de inventario. Llevar catálogo actualizado y contrato marco.',
-      status: 'Programada',
-      coords: [-0.1807, -78.478],
-      medico: { nombre: 'Dr. Roberto García', especialidad: 'Cardiólogo', hospital: 'Hospital Ángeles Metropolitana', phone: '+507 6123-4455' },
-    },
-    {
-      time: '02:00 PM',
-      title: 'Consultores Financieros',
-      addr: 'Av. Balboa, Edificio Mirage, Piso 12',
-      contact: 'Lic. Mariana Torres',
-      phone: '+507 6988-4421',
-      description: 'Presentación de propuesta anual y firma de adenda. Confirmar sala 30 min antes.',
-      status: 'Confirmada',
-      coords: [-0.184, -78.465],
-      medico: { nombre: 'Dra. María López', especialidad: 'Pediatra', hospital: 'Clínica Infantil San José', phone: '+507 6345-7788' },
-    },
-  ],
-  2: [
-    {
-      time: '10:00 AM',
-      title: 'TecnoCorp S.A.',
-      addr: 'Mantenimiento Preventivo - Torre Central, Piso 8',
-      contact: 'Carlos Ruiz',
-      phone: '+507 6123-9988',
-      description: 'Mantenimiento preventivo de servidores. Coordinar acceso con seguridad.',
-      status: 'Programada',
-      coords: [-0.189, -78.47],
-      medico: { nombre: 'Dr. Javier Hernández', especialidad: 'Dermatólogo', hospital: 'Clínica Médica Santa Fe', phone: '+507 6770-9900' },
-    },
-  ],
-  8: [
-    {
-      time: '11:00 AM',
-      title: 'Retail Plaza',
-      addr: 'Instalación POS - Local 105, Vía España',
-      contact: 'Ana Jiménez',
-      phone: '+507 6550-1100',
-      description: 'Instalación y prueba de 3 terminales POS. Capacitar a cajeros.',
-      status: 'En curso',
-      coords: [-0.172, -78.472],
-      medico: { nombre: 'Dra. Ana Sofía Ruiz', especialidad: 'Ginecóloga', hospital: 'Hospital Delta Especialidades', phone: '+507 6550-3366' },
-    },
-  ],
-  18: [
-    {
-      time: '03:00 PM',
-      title: 'Clínica San José',
-      addr: 'Demo técnica - Auditorio Principal',
-      contact: 'Dra. Sofía Hernández',
-      phone: '+507 6777-2233',
-      description: 'Demo de software médico Praxis v2.4. Llevar proyector y muestras impresas.',
-      status: 'Programada',
-      coords: [-0.189, -78.455],
-      medico: { nombre: 'Dra. Sofía Hernández', especialidad: 'Medicina General', hospital: 'Clínica San José', phone: '+507 6777-2233' },
-    },
-  ],
-}
+const VISITS_BY_DATE: Record<number, VisitDetail[]> = {}
 
 function toExpandedCalendar(v: VisitDetail): ExpandedVisit {
   return {
@@ -117,7 +53,7 @@ function getOctober2026Days() {
   return { blanks, daysInMonth: 31, startWeekday: 4 }
 }
 
-export const CalendarView: React.FC<Props> = ({ onNavigate, currentView, onLogout }) => {
+export const CalendarView: React.FC<Props> = ({ onNavigate, currentView, onLogout, onCompletar }) => {
   const [menuOpen, setMenuOpen] = useState(false)
   const [selected, setSelected] = useState(12)
   const [detail, setDetail] = useState<VisitDetail | null>(null)
@@ -141,6 +77,7 @@ export const CalendarView: React.FC<Props> = ({ onNavigate, currentView, onLogou
   }
 
   const visits = VISITS_BY_DATE[selected] || []
+  const allVisits = Object.entries(VISITS_BY_DATE).flatMap(([day, list]) => list.map(v => ({ ...v, day: Number(day) })))
 
   return (
     <div className="calendar-page">
@@ -192,19 +129,34 @@ export const CalendarView: React.FC<Props> = ({ onNavigate, currentView, onLogou
           ) : (
             <ul className="visits-today-list">
               {visits.map((v) => (
-                <li key={v.title} className="visit-row">
+                <li key={v.title} className="visit-row" onClick={() => setDetail(v)} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && setDetail(v)} style={{ cursor: 'pointer' }}>
                   <span className="visit-time-badge">{v.time}</span>
                   <div className="visit-text">
                     <span className="visit-title">{v.title}</span>
                     <span className="visit-addr">{v.addr}</span>
                   </div>
-                  <button className="visit-arrow" aria-label={`Ver detalle de ${v.title}`} onClick={() => setDetail(v)}>
-                    →
-                  </button>
+                  <span className={`visit-detail-status status-${v.status.toLowerCase().replace(' ', '-')}`} style={{ fontSize: 10, padding: '3px 7px' }}>{v.status}</span>
                 </li>
               ))}
             </ul>
           )}
+        </section>
+
+        <section className="visits-today" style={{ marginTop: 12 }}>
+          <h2 className="visits-today-title">Todas las visitas programadas</h2>
+          <p style={{ fontSize: 11, color: '#7e8aa6', margin: '4px 0 8px' }}>{allVisits.length} visitas en total</p>
+          <ul className="visits-today-list">
+            {allVisits.map((v) => (
+              <li key={`${v.day}-${v.title}`} className="visit-row" onClick={() => setDetail(v)} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && setDetail(v)} style={{ cursor: 'pointer' }}>
+                <span className="visit-time-badge">{v.time} · {v.day} Oct</span>
+                <div className="visit-text">
+                  <span className="visit-title">{v.title}</span>
+                  <span className="visit-addr">{v.addr}</span>
+                </div>
+                <span className={`visit-detail-status status-${v.status.toLowerCase().replace(' ', '-')}`} style={{ fontSize: 10, padding: '3px 7px' }}>{v.status}</span>
+              </li>
+            ))}
+          </ul>
         </section>
       </div>
 
@@ -255,12 +207,44 @@ export const CalendarView: React.FC<Props> = ({ onNavigate, currentView, onLogou
               <span className="visit-detail-label">DESCRIPCIÓN</span>
               <p className="visit-detail-desc">{detail.description}</p>
             </div>
+            <div style={{ marginTop: 12, background: '#f8f9fb', border: '1px solid #eef1f5', borderRadius: 10, padding: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
+              <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg,#1B2A4E,#2d9c9c)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
+                {detail.medico.nombre.split(' ').filter(w=>w.length>2).slice(0,2).map(w=>w[0]).join('').slice(0,2)}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1B2A4E' }}>{detail.medico.nombre}</div>
+                <div style={{ fontSize: 11, color: '#2d9c9c' }}>{detail.medico.especialidad}</div>
+                <div style={{ fontSize: 11, color: '#6b7a99' }}>{detail.medico.hospital} · {detail.medico.phone}</div>
+              </div>
+            </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
               <button className="visit-detail-primary" style={{ flex: 1 }} onClick={() => setExpanded(toExpandedCalendar(detail))}>
                 Ver Detalle Completo
               </button>
-              <button className="visit-detail-primary" style={{ flex: 1, background: '#fff', color: '#1b2a4e', border: '1px solid #e8ecf1' }} onClick={() => setDetail(null)}>
-                Cerrar
+              <button
+                className="visit-detail-primary"
+                style={{ flex: 1, background: '#F9B233', color: '#fff', border: 'none' }}
+                onClick={() => {
+                  const v = detail
+                  setDetail(null)
+                  if (v && onCompletar) {
+                    onCompletar({
+                      id: `${v.title}-${v.time}`,
+                      company: v.title,
+                      detail: v.title,
+                      addr: v.addr,
+                      time: v.time,
+                      medico: v.medico,
+                      contact: v.contact,
+                      phone: v.phone,
+                      status: v.status,
+                    })
+                  } else {
+                    onNavigate('registro')
+                  }
+                }}
+              >
+                Completar visita
               </button>
             </div>
           </div>

@@ -1,0 +1,182 @@
+.admin-layout {
+  display: flex;
+  min-height: 100vh;
+  background: #f1f4f8;
+}
+
+.admin-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-content {
+  padding: 18px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-welcome-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: #1B2A4E;
+  margin: 0;
+}
+
+.admin-welcome-sub {
+  font-size: 12px;
+  color: #7e8aa6;
+  margin: 4px 0 0;
+}
+
+/* KPI */
+.admin-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.admin-kpi-card {
+  background: #fff;
+  border: 1px solid #e8ecf1;
+  border-radius: 12px;
+  padding: 14px;
+  position: relative;
+}
+
+.admin-kpi-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #7e8aa6;
+  margin-bottom: 8px;
+}
+
+.admin-kpi-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.admin-kpi-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: #1B2A4E;
+  line-height: 1;
+}
+
+.admin-kpi-badge {
+  position: absolute;
+  top: 36px;
+  right: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 12px;
+}
+
+.admin-kpi-badge.up { background: #e6f7ed; color: #0e9a6b; }
+.admin-kpi-badge.down { background: #fdecea; color: #e35d5d; }
+
+/* Charts rows */
+.admin-charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.admin-chart-card {
+  background: #fff;
+  border: 1px solid #e8ecf1;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.admin-chart-full { width: 100%; }
+
+.admin-chart-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1B2A4E;
+  margin: 0 0 14px;
+}
+
+.admin-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.admin-chart-head .admin-chart-title { margin: 0; }
+
+.admin-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 10px;
+  color: #7e8aa6;
+  font-weight: 600;
+}
+.admin-legend-item { display: flex; align-items: center; gap: 5px; }
+.admin-legend-item i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+/* Horizontal bars */
+.admin-bar-list { display: flex; flex-direction: column; gap: 10px; }
+.admin-bar-row { display: grid; grid-template-columns: 88px 1fr 18px; align-items: center; gap: 8px; }
+.admin-bar-name { font-size: 11px; color: #1B2A4E; font-weight: 500; white-space: nowrap; }
+.admin-bar-track { height: 10px; background: #f1f4f8; border-radius: 6px; overflow: hidden; }
+.admin-bar-fill { height: 100%; border-radius: 6px; transition: width 0.4s; }
+.admin-bar-val { font-size: 11px; font-weight: 600; color: #7e8aa6; text-align: right; }
+
+/* Line chart */
+.admin-line-chart { display: flex; flex-direction: column; gap: 8px; }
+.admin-line-svg { width: 100%; height: 140px; }
+.admin-line-labels {
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  font-size: 10px;
+  color: #8a9ab5;
+  text-align: center;
+  padding: 0 10px 0 30px;
+}
+
+/* Month bars */
+.admin-month-grid {
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  gap: 16px;
+  align-items: end;
+  padding: 8px 8px 0;
+  min-height: 120px;
+}
+
+.admin-month-col { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+
+.admin-month-bars {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  height: 90px;
+}
+
+.admin-month-bar { width: 18px; border-radius: 4px 4px 0 0; }
+.admin-month-bar--comp { background: #0e9a9e; }
+.admin-month-bar--pend { background: #f59e0b; opacity: 0.95; }
+
+.admin-month-label { font-size: 10px; color: #8a9ab5; font-weight: 500; }
+
+@media (max-width: 1000px) {
+  .admin-kpi-row { grid-template-columns: repeat(2,1fr); }
+  .admin-charts-row { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+  .admin-content { padding: 14px 12px; }
+  .admin-kpi-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .admin-month-bars { gap: 6px; }
+  .admin-month-bar { width: 14px; }
+}

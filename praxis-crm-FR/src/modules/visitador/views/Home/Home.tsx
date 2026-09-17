@@ -34,80 +34,9 @@ type Visit = {
   medico: { nombre: string; especialidad: string; hospital: string; phone: string }
 }
 
-const VISITS: Visit[] = [
-  {
-    id: '1',
-    dateLabel: 'Hoy',
-    time: '10:00',
-    company: 'TecnoCorp S.A.',
-    detail: 'Mantenimiento Preventivo Servidores',
-    coords: [-0.1807, -78.478],
-    addr: 'Torre Central, Piso 8 - Av. Amazonas',
-    contact: 'Carlos Ruiz',
-    phone: '+507 6123-9988',
-    status: 'Programada',
-    description: 'Mantenimiento preventivo de servidores. Coordinar acceso con seguridad y llevar checklist de verificación.',
-    medico: { nombre: 'Dr. Roberto García', especialidad: 'Cardiólogo', hospital: 'Hospital Ángeles Metropolitana', phone: '+507 6123-4455' },
-  },
-  {
-    id: '2',
-    dateLabel: 'Hoy',
-    time: '14:30',
-    company: 'Constructora Andes',
-    detail: 'Inspección de Obra y Firma de Avance',
-    coords: [-0.184, -78.465],
-    addr: 'Obra Vía Interoceánica, Galpón B',
-    contact: 'Ing. Valeria Mora',
-    phone: '+507 6345-1120',
-    status: 'Confirmada',
-    description: 'Inspección de avance de obra y firma de acta. Requiere casco y credencial.',
-    medico: { nombre: 'Dra. María López', especialidad: 'Pediatra', hospital: 'Clínica Infantil San José', phone: '+507 6345-7788' },
-  },
-  {
-    id: '3',
-    dateLabel: 'Mañ',
-    time: '09:00',
-    company: 'Logística Central',
-    detail: 'Reunión de Renovación de Contrato',
-    coords: [-0.195, -78.486],
-    addr: 'Km 7 Vía Tocumen, Oficina 201',
-    contact: 'Lic. Jorge Pineda',
-    phone: '+507 6770-3344',
-    status: 'Programada',
-    description: 'Reunión para renovación de contrato anual. Llevar propuesta comercial actualizada.',
-    medico: { nombre: 'Dr. Carlos Mendoza', especialidad: 'Traumatólogo', hospital: 'Centro Médico ABC', phone: '+507 6770-9900' },
-  },
-  {
-    id: '4',
-    dateLabel: '24 Oct',
-    time: '11:00',
-    company: 'Retail Plaza',
-    detail: 'Instalación de Terminales POS',
-    coords: [-0.172, -78.472],
-    addr: 'Local 105, Vía España',
-    contact: 'Ana Jiménez',
-    phone: '+507 6550-1100',
-    status: 'En curso',
-    description: 'Instalación y prueba de 3 terminales POS. Capacitar a cajeros y dejar manual.',
-    medico: { nombre: 'Dra. Ana Sofía Ruiz', especialidad: 'Ginecóloga', hospital: 'Hospital Delta Especialidades', phone: '+507 6550-3366' },
-  },
-  {
-    id: '5',
-    dateLabel: '25 Oct',
-    time: '16:00',
-    company: 'Clínica San José',
-    detail: 'Demo técnica de Software Médico',
-    coords: [-0.189, -78.455],
-    addr: 'Auditorio Principal - Clínica San José',
-    contact: 'Dra. Sofía Hernández',
-    phone: '+507 6777-2233',
-    status: 'Programada',
-    description: 'Demo de software médico Praxis v2.4. Llevar proyector y muestras impresas.',
-    medico: { nombre: 'Dra. Sofía Hernández', especialidad: 'Medicina General', hospital: 'Clínica San José', phone: '+507 6777-2233' },
-  },
-]
+const VISITS: Visit[] = []
 
-const route: [number, number][] = VISITS.slice(0, 4).map((v) => v.coords)
+const route: [number, number][] = []
 
 function createColorIcon(color: string) {
   return L.divIcon({
@@ -120,12 +49,13 @@ function createColorIcon(color: string) {
 
 const markerColors = ['#F9B233', '#2D9C9C', '#E94E6B', '#4A7CF7', '#7B5CFF']
 
-type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos'
+type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
 
 interface HomeProps {
   onNavigate: (view: View) => void
   currentView: View
   onLogout: () => void
+  onCompletar?: (visita: { id: string; company: string; detail: string; addr: string; time: string; dateLabel?: string; medico: { nombre: string; especialidad: string; hospital: string; phone: string }; contact?: string; phone?: string; status?: string }) => void
 }
 
 function toExpanded(v: Visit): ExpandedVisit {
@@ -145,7 +75,7 @@ function toExpanded(v: Visit): ExpandedVisit {
   }
 }
 
-export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, onLogout }) => {
+export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, onLogout, onCompletar }) => {
   const center: [number, number] = [-0.1807, -78.4678]
   const [menuOpen, setMenuOpen] = useState(false)
   const [detail, setDetail] = useState<Visit | null>(null)
@@ -174,7 +104,7 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
         <section className="map-card">
           <div className="map-badge">
             <span className="badge-dot" />
-            3 Visitas Pendientes
+            {VISITS.length} Visitas Pendientes
           </div>
           <div className="map-wrapper">
             <MapContainer
@@ -188,7 +118,7 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              <Polyline positions={route} pathOptions={{ color: '#F9B233', weight: 4, opacity: 0.9 }} />
+              {route.length > 0 && <Polyline positions={route} pathOptions={{ color: '#F9B233', weight: 4, opacity: 0.9 }} />}
               {VISITS.slice(0, 4).map((v, idx) => (
                 <Marker key={v.id} position={v.coords} icon={createColorIcon(markerColors[idx % markerColors.length])}>
                   <Popup>
@@ -207,7 +137,7 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
               <path d="M12 5v14M5 12h14" />
             </svg>
-            Registrar Visita
+            Visita Extraordinaria
           </button>
           <button className="btn-calendar" onClick={() => onNavigate('calendario')}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -220,29 +150,32 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
 
         <section className="visits-card">
           <div className="visits-header">
-            <h2>Próximas Visitas</h2>
-            <button className="view-all" onClick={() => onNavigate('calendario')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-              Ver todo
-            </button>
+            <h2>Visitas programadas</h2>
+            <span style={{ fontSize: 11, color: '#7e8aa6', fontWeight: 600 }}>{VISITS.filter(v=>v.dateLabel==='Hoy').length} hoy</span>
           </div>
 
-          <ul className="visits-list">
-            {VISITS.map((v) => (
-              <li key={v.id} className="visit-item">
-                <div className="visit-date">
-                  <span className="visit-date-label">{v.dateLabel}</span>
-                  <span className="visit-time">{v.time}</span>
-                </div>
-                <div className="visit-info">
-                  <span className="visit-company">{v.company}</span>
-                  <span className="visit-detail">{v.detail}</span>
-                </div>
-                <button className="visit-chevron" aria-label={`Ver detalle de ${v.company}`} onClick={() => setDetail(v)}>
-                  ›
-                </button>
-              </li>
-            ))}
-          </ul>
+          {VISITS.length === 0 ? (
+            <p style={{ fontSize: 12, color: '#7e8aa6', padding: '12px 0', textAlign: 'center' }}>No hay visitas programadas - sin datos en la base de datos</p>
+          ) : (
+            <ul className="visits-list">
+              {VISITS.filter(v=>v.dateLabel==='Hoy').map((v) => (
+                <li key={v.id} className="visit-item" onClick={() => setDetail(v)} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && setDetail(v)} style={{ cursor: 'pointer' }}>
+                  <div className="visit-date">
+                    <span className="visit-date-label">{v.dateLabel}</span>
+                    <span className="visit-time">{v.time}</span>
+                  </div>
+                  <div className="visit-info">
+                    <span className="visit-company">{v.company}</span>
+                    <span className="visit-detail">{v.detail}</span>
+                  </div>
+                  <span className={`visit-status-badge status-${v.status.toLowerCase().replace(' ', '-')}`}>{v.status}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <button className="view-all" onClick={() => onNavigate('calendario')} style={{ background: 'none', border: 'none', cursor: 'pointer', marginTop: 8, fontSize: 12, color: '#2d9c9c', fontWeight: 600, textAlign: 'left', padding: 0 }}>
+            ver más visitas en el calendario →
+          </button>
         </section>
       </div>
 
@@ -296,12 +229,45 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
               <span className="visit-detail-label">DESCRIPCIÓN</span>
               <p className="visit-detail-desc">{detail.description}</p>
             </div>
+            <div style={{ marginTop: 12, background: '#f8f9fb', border: '1px solid #eef1f5', borderRadius: 10, padding: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
+              <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg,#1B2A4E,#2d9c9c)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
+                {detail.medico.nombre.split(' ').filter(w=>w.length>2).slice(0,2).map(w=>w[0]).join('').slice(0,2)}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1B2A4E' }}>{detail.medico.nombre}</div>
+                <div style={{ fontSize: 11, color: '#2d9c9c' }}>{detail.medico.especialidad}</div>
+                <div style={{ fontSize: 11, color: '#6b7a99' }}>{detail.medico.hospital} · {detail.medico.phone}</div>
+              </div>
+            </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
               <button className="visit-detail-primary" style={{ flex: 1 }} onClick={() => setExpanded(toExpanded(detail))}>
                 Ver Detalle Completo
               </button>
-              <button className="visit-detail-primary" style={{ flex: 1, background: '#fff', color: '#1b2a4e', border: '1px solid #e8ecf1' }} onClick={() => setDetail(null)}>
-                Cerrar
+              <button
+                className="visit-detail-primary"
+                style={{ flex: 1, background: '#F9B233', color: '#fff', border: 'none' }}
+                onClick={() => {
+                  const visita = detail
+                  setDetail(null)
+                  if (visita && onCompletar) {
+                    onCompletar({
+                      id: visita.id,
+                      company: visita.company,
+                      detail: visita.detail,
+                      addr: visita.addr,
+                      time: visita.time,
+                      dateLabel: visita.dateLabel,
+                      medico: visita.medico,
+                      contact: visita.contact,
+                      phone: visita.phone,
+                      status: visita.status,
+                    })
+                  } else {
+                    onNavigate('registro')
+                  }
+                }}
+              >
+                Completar visita
               </button>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import './SidebarMenu.css'
 
-type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos'
+type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
 
 interface SidebarMenuProps {
   open: boolean
@@ -79,7 +79,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
               <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
             </svg>
-            Registrar Visita
+            Visita Extraordinaria
           </button>
 
           <button
@@ -125,6 +125,39 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
               <circle cx="12" cy="8" r="5" />
             </svg>
             Mi Perfil
+          </button>
+
+          <button
+            className={`sidebar-item ${currentView === 'comentarios' ? 'active' : ''}`}
+            onClick={() => handleNav('comentarios')}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M21 11.5a8.38 8.38 0 0 1-1.9.5 4.48 4.48 0 0 0 1.95-2.45 8.94 8.94 0 0 1-2.83 1.08 4.48 4.48 0 0 0-7.65 3.08 12.72 12.72 0 0 1-9.23-4.68 4.48 4.48 0 0 0 1.39 5.98 4.43 4.43 0 0 1-2.03-.56v.06a4.48 4.48 0 0 0 3.6 4.4 4.52 4.52 0 0 1-2.04.08 4.48 4.48 0 0 0 4.18 3.11A8.98 8.98 0 0 1 2 19.1a12.66 12.66 0 0 0 6.86 2.01c8.25 0 12.76-6.84 12.76-12.76 0-.2 0-.4-.01-.6A9.2 9.2 0 0 0 23 6.2a8.9 8.9 0 0 1-2.6.7z" />
+            </svg>
+            Comentarios
+          </button>
+
+          <button
+            className={`sidebar-item ${currentView === 'historial' ? 'active' : ''}`}
+            onClick={() => handleNav('historial')}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <path d="M14 2v6h6M10 13H8M16 17H8M13 13h2" />
+            </svg>
+            Historial
+          </button>
+
+          <button
+            className={`sidebar-item ${currentView === 'cartera' ? 'active' : ''}`}
+            onClick={() => handleNav('cartera')}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <rect x="2" y="7" width="20" height="15" rx="2" />
+              <path d="M16 11a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2" />
+              <path d="M2 12h16" />
+            </svg>
+            Cartera
           </button>
         </nav>
 

@@ -1,0 +1,51 @@
+.graficos-intro { margin-bottom: 10px; }
+.graficos-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1B2A4E;
+  margin: 0;
+  letter-spacing: 0.3px;
+}
+.graficos-sub {
+  font-size: 11.5px;
+  color: #7e8aa6;
+  margin: 4px 0 0;
+}
+.graficos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+}
+.graficos-card {
+  background: #fff;
+  border: 1px solid #e8ecf1;
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 180px;
+}
+.graficos-card-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #1B2A4E;
+  margin: 0 0 14px;
+}
+.graficos-bars { display: flex; flex-direction: column; gap: 12px; }
+.graficos-bar-row { display: grid; grid-template-columns: 96px 1fr 36px; align-items: center; gap: 10px; }
+.graficos-bar-name { font-size: 11px; color: #1B2A4E; font-weight: 500; }
+.graficos-bar-track { height: 10px; background: #f1f4f8; border-radius: 6px; overflow: hidden; }
+.graficos-bar-fill { height: 100%; border-radius: 6px; transition: width 0.3s; }
+.graficos-bar-pct { font-size: 11px; font-weight: 600; color: #1B2A4E; text-align: right; }
+
+.graficos-line-wrap { display: flex; flex-direction: column; gap: 6px; }
+.graficos-line-svg { width: 100%; height: 130px; }
+.graficos-line-labels { display: grid; grid-template-columns: repeat(4,1fr); font-size: 10px; color: #8a9ab5; text-align: center; padding: 0 10px 0 20px; }
+
+.graficos-card--dashed {
+  border-style: dashed;
+  background: #fcfcfd;
+  display: grid;
+  place-items: center;
+}
+.graficos-empty { text-align: center; }
+.graficos-empty p { font-size: 12px; font-weight: 600; color: #1B2A4E; margin: 8px 0 4px; }
+.graficos-empty span { font-size: 11px; color: #7e8aa6; }

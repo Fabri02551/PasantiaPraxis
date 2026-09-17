@@ -176,9 +176,18 @@
   border-radius: 12px;
   padding: 12px;
   display: grid;
-  grid-template-columns: 88px 1fr 18px;
+  grid-template-columns: 88px 1fr auto;
   align-items: center;
   gap: 10px;
+}
+
+.visit-row .visit-detail-status {
+  font-size: 10px;
+  padding: 4px 8px;
+  white-space: nowrap;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .visit-time-badge {
@@ -383,6 +392,22 @@
   border: 1px dashed #e2e6ed;
   border-radius: 12px;
   padding: 16px;
+}
+
+@media (max-width: 380px) {
+  .visit-row {
+    grid-template-columns: 72px 1fr;
+    gap: 8px;
+  }
+  .visit-row .visit-detail-status {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-top: 2px;
+  }
+  .visit-time-badge {
+    font-size: 10px;
+    padding: 4px 6px;
+  }
 }
 
 @media (min-width: 768px) {

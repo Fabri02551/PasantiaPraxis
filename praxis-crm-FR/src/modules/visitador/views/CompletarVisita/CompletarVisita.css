@@ -1,0 +1,31 @@
+.completar-page { min-height: 100vh; background: #f4f6f9; display: flex; flex-direction: column; }
+.completar-header { height: 56px; background: #1b2a4e; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; position: sticky; top: 0; z-index: 1000; }
+.completar-content { flex: 1; max-width: 560px; width: 100%; margin: 0 auto; padding: 16px; box-sizing: border-box; }
+.completar-form { background: #fff; border-radius: 16px; padding: 18px; box-shadow: 0 4px 16px rgba(27,42,78,0.06); border: 1px solid #e8ecf1; display: flex; flex-direction: column; gap: 14px; }
+.completar-visita-info { border-bottom: 1px solid #eef1f5; padding-bottom: 12px; }
+.completar-company { font-size: 16px; font-weight: 700; color: #1b2a4e; margin: 0; }
+.completar-detail { font-size: 12.5px; color: #2d9c9c; font-weight: 600; margin: 4px 0 0; }
+.completar-addr { font-size: 11.5px; color: #6b7a99; margin: 6px 0 8px; line-height: 1.4; }
+.completar-status { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; display: inline-block; }
+.completar-status.status-programada { background: #fef6e7; color: #b45309; }
+.completar-status.status-confirmada { background: #e6f7ed; color: #0e502e; }
+.completar-status.status-en-curso { background: #eef2ff; color: #4338ca; }
+
+/* Médico como texto, no recuadro */
+.completar-medico-text { padding: 4px 0 8px; border-bottom: 1px solid #eef1f5; }
+.completar-medico-title { font-size: 12px; font-weight: 700; color: #1b2a4e; margin: 0 0 8px; letter-spacing: 0.3px; }
+.completar-medico-line { font-size: 12.5px; color: #1b2a4e; margin: 3px 0; line-height: 1.4; }
+.completar-medico-line strong { color: #6b7a99; font-weight: 600; font-size: 11.5px; }
+
+.form-label { font-size: 12.5px; font-weight: 700; color: #1b2a4e; margin-bottom: 6px; display: block; }
+.form-textarea { width: 100%; padding: 10px 14px; border: 1px solid #e2e6ed; border-radius: 10px; font-size: 13.5px; color: #1b2a4e; outline: none; resize: vertical; min-height: 76px; font-family: inherit; box-sizing: border-box; background: #fff; }
+.form-textarea::placeholder { color: #a0aec0; }
+.form-textarea:focus { border-color: #1b2a4e; box-shadow: 0 0 0 3px rgba(27,42,78,0.08); }
+
+.signature-wrapper { position: relative; border: 1px solid #e2e6ed; border-radius: 10px; background: #fcfcfd; height: 140px; overflow: hidden; display: grid; place-items: center; }
+.signature-canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; z-index: 2; }
+.signature-placeholder { font-size: 12px; color: #8a9ab5; z-index: 1; pointer-events: none; margin-top: 18px; }
+.signature-line { position: absolute; left: 14%; right: 14%; top: 56%; height: 1px; background: #cbd5e1; z-index: 1; pointer-events: none; }
+.signature-clear { position: absolute; top: 8px; right: 8px; z-index: 3; background: #fff; border: 1px solid #e2e6ed; color: #1b2a4e; font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+.btn-submit { height: 46px; background: #f9b233; color: #fff; border: none; border-radius: 10px; font-weight: 700; font-size: 14px; cursor: pointer; }
+.btn-submit:hover { background: #f0a820; }

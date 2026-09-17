@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
 import './Notifications.css'
 
-type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos'
+type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
 
 interface Props {
   onNavigate: (view: View) => void
@@ -19,64 +19,7 @@ type NotificationItem = {
   isNew: boolean
 }
 
-const NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: '1',
-    title: 'Nueva visita asignada',
-    desc: 'Se te ha asignado una inspección preventiva en TecnoCorp S.A. programada para hoy.',
-    time: 'Hace 5 min',
-    variant: 'info',
-    isNew: true,
-  },
-  {
-    id: '2',
-    title: 'Recordatorio de visita',
-    desc: 'Mañana a las 09:00 tienes una reunión agendada con Logística Central.',
-    time: 'Hace 1h',
-    variant: 'clock',
-    isNew: true,
-  },
-  {
-    id: '3',
-    title: 'Urgente: Re-programación',
-    desc: 'La cita con Constructora Andes se ha adelantado a las 14:30 de hoy.',
-    time: 'Hace 2h',
-    variant: 'alert',
-    isNew: true,
-  },
-  {
-    id: '4',
-    title: 'Reporte de visita aprobado',
-    desc: 'El supervisor aprobó tu último reporte de visita a Retail Plaza.',
-    time: 'Ayer',
-    variant: 'info',
-    isNew: false,
-  },
-  {
-    id: '5',
-    title: 'Alerta de retraso',
-    desc: 'Aún no registras la visita programada en Clínica San José.',
-    time: 'Ayer',
-    variant: 'alert',
-    isNew: false,
-  },
-  {
-    id: '6',
-    title: 'Instrucciones de visita actualizadas',
-    desc: 'Se agregaron nuevos planos y requerimientos para la visita de Constructora Andes.',
-    time: '23 Oct',
-    variant: 'info',
-    isNew: false,
-  },
-  {
-    id: '7',
-    title: 'Recordatorio mensual',
-    desc: 'Recuerda enviar tu firma digital de asistencia antes del fin de mes.',
-    time: '20 Oct',
-    variant: 'clock',
-    isNew: false,
-  },
-]
+const NOTIFICATIONS: NotificationItem[] = []
 
 function Icon({ variant }: { variant: NotificationItem['variant'] }) {
   if (variant === 'info') {
@@ -139,20 +82,24 @@ export const NotificationsView: React.FC<Props> = ({ onNavigate, currentView, on
           <span className="badge-new">{newCount} Nuevas</span>
         </div>
 
-        <ul className="notif-list">
-          {NOTIFICATIONS.map((n) => (
-            <li key={n.id} className={`notif-card ${n.isNew ? 'notif-card--new' : ''}`}>
-              <Icon variant={n.variant} />
-              <div className="notif-text">
-                <div className="notif-top">
-                  <span className="notif-title">{n.title}</span>
-                  <span className="notif-time">{n.time}</span>
+        {NOTIFICATIONS.length === 0 ? (
+          <p style={{ fontSize: 12, color: '#7e8aa6', padding: 16, textAlign: 'center' }}>No hay notificaciones - sin datos en BD</p>
+        ) : (
+          <ul className="notif-list">
+            {NOTIFICATIONS.map((n) => (
+              <li key={n.id} className={`notif-card ${n.isNew ? 'notif-card--new' : ''}`}>
+                <Icon variant={n.variant} />
+                <div className="notif-text">
+                  <div className="notif-top">
+                    <span className="notif-title">{n.title}</span>
+                    <span className="notif-time">{n.time}</span>
+                  </div>
+                  <p className="notif-desc">{n.desc}</p>
                 </div>
-                <p className="notif-desc">{n.desc}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   )

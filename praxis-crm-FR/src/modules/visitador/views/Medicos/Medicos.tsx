@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
+import { medicoService } from '../../../core/services/medico.service'
+import { ENV } from '../../../core/config/env'
 import './Medicos.css'
 
-type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos'
+type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
 
 interface Props {
   onNavigate: (view: View) => void
@@ -10,33 +12,67 @@ interface Props {
   onLogout: () => void
 }
 
-type Medico = {
+export type Medico = {
   id: string
   nombre: string
   especialidad: string
   hospital: string
+  visitadorAsignado: string | null
 }
 
-const MEDICOS: Medico[] = [
-  { id: '1', nombre: 'Dr. Roberto Garcia', especialidad: 'Cardiólogo', hospital: 'Hospital Ángeles Metropolitana' },
-  { id: '2', nombre: 'Dra. María López', especialidad: 'Pediatra', hospital: 'Clínica Infantil San José' },
-  { id: '3', nombre: 'Dr. Carlos Mendoza', especialidad: 'Traumatólogo', hospital: 'Centro Médico ABC' },
-  { id: '4', nombre: 'Dra. Ana Sofía Ruiz', especialidad: 'Ginecóloga', hospital: 'Hospital Delta Especialidades' },
-  { id: '5', nombre: 'Dr. Javier Hernández', especialidad: 'Dermatólogo', hospital: 'Clínica Médica Santa Fe' },
-  { id: '6', nombre: 'Dra. Elena Gómez', especialidad: 'Neuróloga', hospital: 'Instituto Nacional de Neurología' },
-]
+export const MEDICOS: Medico[] = []
 
 export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState<Medico | null>(null)
+  const [medicos, setMedicos] = useState<Medico[]>([])
+  const [apiStatus, setApiStatus] = useState(`API: ${ENV.API_URL}`)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    medicoService
+      .list()
+      .then((data) => {
+        if (cancelled) return
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped: Medico[] = data.map((b, idx) => ({
+            id: String(b.persona_id || idx + 1),
+            nombre: (b as unknown as { nombre?: string }).nombre || `Médico ${b.codigo || b.persona_id}`,
+            especialidad: String((b as unknown as { especialidad?: string }).especialidad || b.especialidad_id || 'General'),
+            hospital: b.institucion || 'Sin institución',
+            visitadorAsignado: (b as unknown as { visitadorAsignado?: string | null }).visitadorAsignado ?? null,
+          }))
+          setMedicos(mapped)
+          setApiStatus(`Conectado a ${ENV.API_URL} — ${data.length} médicos desde /api/medicos`)
+        } else {
+          setMedicos([])
+          setApiStatus(`Conectado a ${ENV.API_URL} — sin datos`)
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return
+        console.warn('[Medicos] API no disponible', err)
+        setMedicos([])
+        setApiStatus(`Sin conexión a ${ENV.API_URL}`)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return MEDICOS
-    return MEDICOS.filter(
+    if (!q) return medicos
+    return medicos.filter(
       (m) => m.nombre.toLowerCase().includes(q) || m.especialidad.toLowerCase().includes(q) || m.hospital.toLowerCase().includes(q),
     )
-  }, [search])
+  }, [search, medicos])
 
   return (
     <div className="medicos-page">
@@ -58,6 +94,7 @@ export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout
       <SidebarMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={onNavigate as any} currentView={currentView as any} onLogout={onLogout} />
 
       <div className="medicos-content">
+        <div style={{ fontSize: 11, color: loading ? '#2d9c9c' : '#6b7a99', margin: '0 0 8px', fontWeight: 500 }}>{loading ? 'Cargando...' : apiStatus}</div>
         <div className="medicos-search-wrap">
           <svg className="medicos-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a9ab5" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
@@ -78,7 +115,7 @@ export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout
 
         <ul className="medicos-list">
           {filtered.map((m) => (
-            <li key={m.id} className="medico-card">
+            <li key={m.id} className="medico-card" onClick={() => setSelected(m)} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && setSelected(m)} style={{ cursor: 'pointer' }}>
               <div className="medico-info">
                 <span className="medico-nombre">{m.nombre}</span>
                 <span className="medico-especialidad">{m.especialidad}</span>
@@ -86,16 +123,38 @@ export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout
                   <span className="medico-hospital-dot" />
                   {m.hospital}
                 </span>
+                <span className={`medico-visitador ${m.visitadorAsignado ? 'asignado' : 'no-asignado'}`}>
+                  {m.visitadorAsignado ? `Visitador: ${m.visitadorAsignado}` : 'Sin visitador asignado'}
+                </span>
               </div>
-              <div className="medico-actions">
-                <button className="btn-ver" onClick={() => console.log('Ver', m.id)}>Ver</button>
-                <button className="btn-editar" onClick={() => console.log('Editar', m.id)}>Editar</button>
-              </div>
+              <span className="medico-chevron">›</span>
             </li>
           ))}
         </ul>
 
-        {filtered.length === 0 && <p className="medicos-empty">No se encontraron médicos</p>}
+        {!loading && filtered.length === 0 && (
+          <p className="medicos-empty">{medicos.length === 0 ? 'No hay médicos registrados en la base de datos' : 'No se encontraron médicos'}</p>
+        )}
+
+        {selected && (
+          <div className="medico-detail-overlay" onClick={() => setSelected(null)}>
+            <div className="medico-detail-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+              <div className="medico-detail-header">
+                <h3>{selected.nombre}</h3>
+                <button className="medico-detail-close" onClick={() => setSelected(null)} aria-label="Cerrar">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p className="medico-detail-esp">{selected.especialidad} · {selected.hospital}</p>
+              <div className={`medico-detail-asignado ${selected.visitadorAsignado ? 'asignado' : 'no-asignado'}`}>
+                {selected.visitadorAsignado ? `✓ Visitador asignado: ${selected.visitadorAsignado}` : '○ Sin visitador asignado'}
+              </div>
+              <button className="medico-detail-primary" onClick={() => setSelected(null)}>Cerrar</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

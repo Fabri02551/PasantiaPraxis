@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
 import './Profile.css'
 
-type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos'
+type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
 
 interface Props {
   onNavigate: (view: View) => void
@@ -20,26 +20,26 @@ type ProfileData = {
   avatar: string
 }
 
-const INITIAL: ProfileData = {
-  nombre: 'Carlos Mendoza',
-  rol: 'Ejecutivo de Cuentas Senior',
-  email: 'c.mendoza@fieldcrm.com',
-  telefono: '+54 9 11 5829-1030',
-  cargo: 'Supervisor de Visitas Técnicas',
-  empresa: 'SaaS Solutions Latam',
-  avatar: 'https://i.pravatar.cc/200?img=12',
+const EMPTY_PROFILE: ProfileData = {
+  nombre: '',
+  rol: '',
+  email: '',
+  telefono: '',
+  cargo: '',
+  empresa: '',
+  avatar: '',
 }
 
 export const ProfileView: React.FC<Props> = ({ onNavigate, currentView, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false)
-  const [profile, setProfile] = useState<ProfileData>(INITIAL)
+  const [profile, setProfile] = useState<ProfileData | null>(null)
   const [editOpen, setEditOpen] = useState(false)
-  const [form, setForm] = useState<ProfileData>(INITIAL)
+  const [form, setForm] = useState<ProfileData>(EMPTY_PROFILE)
   const [errors, setErrors] = useState<Partial<Record<keyof ProfileData, string>>>({})
   const [saved, setSaved] = useState(false)
 
   const openEdit = () => {
-    setForm(profile)
+    setForm(profile ?? EMPTY_PROFILE)
     setErrors({})
     setSaved(false)
     setEditOpen(true)
@@ -93,30 +93,36 @@ export const ProfileView: React.FC<Props> = ({ onNavigate, currentView, onLogout
       <SidebarMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={onNavigate as any} currentView={currentView as any} onLogout={onLogout} />
 
       <div className="profile-content">
-        <section className="profile-card">
-          <img src={profile.avatar} alt={profile.nombre} className="profile-avatar" />
-          <h2 className="profile-name">{profile.nombre}</h2>
-          <p className="profile-role">{profile.rol}</p>
-        </section>
+        {!profile ? (
+          <p style={{ fontSize: 12, color: '#7e8aa6', padding: 16, textAlign: 'center' }}>No hay datos de perfil - sin datos en BD. No existe endpoint de perfil.</p>
+        ) : (
+          <>
+            <section className="profile-card">
+              <img src={profile.avatar || 'https://i.pravatar.cc/200?img=12'} alt={profile.nombre || 'Perfil'} className="profile-avatar" />
+              <h2 className="profile-name">{profile.nombre || 'Sin nombre'}</h2>
+              <p className="profile-role">{profile.rol || 'Sin rol'}</p>
+            </section>
 
-        <section className="profile-fields">
-          <div className="field-group">
-            <label className="field-label">CORREO ELECTRÓNICO</label>
-            <div className="field-box">{profile.email}</div>
-          </div>
-          <div className="field-group">
-            <label className="field-label">TELÉFONO</label>
-            <div className="field-box">{profile.telefono}</div>
-          </div>
-          <div className="field-group">
-            <label className="field-label">CARGO</label>
-            <div className="field-box">{profile.cargo}</div>
-          </div>
-          <div className="field-group">
-            <label className="field-label">EMPRESA</label>
-            <div className="field-box">{profile.empresa}</div>
-          </div>
-        </section>
+            <section className="profile-fields">
+              <div className="field-group">
+                <label className="field-label">CORREO ELECTRÓNICO</label>
+                <div className="field-box">{profile.email || '—'}</div>
+              </div>
+              <div className="field-group">
+                <label className="field-label">TELÉFONO</label>
+                <div className="field-box">{profile.telefono || '—'}</div>
+              </div>
+              <div className="field-group">
+                <label className="field-label">CARGO</label>
+                <div className="field-box">{profile.cargo || '—'}</div>
+              </div>
+              <div className="field-group">
+                <label className="field-label">EMPRESA</label>
+                <div className="field-box">{profile.empresa || '—'}</div>
+              </div>
+            </section>
+          </>
+        )}
 
         <button className="btn-edit" onClick={openEdit}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">

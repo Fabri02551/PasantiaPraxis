@@ -1,0 +1,26 @@
+.cartera-page { min-height: 100vh; background: #f4f6f9; display: flex; flex-direction: column; }
+.cartera-header { height: 56px; background: #1b2a4e; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; position: sticky; top: 0; z-index: 1000; }
+.cartera-content { flex: 1; max-width: 560px; width: 100%; margin: 0 auto; padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; }
+.cartera-intro h2 { font-size: 14px; font-weight: 700; color: #1b2a4e; margin: 0; }
+.cartera-intro p { font-size: 11.5px; color: #6b7a99; margin: 4px 0 0; line-height: 1.4; }
+.cartera-search-wrap { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e8ecf1; border-radius: 12px; padding: 0 12px; height: 42px; }
+.cartera-search-input { flex: 1; border: none; outline: none; font-size: 13px; color: #1b2a4e; background: transparent; }
+.cartera-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.cartera-card { background: #fff; border: 1px solid #e8ecf1; border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; box-shadow: 0 2px 8px rgba(27,42,78,0.04); transition: border-color 0.15s, box-shadow 0.15s; }
+.cartera-card:hover { border-color: #cbd5e1; box-shadow: 0 4px 12px rgba(27,42,78,0.08); }
+.cartera-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.cartera-nombre { font-size: 13.5px; font-weight: 700; color: #1b2a4e; }
+.cartera-esp { font-size: 12px; color: #6b7a99; }
+.cartera-hosp { font-size: 11.5px; color: #8a9ab5; display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; }
+.cartera-dot { width: 7px; height: 7px; background: #2d9c9c; border-radius: 2px; display: inline-block; }
+.cartera-badge { margin-top: 6px; font-size: 11px; font-weight: 600; background: #e6f7ed; color: #0e502e; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 8px; width: fit-content; }
+.cartera-chevron { color: #2d9c9c; font-size: 20px; }
+.cartera-empty { text-align: center; color: #8a9ab5; font-size: 13px; background: #fff; border: 1px dashed #e2e6ed; border-radius: 12px; padding: 20px; }
+.cartera-overlay { position: fixed; inset: 0; background: rgba(27,42,78,0.5); backdrop-filter: blur(2px); display: grid; place-items: center; z-index: 2000; padding: 16px; }
+.cartera-modal { background: #fff; border-radius: 16px; width: 100%; max-width: 420px; padding: 18px; box-shadow: 0 12px 32px rgba(27,42,78,0.18); border: 1px solid #e8ecf1; }
+.cartera-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.cartera-modal-header h3 { font-size: 15px; font-weight: 700; color: #1b2a4e; margin: 0; }
+.cartera-modal-close { width: 32px; height: 32px; border: none; background: #f4f6f9; border-radius: 8px; display: grid; place-items: center; cursor: pointer; color: #6b7a99; }
+.cartera-modal-esp { font-size: 12px; color: #6b7a99; margin: 0 0 12px; }
+.cartera-modal-badge { font-size: 12px; font-weight: 600; background: #e6f7ed; color: #0e502e; border: 1px solid #a7f3d0; padding: 8px 12px; border-radius: 8px; margin-bottom: 16px; }
+.cartera-modal-primary { width: 100%; height: 42px; background: #1b2a4e; color: #fff; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; }

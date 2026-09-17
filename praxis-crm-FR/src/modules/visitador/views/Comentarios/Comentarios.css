@@ -1,0 +1,47 @@
+.comentarios-page {
+  min-height: 100vh;
+  background: #f1f4f8;
+  display: flex;
+  flex-direction: column;
+}
+
+.comentarios-header {
+  height: 56px;
+  background: #1B2A4E;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.comentarios-header .header-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+}
+
+.comentarios-header .icon-btn {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.comentarios-content {
+  flex: 1;
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 16px;
+  box-sizing: border-box;
+}
