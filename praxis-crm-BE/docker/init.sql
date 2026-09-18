@@ -81,6 +81,8 @@ CREATE TABLE medico (
     persona_id INTEGER PRIMARY KEY REFERENCES persona(id) ON DELETE CASCADE,
     codigo VARCHAR(50) UNIQUE NOT NULL,
     especialidad_id INTEGER REFERENCES especialidad(id) ON DELETE SET NULL,
+    visitador_id INTEGER REFERENCES visitador(persona_id) ON DELETE SET NULL,
+    es_particular BOOLEAN DEFAULT false,
     institucion VARCHAR(255),
     direccion JSONB DEFAULT '{}',
     clasificacion SMALLINT DEFAULT 0 CHECK (clasificacion BETWEEN 0 AND 5),
@@ -120,15 +122,19 @@ CREATE TABLE visitador (
 -- VisitadorMedico (tabla de relación visitas)
 -- ============================================================
 CREATE TABLE visitador_medico (
+    id SERIAL PRIMARY KEY,
     id_visitador INTEGER NOT NULL REFERENCES persona(id) ON DELETE CASCADE,
     id_medico INTEGER NOT NULL REFERENCES medico(persona_id) ON DELETE CASCADE,
     fecha_visita TIMESTAMPTZ DEFAULT NOW(),
+    fecha_visita_tentativa TIMESTAMPTZ,
+    latitud NUMERIC(10,7),
+    longitud NUMERIC(10,7),
+    firma TEXT DEFAULT '',
     observacion JSONB DEFAULT '{}',
     satisfaccion SMALLINT DEFAULT 0 CHECK (satisfaccion BETWEEN 0 AND 5),
     duracion SMALLINT DEFAULT 0,
     ingreso DECIMAL(10,2) DEFAULT 0,
-    papeleta INTEGER DEFAULT 0,
-    PRIMARY KEY (id_visitador, id_medico, fecha_visita)
+    papeleta INTEGER DEFAULT 0
 );
 
 CREATE INDEX idx_vm_visitador ON visitador_medico(id_visitador);

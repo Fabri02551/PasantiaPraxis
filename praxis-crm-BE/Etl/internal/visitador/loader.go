@@ -48,6 +48,19 @@ func (l *Loader) SeedDepartamentos(ctx context.Context) (map[string]int, error) 
 	return ids, nil
 }
 
+// DeleteVisitadores elimina todos los usuarios con rol 'visitador',
+// sus registros en visitador y las personas asociadas (ON DELETE CASCADE).
+func (l *Loader) DeleteVisitadores(ctx context.Context) error {
+	_, err := l.pool.Exec(ctx, `
+		DELETE FROM persona
+		WHERE id IN (SELECT persona_id FROM visitador)
+	`)
+	if err != nil {
+		return fmt.Errorf("eliminando visitadores: %w", err)
+	}
+	return nil
+}
+
 // Load inserta cada visitador (persona + visitador + usuario) en su propia
 // transacción y devuelve el resultado de cada uno.
 func (l *Loader) Load(ctx context.Context, visitadores []Visitador, ciudadIDs map[string]int) ([]Result, error) {

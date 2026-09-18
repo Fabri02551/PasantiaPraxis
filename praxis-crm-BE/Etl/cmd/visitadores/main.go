@@ -17,7 +17,7 @@ import (
 func main() {
 	var src string
 	var logDir string
-	flag.StringVar(&src, "src", "src/vistadores/data visitadores.xlsx", "ruta del archivo XLSX de visitadores")
+	flag.StringVar(&src, "src", "src/vistadores/visitadores.csv", "ruta del archivo CSV de visitadores")
 	flag.StringVar(&logDir, "logs", "logs", "directorio donde se escribe el log")
 	flag.Parse()
 

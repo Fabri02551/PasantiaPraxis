@@ -28,6 +28,11 @@ func Run(ctx context.Context, pool *pgxpool.Pool, path string) (ResultadoRun, er
 		return ResultadoRun{}, fmt.Errorf("departamentos: %w", err)
 	}
 
+	// Limpiar visitadores existentes antes de recargar
+	if err := loader.DeleteVisitadores(ctx); err != nil {
+		return ResultadoRun{}, fmt.Errorf("limpiando visitadores: %w", err)
+	}
+
 	results, err := loader.Load(ctx, vis, ciudadIDs)
 	if err != nil {
 		return ResultadoRun{}, fmt.Errorf("carga visitadores: %w", err)
