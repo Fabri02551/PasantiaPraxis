@@ -41,6 +41,10 @@ import (
 	vrepo "gitlab.com/labpraxis/praxis-crm-be/api/internal/visitador/repository"
 	vroutes "gitlab.com/labpraxis/praxis-crm-be/api/internal/visitador/routes"
 	vsvc "gitlab.com/labpraxis/praxis-crm-be/api/internal/visitador/services"
+	visitalhandlers "gitlab.com/labpraxis/praxis-crm-be/api/internal/visita/handlers"
+	visitalrepo "gitlab.com/labpraxis/praxis-crm-be/api/internal/visita/repository"
+	visitaroutes "gitlab.com/labpraxis/praxis-crm-be/api/internal/visita/routes"
+	visitasvc "gitlab.com/labpraxis/praxis-crm-be/api/internal/visita/services"
 )
 
 func main() {
@@ -105,6 +109,12 @@ func main() {
 	visitadorSvc := vsvc.NewVisitadorService(visitadorRepo)
 	visitadorHandler := vhandlers.NewVisitadorHandler(visitadorSvc)
 	vroutes.Register(mux, visitadorHandler, cfg.JWTSecret)
+
+	// Visita module
+	visitaRepo := visitalrepo.NewVisitaRepository(pool)
+	visitaSvc := visitasvc.NewVisitaService(visitaRepo)
+	visitaHandler := visitalhandlers.NewVisitaHandler(visitaSvc)
+	visitaroutes.Register(mux, visitaHandler, cfg.JWTSecret)
 
 	handler := middleware.CORS(mux)
 
