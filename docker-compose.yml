@@ -11,7 +11,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./docker/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./praxis-crm-BE/docker/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U praxis -d praxis_crm"]
       interval: 5s
@@ -20,7 +20,7 @@ services:
 
   api:
     build:
-      context: ./Api
+      context: ./praxis-crm-BE/Api
       dockerfile: Dockerfile
     container_name: praxis-api
     restart: unless-stopped
@@ -35,6 +35,18 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  web:
+    build:
+      context: ./praxis-crm-FR
+      dockerfile: Dockerfile
+    container_name: praxis-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      api:
+        condition: service_started
 
 volumes:
   pgdata:
