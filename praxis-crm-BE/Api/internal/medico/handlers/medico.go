@@ -4,11 +4,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/middleware"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/pkg/response"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/medico/models"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/medico/services"
 )
+
+func isDuplicateKey(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "duplicate key")
+}
 
 type MedicoHandler struct {
 	svc *services.MedicoService
@@ -49,13 +55,31 @@ func (h *MedicoHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Codigo == "" {
-		response.Error(w, http.StatusBadRequest, "código es requerido")
+	if req.Matricula == "" {
+		response.Error(w, http.StatusBadRequest, "matricula es requerida")
+		return
+	}
+	if req.EspecialidadID == 0 {
+		response.Error(w, http.StatusBadRequest, "especialidad_id es requerido")
 		return
 	}
 
-	medico, err := h.svc.Create(r.Context(), req)
+	sexo, err := h.svc.GetPersonaSexo(r.Context(), req.PersonaID)
 	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if sexo == "" {
+		response.Error(w, http.StatusBadRequest, "la persona del médico debe tener sexo definido")
+		return
+	}
+
+	medico, err := h.svc.Create(r.Context(), middleware.UserPersonaID(r.Context()), req)
+	if err != nil {
+		if isDuplicateKey(err) {
+			response.Error(w, http.StatusConflict, "matricula, código o persona ya registrados")
+			return
+		}
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -75,8 +99,12 @@ func (h *MedicoHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	medico, err := h.svc.Update(r.Context(), personaID, req)
+	medico, err := h.svc.Update(r.Context(), middleware.UserPersonaID(r.Context()), personaID, req)
 	if err != nil {
+		if isDuplicateKey(err) {
+			response.Error(w, http.StatusConflict, "matricula, código o persona ya registrados")
+			return
+		}
 		response.Error(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -90,7 +118,7 @@ func (h *MedicoHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.Delete(r.Context(), personaID); err != nil {
+	if err := h.svc.Delete(r.Context(), middleware.UserPersonaID(r.Context()), personaID); err != nil {
 		response.Error(w, http.StatusNotFound, err.Error())
 		return
 	}

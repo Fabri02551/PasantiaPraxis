@@ -77,7 +77,8 @@ func (s *AuthService) GetByID(ctx context.Context, id string) (*models.UserWithP
 }
 
 type Claims struct {
-	Role string `json:"role"`
+	Role      string `json:"role"`
+	PersonaID *int   `json:"persona_id"`
 	jwt.RegisteredClaims
 }
 
@@ -85,7 +86,8 @@ func (s *AuthService) generateToken(user *models.User) (*models.TokenResponse, e
 	expiresAt := time.Now().Add(s.cfg.JWTExpiration)
 
 	claims := &Claims{
-		Role: user.Role,
+		Role:      user.Role,
+		PersonaID: user.PersonaID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
