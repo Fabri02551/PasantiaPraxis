@@ -1,6 +1,6 @@
 import './AdminSidebar.css'
 
-export type AdminView = 'admin-dashboard' | 'admin-visitadores' | 'admin-graficos' | 'admin-calendario' | 'admin-laboratorios' | 'admin-instituciones' | 'admin-medicos' | 'admin-comentarios' | 'admin-notificaciones' | 'admin-perfil'
+export type AdminView = 'admin-dashboard' | 'admin-visitadores' | 'admin-graficos' | 'admin-calendario' | 'admin-laboratorios' | 'admin-instituciones' | 'admin-medicos' | 'admin-especialidades' | 'admin-comentarios' | 'admin-notificaciones' | 'admin-perfil'
 
 interface Props {
   currentView: AdminView
@@ -62,6 +62,11 @@ export const AdminSidebar: React.FC<Props> = ({ currentView, onNavigate, onLogou
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><path d="M20 8l-2 2 2 2M22 12h-4" /></svg>
           Médicos
           {isActive('admin-medicos') && <span className="admin-active-bar" />}
+        </button>
+        <button className={`admin-nav-item ${isActive('admin-especialidades') ? 'active' : ''}`} onClick={() => onNavigate('admin-especialidades')}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
+          Especialidades
+          {isActive('admin-especialidades') && <span className="admin-active-bar" />}
         </button>
         <button className={`admin-nav-item ${isActive('admin-comentarios') ? 'active' : ''}`} onClick={() => onNavigate('admin-comentarios')}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 11.5a8.38 8.38 0 0 1-1.9.5 4.48 4.48 0 0 0 1.95-2.45 8.94 8.94 0 0 1-2.83 1.08 4.48 4.48 0 0 0-7.65 3.08 12.72 12.72 0 0 1-9.23-4.68 4.48 4.48 0 0 0 1.39 5.98 4.43 4.43 0 0 1-2.03-.56v.06a4.48 4.48 0 0 0 3.6 4.4 4.52 4.52 0 0 1-2.04.08 4.48 4.48 0 0 0 4.18 3.11A8.98 8.98 0 0 1 2 19.1a12.66 12.66 0 0 0 6.86 2.01c8.25 0 12.76-6.84 12.76-12.76 0-.2 0-.4-.01-.6A9.2 9.2 0 0 0 23 6.2a8.9 8.9 0 0 1-2.6.7z" /><circle cx="12" cy="12" r="1" /></svg>

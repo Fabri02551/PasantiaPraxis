@@ -10,7 +10,9 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 import { MapPicker } from '../../components/MapPicker/MapPicker'
 import { medicoService, type MedicoBE } from '../../../core/services/medico.service'
 import { personaService } from '../../../core/services/persona.service'
+import { especialidadService, type Especialidad } from '../../../core/services/especialidad.service'
 import { ENV } from '../../../core/config/env'
+import { displayMedico } from '../../../core/utils/medicoPrefix'
 import './MedicosAdmin.css'
 import '../Visitadores/Visitadores.css'
 
@@ -23,13 +25,21 @@ type Ubicacion = { id: string; direccion: string; detalle: string; coords: [numb
 type MedicoAdmin = {
   id: string
   nombre: string
+  primerApellido: string
+  segundoApellido: string
+  sexo: string
+  codigo: string
   especialidad: string
   hospital: string
   telefono: string
   email: string
+  ci: string
   descripcion: string
   ubicaciones: Ubicacion[]
 }
+
+const reqLabelStyle: React.CSSProperties = { color: '#8a9ab5', fontWeight: 400, fontSize: 10, opacity: 0.85, marginLeft: 4, textTransform: 'lowercase' }
+const optLabelStyle: React.CSSProperties = { color: '#8a9ab5', fontWeight: 400, fontSize: 10, opacity: 0.75, marginLeft: 4, textTransform: 'lowercase' }
 
 export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v: AdminView) => void; onLogout: () => void }> = ({ currentView, onNavigate, onLogout }) => {
   const [medicos, setMedicos] = useState<MedicoAdmin[]>([])
@@ -39,7 +49,12 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
   const [editForm, setEditForm] = useState<MedicoAdmin | null>(null)
   const [deleting, setDeleting] = useState<MedicoAdmin | null>(null)
   const [showCreate, setShowCreate] = useState(false)
-  const [form, setForm] = useState<Omit<MedicoAdmin, 'id'>>({ nombre: '', especialidad: '', hospital: '', telefono: '', email: '', descripcion: '', ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: [-0.1807, -78.4678] }] })
+  const [form, setForm] = useState<Omit<MedicoAdmin, 'id'>>({
+    nombre: '', primerApellido: '', segundoApellido: '', sexo: '', codigo: '',
+    especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '',
+    ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: [-0.1807, -78.4678] }],
+  })
+  const [especialidades, setEspecialidades] = useState<Especialidad[]>([])
   const [apiStatus, setApiStatus] = useState(`API: ${ENV.API_URL}`)
   const [loading, setLoading] = useState(false)
 
@@ -69,21 +84,34 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
     const enriched = await Promise.all(
       list.map(async (b) => {
         let nombre = `Médico ${b.codigo || b.persona_id}`
+        let primerApellido = ''
+        let segundoApellido = ''
+        let sexo = ''
         let email = ''
         let telefono = ''
+        let ci = ''
         try {
           const p = await personaService.getById(b.persona_id)
-          nombre = `${p.nombre} ${p.primer_apellido}${p.segundo_apellido ? ' ' + p.segundo_apellido : ''}`.trim() || nombre
+          nombre = p.nombre || nombre
+          primerApellido = p.primer_apellido || ''
+          segundoApellido = p.segundo_apellido || ''
+          sexo = p.sexo || ''
           email = p.correo || ''
           telefono = p.telefono || ''
+          ci = p.ci || ''
         } catch { /* sin persona, usa fallback */ }
         return {
           id: String(b.persona_id),
           nombre,
+          primerApellido,
+          segundoApellido,
+          sexo,
+          codigo: b.codigo || '',
           especialidad: String(b.especialidad_id ?? ''),
           hospital: b.institucion || '',
           telefono,
           email,
+          ci,
           descripcion: typeof b.notas === 'string' ? b.notas : '',
           ubicaciones: parseUbicaciones(b.direccion, b.institucion),
         } as MedicoAdmin
@@ -121,42 +149,77 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
     }
   }, [])
 
+  useEffect(() => {
+    especialidadService.list().then(data => setEspecialidades(Array.isArray(data) ? data : [])).catch(() => setEspecialidades([]))
+  }, [])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return medicos
-    return medicos.filter(m => m.nombre.toLowerCase().includes(q) || m.especialidad.toLowerCase().includes(q) || m.hospital.toLowerCase().includes(q))
+    return medicos.filter(m => displayMedico(m.sexo, `${m.nombre} ${m.primerApellido}`).toLowerCase().includes(q) || m.especialidad.toLowerCase().includes(q) || m.hospital.toLowerCase().includes(q))
   }, [medicos, search])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.nombre.trim()) return
+    if (!form.nombre.trim() || !form.primerApellido.trim()) return
     const direccionPayload = form.ubicaciones[0] ? JSON.stringify(form.ubicaciones) : undefined
     try {
-      const pid = Date.now() % 100000
+      const persona = await personaService.create({
+        nombre: form.nombre.trim(),
+        primer_apellido: form.primerApellido.trim(),
+        segundo_apellido: form.segundoApellido.trim() || null,
+        sexo: form.sexo || '',
+        correo: form.email?.trim() || '',
+        telefono: form.telefono?.trim() || '',
+        ci: form.ci?.trim() || '',
+      } as unknown as Omit<import('../../../core/services/persona.service').Persona, 'id' | 'status' | 'created_at'>)
+      const pid = (persona as unknown as { id: number }).id
+      const codigo = form.codigo.trim()
+      const especialidadId = form.especialidad ? Number(form.especialidad) : undefined
       const created = await medicoService.create({
         persona_id: pid,
-        codigo: `MED-${pid}`,
-        institucion: form.hospital,
+        codigo,
+        especialidad_id: Number.isFinite(especialidadId as number) ? especialidadId : undefined,
         direccion: direccionPayload ? (JSON.parse(direccionPayload) as unknown) : undefined,
       } as never)
-      // Solo refleja DB: mapea respuesta y añade a lista
       const mappedList = await mapBEList([created as MedicoBE])
       const mapped = mappedList[0] ?? null
       if (mapped) {
-        // si el BE no devolvió nombre, usa form como fallback visual
-        if (!mapped.nombre || mapped.nombre.startsWith('Médico MED-')) {
-          mapped.nombre = form.nombre.trim()
-          mapped.especialidad = form.especialidad
-          mapped.telefono = form.telefono
-          mapped.email = form.email
-          mapped.descripcion = form.descripcion
-          mapped.ubicaciones = form.ubicaciones.filter(u => u.direccion.trim()).map((u, i) => ({ ...u, id: `u${i}` }))
-          if (mapped.ubicaciones.length === 0) mapped.ubicaciones = [{ id: 'u0', direccion: form.hospital, detalle: '', coords: [-0.1807, -78.4678] }]
-        }
+        // enriquecer con datos locales por si BE no devuelve todo
+        mapped.nombre = form.nombre.trim()
+        mapped.primerApellido = form.primerApellido.trim()
+        mapped.segundoApellido = form.segundoApellido.trim()
+        mapped.sexo = form.sexo
+        mapped.codigo = codigo
+        mapped.especialidad = form.especialidad
+        mapped.telefono = form.telefono
+        mapped.email = form.email
+        mapped.ci = form.ci
+        mapped.descripcion = form.descripcion
+        mapped.ubicaciones = form.ubicaciones.filter(u => u.direccion.trim() || u.detalle.trim()).map((u, i) => ({ ...u, id: `u${i}` }))
+        if (mapped.ubicaciones.length === 0) mapped.ubicaciones = [{ id: 'u0', direccion: '', detalle: '', coords: [-0.1807, -78.4678] }]
         setMedicos(prev => [...prev, mapped])
+      } else {
+        // fallback si map falla, añade visual
+        const fallback: MedicoAdmin = {
+          id: String(pid),
+          nombre: form.nombre.trim(),
+          primerApellido: form.primerApellido.trim(),
+          segundoApellido: form.segundoApellido.trim(),
+          sexo: form.sexo,
+          codigo,
+          especialidad: form.especialidad,
+          hospital: '',
+          telefono: form.telefono,
+          email: form.email,
+          ci: form.ci,
+          descripcion: form.descripcion,
+          ubicaciones: form.ubicaciones,
+        }
+        setMedicos(prev => [...prev, fallback])
       }
-      setApiStatus(`Creado en API: ${form.nombre}`)
-      setForm({ nombre: '', especialidad: '', hospital: '', telefono: '', email: '', descripcion: '', ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: [-0.1807, -78.4678] }] })
+      setApiStatus(`Creado en API: ${form.nombre} ${form.primerApellido} (${codigo})`)
+      setForm({ nombre: '', primerApellido: '', segundoApellido: '', sexo: '', codigo: '', especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '', ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: [-0.1807, -78.4678] }] })
       setShowCreate(false)
     } catch (err) {
       console.warn('[MedicosAdmin] create error', err)
@@ -169,9 +232,10 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
     if (!editForm) return
     try {
       const pid = Number(editForm.id) || 1
-      await medicoService.update(pid, { institucion: editForm.hospital, direccion: JSON.stringify(editForm.ubicaciones) as unknown as never } as never)
+      const especialidadId = editForm.especialidad ? Number(editForm.especialidad) : undefined
+      await medicoService.update(pid, { especialidad_id: Number.isFinite(especialidadId as number) ? especialidadId : null as unknown as number, direccion: JSON.stringify(editForm.ubicaciones) as unknown as never } as never)
       setMedicos(prev => prev.map(m => (m.id === editForm.id ? editForm : m)))
-      setApiStatus(`Actualizado en API: ${editForm.nombre}`)
+      setApiStatus(`Actualizado en API: ${displayMedico(editForm.sexo, `${editForm.nombre} ${editForm.primerApellido}`)}`)
       setEditing(null)
       setEditForm(null)
     } catch (err) {
@@ -187,13 +251,15 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
       if (!Number.isFinite(pid)) throw new Error('ID inválido')
       await medicoService.remove(pid)
       setMedicos(prev => prev.filter(m => m.id !== deleting.id))
-      setApiStatus(`Eliminado en API: ${deleting.nombre}`)
+      setApiStatus(`Eliminado en API: ${displayMedico(deleting.sexo, deleting.nombre)}`)
       setDeleting(null)
     } catch (err) {
       console.warn('[MedicosAdmin] delete error', err)
       setApiStatus(`Error al eliminar: ${err instanceof Error ? err.message : String(err)} — no se eliminó (solo DB)`)
     }
   }
+
+  const nombreCompleto = (m: MedicoAdmin) => `${m.nombre} ${m.primerApellido}${m.segundoApellido ? ' ' + m.segundoApellido : ''}`.trim()
 
   return (
     <AdminLayout currentView={currentView} onNavigate={onNavigate} onLogout={onLogout} title="Médicos" searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar médico o especialidad...">
@@ -223,12 +289,12 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
                 <tr key={m.id}>
                   <td>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontWeight: 700, fontSize: 12 }}>{m.nombre}</span>
-                      <span style={{ fontSize: 11, color: '#7e8aa6' }}>{m.email}</span>
+                      <span style={{ fontWeight: 700, fontSize: 12 }}>{displayMedico(m.sexo, nombreCompleto(m))}</span>
+                      <span style={{ fontSize: 11, color: '#7e8aa6' }}>{m.email}{m.codigo ? ` · ${m.codigo}` : ''}</span>
                     </div>
                   </td>
-                  <td><span className="medicos-espec">{m.especialidad}</span></td>
-                  <td style={{ fontSize: 11.5 }}>{m.hospital}</td>
+                  <td><span className="medicos-espec">{m.especialidad ? ((especialidades ?? []).find(e => String(e.id) === m.especialidad)?.nombre || m.especialidad) : '—'}</span></td>
+                  <td style={{ fontSize: 11.5 }}>{m.hospital || '—'}</td>
                   <td><span className="medicos-ubi-badge">{m.ubicaciones.length} {m.ubicaciones.length === 1 ? 'ubicación' : 'ubicaciones'}</span></td>
                   <td>
                     <div className="pruebas-actions">
@@ -248,13 +314,16 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
       {viewing && (
         <div className="vt-overlay" onClick={() => setViewing(null)}>
           <div className="vt-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal style={{ maxWidth: 560 }}>
-            <div className="vt-modal-head"><h3>{viewing.nombre}</h3><button className="vt-modal-close" onClick={() => setViewing(null)} aria-label="Cerrar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button></div>
+            <div className="vt-modal-head"><h3>{displayMedico(viewing.sexo, nombreCompleto(viewing))}</h3><button className="vt-modal-close" onClick={() => setViewing(null)} aria-label="Cerrar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button></div>
             <div className="vt-view-body" style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <span style={{ fontSize: 12, color: '#2d9c9c', fontWeight: 600 }}>{viewing.especialidad} · {viewing.hospital}</span>
-              <p style={{ fontSize: 12, color: '#1B2A4E', margin: 0 }}>{viewing.descripcion}</p>
+              <span style={{ fontSize: 12, color: '#2d9c9c', fontWeight: 600 }}>{viewing.especialidad ? ((especialidades ?? []).find(e => String(e.id) === viewing.especialidad)?.nombre || viewing.especialidad) : 'Sin especialidad'} · {viewing.hospital || 'Sin institución'}</span>
+              <p style={{ fontSize: 12, color: '#1B2A4E', margin: 0 }}>{viewing.descripcion || 'Sin descripción'}</p>
               <div className="vt-view-grid">
-                <span>Teléfono</span><strong>{viewing.telefono}</strong>
-                <span>Email</span><strong>{viewing.email}</strong>
+                <span>Matrícula</span><strong>{viewing.codigo || '—'}</strong>
+                <span>Sexo</span><strong>{viewing.sexo ? (viewing.sexo.toLowerCase().startsWith('f') ? 'Femenino' : viewing.sexo.toLowerCase().startsWith('m') ? 'Masculino' : viewing.sexo) : '—'}</strong>
+                <span>CI</span><strong>{viewing.ci || '—'}</strong>
+                <span>Teléfono</span><strong>{viewing.telefono || '—'}</strong>
+                <span>Email</span><strong>{viewing.email || '—'}</strong>
               </div>
               <div>
                 <h4 style={{ fontSize: 12, fontWeight: 700, color: '#1B2A4E', margin: '6px 0 8px' }}>Ubicaciones ({viewing.ubicaciones.length})</h4>
@@ -287,14 +356,29 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
           <div className="vt-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal>
             <div className="vt-modal-head"><h3>Nuevo Médico</h3><button className="vt-modal-close" onClick={() => setShowCreate(false)} aria-label="Cerrar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button></div>
             <form onSubmit={handleCreate} className="vt-form">
-              <label>Nombre<input required value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Dr. Nombre" /></label>
-              <label>Especialidad<input value={form.especialidad} onChange={e => setForm({ ...form, especialidad: e.target.value })} placeholder="Ej. Cardiólogo" /></label>
-              <label>Hospital<input value={form.hospital} onChange={e => setForm({ ...form, hospital: e.target.value })} /></label>
-              <label>Teléfono<input value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} /></label>
-              <label>Email<input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></label>
-              <label>Descripción<textarea value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} /></label>
+              <label>Nombre <span style={reqLabelStyle}>* obligatorio</span><input required value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej. Juan" /></label>
+              <label>Primer Apellido <span style={reqLabelStyle}>* obligatorio</span><input required value={form.primerApellido} onChange={e => setForm({ ...form, primerApellido: e.target.value })} placeholder="Ej. Pérez" /></label>
+              <label>Segundo Apellido <span style={optLabelStyle}>(opcional)</span><input value={form.segundoApellido} onChange={e => setForm({ ...form, segundoApellido: e.target.value })} placeholder="Ej. López" /></label>
+              <label>Sexo <span style={optLabelStyle}>(opcional)</span>
+                <select value={form.sexo} onChange={e => setForm({ ...form, sexo: e.target.value })}>
+                  <option value="">Seleccione sexo</option>
+                  <option value="masculino">Masculino</option>
+                  <option value="femenino">Femenino</option>
+                </select>
+              </label>
+              <label>Matrícula <span style={reqLabelStyle}>* obligatorio</span><input value={form.codigo} onChange={e => setForm({ ...form, codigo: e.target.value })} placeholder="Ej. MED-12345 (autogenerado si vacío)" /></label>
+              <label>Especialidad <span style={optLabelStyle}>(opcional)</span>
+                <select value={form.especialidad} onChange={e => setForm({ ...form, especialidad: e.target.value })}>
+                  <option value="">Seleccione especialidad</option>
+                  {(especialidades ?? []).map(es => <option key={es.id} value={String(es.id)}>{es.nombre} ({es.codigo})</option>)}
+                </select>
+              </label>
+              <label>Teléfono <span style={optLabelStyle}>(opcional)</span><input value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="Ej. 0999999999" /></label>
+              <label>Correo / Email <span style={optLabelStyle}>(opcional)</span><input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="ejemplo@correo.com" /></label>
+              <label>CI <span style={optLabelStyle}>(opcional)</span><input value={form.ci} onChange={e => setForm({ ...form, ci: e.target.value })} placeholder="Ej. 1712345678" /></label>
+              <label>Descripción / Notas <span style={optLabelStyle}>(opcional)</span><textarea value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} placeholder="Notas adicionales" /></label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2A4E' }}>Ubicaciones — agrega pin en el mapa + detalle</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2A4E' }}>Ubicaciones</span>
                 {form.ubicaciones.map((u, idx) => (
                   <div key={u.id} style={{ border: '1px solid #e8ecf1', borderRadius: 10, padding: 10, display: 'flex', flexDirection: 'column', gap: 8, background: '#fcfcfd' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -319,14 +403,29 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
           <div className="vt-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal>
             <div className="vt-modal-head"><h3>Editar Médico</h3><button className="vt-modal-close" onClick={() => { setEditing(null); setEditForm(null) }} aria-label="Cerrar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button></div>
             <form onSubmit={handleEditSave} className="vt-form">
-              <label>Nombre<input required value={editForm.nombre} onChange={e => setEditForm({ ...editForm, nombre: e.target.value })} /></label>
-              <label>Especialidad<input value={editForm.especialidad} onChange={e => setEditForm({ ...editForm, especialidad: e.target.value })} /></label>
-              <label>Hospital<input value={editForm.hospital} onChange={e => setEditForm({ ...editForm, hospital: e.target.value })} /></label>
-              <label>Teléfono<input value={editForm.telefono} onChange={e => setEditForm({ ...editForm, telefono: e.target.value })} /></label>
-              <label>Email<input type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} /></label>
-              <label>Descripción<textarea value={editForm.descripcion} onChange={e => setEditForm({ ...editForm, descripcion: e.target.value })} /></label>
+              <label>Nombre <span style={reqLabelStyle}>* obligatorio</span><input required value={editForm.nombre} onChange={e => setEditForm({ ...editForm, nombre: e.target.value })} /></label>
+              <label>Primer Apellido <span style={reqLabelStyle}>* obligatorio</span><input required value={editForm.primerApellido} onChange={e => setEditForm({ ...editForm, primerApellido: e.target.value })} /></label>
+              <label>Segundo Apellido <span style={optLabelStyle}>(opcional)</span><input value={editForm.segundoApellido} onChange={e => setEditForm({ ...editForm, segundoApellido: e.target.value })} /></label>
+              <label>Sexo <span style={optLabelStyle}>(opcional)</span>
+                <select value={editForm.sexo} onChange={e => setEditForm({ ...editForm, sexo: e.target.value })}>
+                  <option value="">Seleccione sexo</option>
+                  <option value="masculino">Masculino</option>
+                  <option value="femenino">Femenino</option>
+                </select>
+              </label>
+              <label>Matrícula <span style={reqLabelStyle}>* obligatorio</span><input value={editForm.codigo} onChange={e => setEditForm({ ...editForm, codigo: e.target.value })} /></label>
+              <label>Especialidad <span style={optLabelStyle}>(opcional)</span>
+                <select value={editForm.especialidad} onChange={e => setEditForm({ ...editForm, especialidad: e.target.value })}>
+                  <option value="">Seleccione especialidad</option>
+                  {(especialidades ?? []).map(es => <option key={es.id} value={String(es.id)}>{es.nombre} ({es.codigo})</option>)}
+                </select>
+              </label>
+              <label>Teléfono <span style={optLabelStyle}>(opcional)</span><input value={editForm.telefono} onChange={e => setEditForm({ ...editForm, telefono: e.target.value })} /></label>
+              <label>Email <span style={optLabelStyle}>(opcional)</span><input type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} /></label>
+              <label>CI <span style={optLabelStyle}>(opcional)</span><input value={editForm.ci} onChange={e => setEditForm({ ...editForm, ci: e.target.value })} /></label>
+              <label>Descripción <span style={optLabelStyle}>(opcional)</span><textarea value={editForm.descripcion} onChange={e => setEditForm({ ...editForm, descripcion: e.target.value })} /></label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2A4E' }}>Ubicaciones — pin en mapa + detalle</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2A4E' }}>Ubicaciones</span>
                 {editForm.ubicaciones.map((u, idx) => (
                   <div key={u.id} style={{ border: '1px solid #e8ecf1', borderRadius: 10, padding: 10, display: 'flex', flexDirection: 'column', gap: 8, background: '#fcfcfd' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -352,7 +451,7 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
             <div className="vt-modal-head"><h3>Confirmar Eliminación</h3><button className="vt-modal-close" onClick={() => setDeleting(null)} aria-label="Cerrar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button></div>
             <div className="vt-delete-body">
               <div className="vt-delete-icon--minimal"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#8a9ab5" strokeWidth="1.6"><circle cx="12" cy="12" r="9" /><path d="M12 8v6" /><circle cx="12" cy="16" r="0.8" fill="#8a9ab5" stroke="none" /></svg></div>
-              <p>¿Eliminar <strong>{deleting.nombre}</strong>?</p>
+              <p>¿Eliminar <strong>{displayMedico(deleting.sexo, nombreCompleto(deleting))}</strong>?</p>
               <p className="vt-delete-hint">Esta acción eliminará el registro en la base de datos ({ENV.API_URL}).</p>
               <div className="vt-form-actions"><button className="vt-btn-cancel" onClick={() => setDeleting(null)}>Cancelar</button><button className="vt-btn vt-btn--eliminar" onClick={handleDelete}>Eliminar</button></div>
             </div>

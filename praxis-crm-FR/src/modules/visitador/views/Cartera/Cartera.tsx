@@ -2,7 +2,9 @@ import { useState, useMemo, useEffect } from 'react'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
 import type { Medico } from '../Medicos/Medicos'
 import { medicoService } from '../../../core/services/medico.service'
+import { personaService } from '../../../core/services/persona.service'
 import { ENV } from '../../../core/config/env'
+import { displayMedico } from '../../../core/utils/medicoPrefix'
 import './Cartera.css'
 
 type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
@@ -29,16 +31,32 @@ export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout
     setLoading(true)
     medicoService
       .list()
-      .then((data) => {
+      .then(async (data) => {
         if (cancelled) return
         if (Array.isArray(data) && data.length > 0) {
-          const mapped: Medico[] = data.map((b, idx) => ({
-            id: String(b.persona_id || idx + 1),
-            nombre: (b as unknown as { nombre?: string }).nombre || `Médico ${b.codigo || b.persona_id}`,
-            especialidad: String((b as unknown as { especialidad?: string }).especialidad || b.especialidad_id || 'General'),
-            hospital: b.institucion || 'Sin institución',
-            visitadorAsignado: (b as unknown as { visitadorAsignado?: string | null }).visitadorAsignado ?? null,
+          const mapped: Medico[] = await Promise.all(data.map(async (b, idx) => {
+            let sexo: string | undefined
+            let primerApellido = ''
+            let segundoApellido = ''
+            let nombre = (b as unknown as { nombre?: string }).nombre || `Médico ${b.codigo || b.persona_id}`
+            try {
+              const p = await personaService.getById(b.persona_id)
+              nombre = p.nombre || nombre
+              primerApellido = p.primer_apellido || ''
+              segundoApellido = p.segundo_apellido || ''
+              sexo = p.sexo || undefined
+              if (primerApellido) nombre = `${nombre} ${primerApellido}${segundoApellido ? ' ' + segundoApellido : ''}`.trim()
+            } catch { /* fallback */ }
+            return {
+              id: String(b.persona_id || idx + 1),
+              nombre,
+              sexo,
+              especialidad: String((b as unknown as { especialidad?: string }).especialidad || b.especialidad_id || 'General'),
+              hospital: b.institucion || 'Sin institución',
+              visitadorAsignado: (b as unknown as { visitadorAsignado?: string | null }).visitadorAsignado ?? null,
+            }
           }))
+          if (cancelled) return
           setMedicos(mapped)
           setApiStatus(`Conectado a ${ENV.API_URL} — ${data.length} médicos desde /api/medicos`)
         } else {
@@ -105,7 +123,7 @@ export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout
           {filtered.map(m => (
             <li key={m.id} className="cartera-card" onClick={() => setSelected(m)} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && setSelected(m)}>
               <div className="cartera-info">
-                <span className="cartera-nombre">{m.nombre}</span>
+                <span className="cartera-nombre">{displayMedico(m.sexo, m.nombre)}</span>
                 <span className="cartera-esp">{m.especialidad}</span>
                 <span className="cartera-hosp"><span className="cartera-dot" />{m.hospital}</span>
                 <span className="cartera-badge">Cartera: {m.visitadorAsignado}</span>
@@ -121,7 +139,7 @@ export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout
           <div className="cartera-overlay" onClick={() => setSelected(null)}>
             <div className="cartera-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
               <div className="cartera-modal-header">
-                <h3>{selected.nombre}</h3>
+                <h3>{displayMedico(selected.sexo, selected.nombre)}</h3>
                 <button className="cartera-modal-close" onClick={() => setSelected(null)} aria-label="Cerrar">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
                 </button>

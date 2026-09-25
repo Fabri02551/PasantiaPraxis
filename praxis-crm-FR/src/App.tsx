@@ -16,6 +16,7 @@ import { LaboratoriosView } from './modules/admin/views/Laboratorios/Laboratorio
 import { CalendarAdminView } from './modules/admin/views/CalendarAdmin/CalendarAdmin'
 import { InstitucionesView } from './modules/admin/views/Instituciones/Instituciones'
 import { MedicosAdminView } from './modules/admin/views/MedicosAdmin/MedicosAdmin'
+import { EspecialidadesView } from './modules/admin/views/Especialidades/Especialidades'
 import { AdminComentariosView } from './modules/admin/views/Comentarios/AdminComentarios'
 import { VisitadorComentariosView } from './modules/visitador/views/Comentarios/Comentarios'
 import { PlanificadorView } from './modules/visitador/views/Planificador/Planificador'
@@ -87,6 +88,8 @@ function App() {
     content = <InstitucionesView currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
   } else if (view === 'admin-medicos') {
     content = <MedicosAdminView currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
+  } else if (view === 'admin-especialidades') {
+    content = <EspecialidadesView currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
   } else if (view === 'admin-comentarios') {
     content = <AdminComentariosView currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
   } else if (view === 'home') {
