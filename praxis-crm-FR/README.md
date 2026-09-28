@@ -1,6 +1,60 @@
 # Praxis Crm FE
 
+## Build del APK Android (Capacitor)
 
+La app es un SPA (React + Vite) que se envuelve con [Capacitor](https://capacitorjs.com/) para generar el APK. El proyecto nativo vive en `android/`.
+
+### Requisitos
+
+* Node.js 22+
+* Android Studio (incluye JDK, SDK y Gradle)
+* Android SDK (Android Studio lo instala automaticamente en el primer sync)
+
+### Estructura relevante
+
+* `src/` — codigo de la app (React)
+* `dist/` — build web generado por Vite
+* `android/` — proyecto nativo Android (generado con `npx cap add android`)
+* `capacitor.config.ts` — configuracion de Capacitor (appId `com.praxis.crm`, webDir `dist`)
+
+### Paso 1 — Copiar la web al proyecto Android (obligatorio tras cada cambio en `src/`)
+
+Android Studio compila los assets copiados en `android/app/src/main/assets/public`, no lee `src/` directamente:
+
+```bash
+cd praxis-crm-FR
+npm install
+npm run android:build   # es equivalente a: vite build + cap sync android
+```
+
+### Paso 2A — Buildear en Android Studio (recomendado)
+
+Doble clic en `abrir-android-studio.bat` (raiz del repositorio). El script:
+
+1. ejecuta `npm run android:build` para dejar la web actualizada,
+2. abre `praxis-crm-FR/android` en Android Studio.
+
+En el IDE: esperar a que termine el *Gradle Sync* y luego `Build > Build APK(s)`.
+
+### Paso 2B — Buildear solo por CLI (sin abrir el IDE)
+
+```bash
+cd praxis-crm-FR
+npm run android:apk
+```
+
+### Salida
+
+```
+praxis-crm-FR/android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+APK verificada: `com.praxis.crm`, minSdk 24 / targetSdk 36, firmada con el certificado debug.
+
+### Notas
+
+* `android/local.properties` (ruta del SDK local) y las carpetas `android/build/`, `.gradle/` y `app/src/main/assets/public` estan en `.gitignore` y no se comparten en el repo.
+* El APK **debug** usa una firma local automatica de Android Studio, valida para instalar/probar. Para publicar en Google Play hace falta un APK/Bundle **release** firmado con un keystore propio (`./gradlew assembleRelease` y un `signingConfig` en `android/app/build.gradle`).
 
 ## Getting started
 
