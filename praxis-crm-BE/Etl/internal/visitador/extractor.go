@@ -4,12 +4,13 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
 // Extract abre un archivo CSV con la estructura pre-procesada de visitadores
 // y devuelve los registros normalizados.
-// Columnas esperadas: nombre,primer_apellido,segundo_apellido,ci,depto,telefono,nacimiento,correo
+// Columnas esperadas: nombre,primer_apellido,segundo_apellido,ci,depto,telefono,nacimiento,correo[,latitud,longitud]
 func Extract(path string) ([]Visitador, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -50,6 +51,8 @@ func Extract(path string) ([]Visitador, error) {
 	iTel := field("telefono")
 	iNac := field("nacimiento")
 	iCorr := field("correo")
+	iLat := field("latitud")
+	iLong := field("longitud")
 
 	if iNombre < 0 || iCorr < 0 {
 		return nil, fmt.Errorf("el CSV no tiene las columnas requeridas (nombre, correo)")
@@ -60,6 +63,20 @@ func Extract(path string) ([]Visitador, error) {
 			return ""
 		}
 		return strings.TrimSpace(row[i])
+	}
+
+	// coordenada convierte un valor de lat/long del CSV. Vacío o inválido
+	// devuelve nil: la columna queda NULL en la base en vez de abortar la
+	// carga de un visitador que existe sin coordenadas.
+	coordenada := func(texto string) *float64 {
+		if texto == "" {
+			return nil
+		}
+		valor, err := strconv.ParseFloat(texto, 64)
+		if err != nil {
+			return nil
+		}
+		return &valor
 	}
 
 	var out []Visitador
@@ -89,6 +106,8 @@ func Extract(path string) ([]Visitador, error) {
 			CI:              cell(row, iCi),
 			DeptoCodigo:     cell(row, iDepto),
 			Nacimiento:      nac,
+			Latitud:         coordenada(cell(row, iLat)),
+			Longitud:        coordenada(cell(row, iLong)),
 		}
 		_ = i
 		out = append(out, vis)

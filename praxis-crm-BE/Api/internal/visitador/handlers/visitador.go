@@ -44,6 +44,8 @@ func (h *VisitadorHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Correo:          req.Correo,
 		Telefono:        req.Telefono,
 		CI:              req.CI,
+		Latitud:         req.Latitud,
+		Longitud:        req.Longitud,
 		Activo:          true,
 	}
 

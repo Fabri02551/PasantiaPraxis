@@ -83,6 +83,8 @@ CREATE INDEX idx_lab_ciudad_ciudad ON laboratorio_ciudad(ciudad_id);
 CREATE TABLE visitador (
     persona_id INTEGER PRIMARY KEY REFERENCES persona(id) ON DELETE CASCADE,
     activo BOOLEAN DEFAULT true,
+    latitud NUMERIC(10,7),
+    longitud NUMERIC(10,7),
     creado_por INTEGER REFERENCES persona(id) ON DELETE SET NULL,
     modificado_por INTEGER REFERENCES persona(id) ON DELETE SET NULL,
     fecha_creacion TIMESTAMPTZ DEFAULT NOW(),

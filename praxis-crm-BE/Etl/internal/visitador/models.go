@@ -11,7 +11,9 @@ type Visitador struct {
 	CI              string
 	DeptoCodigo     string
 	CiudadID        *int
-	Nacimiento      *string // "YYYY-MM-DD" o nil cuando no hay fecha
+	Nacimiento      *string    // "YYYY-MM-DD" o nil cuando no hay fecha
+	Latitud         *float64   // nil cuando el CSV no la trae
+	Longitud        *float64   // nil cuando el CSV no la trae
 }
 
 // Result describe el resultado de la carga de un visitador en la BD.

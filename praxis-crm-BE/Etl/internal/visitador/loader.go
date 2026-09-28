@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
+
+	"gitlab.com/labpraxis/praxis-crm-be/etl/internal/catalog"
 )
 
 type Loader struct {
@@ -21,50 +23,18 @@ func NewLoader(pool *pgxpool.Pool) *Loader {
 	return &Loader{pool: pool}
 }
 
-// SeedDepartamentos asegura que los 9 departamentos de Bolivia existan
-// en la tabla ciudad. Devuelve el mapa nombre -> id.
-func (l *Loader) SeedDepartamentos(ctx context.Context) (map[string]int, error) {
-	ids := make(map[string]int, len(Departamentos))
-	for _, nombre := range Departamentos {
-		var id int
-		err := l.pool.QueryRow(ctx,
-			`SELECT id FROM ciudad WHERE nombre = $1 LIMIT 1`, nombre,
-		).Scan(&id)
-		if err == nil {
-			ids[nombre] = id
-			continue
-		}
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("buscando departamento %q: %w", nombre, err)
-		}
-		err = l.pool.QueryRow(ctx,
-			`INSERT INTO ciudad (nombre) VALUES ($1) RETURNING id`, nombre,
-		).Scan(&id)
-		if err != nil {
-			return nil, fmt.Errorf("insertando departamento %q: %w", nombre, err)
-		}
-		ids[nombre] = id
-	}
-	return ids, nil
-}
-
-// DeleteVisitadores elimina todos los usuarios con rol 'visitador',
-// sus registros en visitador y las personas asociadas (ON DELETE CASCADE).
-func (l *Loader) DeleteVisitadores(ctx context.Context) error {
-	_, err := l.pool.Exec(ctx, `
-		DELETE FROM persona
-		WHERE id IN (SELECT persona_id FROM visitador)
-	`)
-	if err != nil {
-		return fmt.Errorf("eliminando visitadores: %w", err)
-	}
-	return nil
-}
-
-// Load inserta cada visitador (persona + visitador + usuario) en su propia
-// transacción y devuelve el resultado de cada uno.
-func (l *Loader) Load(ctx context.Context, visitadores []Visitador, ciudadIDs map[string]int) ([]Result, error) {
+// Load inserta o actualiza cada visitador y devuelve, además del detalle por
+// registro, un mapa alias -> persona_id que usan las etapas de médico e
+// institución para resolver la columna "VISITADOR ASIGNADO".
+//
+// La carga es idempotente: el visitador se reconoce por CI y, si no lo
+// tiene, por correo. Reejecutar el ETL actualiza los datos en vez de
+// duplicarlos, y nunca borra visitadores que ya tengan médicos asignados
+// (medico.visitador_id).
+func (l *Loader) Load(ctx context.Context, visitadores []Visitador, ciudades *catalog.Ciudades) (*Mapa, []Result, error) {
+	mapa := NewMapa()
 	results := make([]Result, 0, len(visitadores))
+
 	for _, v := range visitadores {
 		res := Result{
 			Nombre:          v.Nombre,
@@ -81,25 +51,33 @@ func (l *Loader) Load(ctx context.Context, visitadores []Visitador, ciudadIDs ma
 			continue
 		}
 
-		depto := deptoNombre(v.DeptoCodigo)
-		if depto == "" {
-			depto = "Cochabamba"
+		ciudadID, nombreCiudad := resolverCiudad(ciudades, v.DeptoCodigo)
+		v.CiudadID = ciudadID
+		if nombreCiudad == "" {
+			// Sin departamento reconocible la persona queda con ciudad_id
+			// NULL, que es NULL en el esquema y no rompe nada.
+			nombreCiudad = "sin departamento"
 		}
-		if id, ok := ciudadIDs[depto]; ok {
-			res.Ciudad = depto
-			v.CiudadID = &id
-		}
+		res.Ciudad = nombreCiudad
 
-		existe, err := l.emailExiste(ctx, v.Correo)
+		personaID, existente, err := l.buscar(ctx, v)
 		if err != nil {
 			res.Estado = "error"
 			res.Detalle = err.Error()
 			results = append(results, res)
 			continue
 		}
-		if existe {
-			res.Estado = "omitido"
-			res.Detalle = "el correo ya estaba registrado"
+
+		if existente {
+			if err := l.actualizar(ctx, personaID, v); err != nil {
+				res.Estado = "error"
+				res.Detalle = err.Error()
+				results = append(results, res)
+				continue
+			}
+			mapa.Agregar(v, personaID)
+			res.Estado = "actualizado"
+			res.Detalle = fmt.Sprintf("persona_id=%d", personaID)
 			results = append(results, res)
 			continue
 		}
@@ -112,7 +90,7 @@ func (l *Loader) Load(ctx context.Context, visitadores []Visitador, ciudadIDs ma
 			continue
 		}
 
-		personaID, err := l.insertVisitador(ctx, v, password)
+		personaID, err = l.insertar(ctx, v, password)
 		if err != nil {
 			res.Estado = "error"
 			res.Detalle = err.Error()
@@ -120,29 +98,78 @@ func (l *Loader) Load(ctx context.Context, visitadores []Visitador, ciudadIDs ma
 			continue
 		}
 
+		mapa.Agregar(v, personaID)
 		res.Password = password
 		res.Estado = "insertado"
 		res.Detalle = fmt.Sprintf("persona_id=%d", personaID)
 		results = append(results, res)
 	}
-	return results, nil
+
+	return mapa, results, nil
 }
 
-func (l *Loader) emailExiste(ctx context.Context, email string) (bool, error) {
-	var one int
+// buscar localiza un visitador ya cargado. El CI es la clave natural más
+// estable; el correo es el respaldo para los que no lo tienen.
+func (l *Loader) buscar(ctx context.Context, v Visitador) (int, bool, error) {
+	if v.CI != "" {
+		var id int
+		err := l.pool.QueryRow(ctx,
+			`SELECT p.id FROM persona p
+			 JOIN visitador vt ON vt.persona_id = p.id
+			 WHERE p.ci = $1 LIMIT 1`, v.CI).Scan(&id)
+		if err == nil {
+			return id, true, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return 0, false, fmt.Errorf("buscando visitador por CI: %w", err)
+		}
+	}
+
+	var id int
 	err := l.pool.QueryRow(ctx,
-		`SELECT 1 FROM users WHERE email = $1 LIMIT 1`, email,
-	).Scan(&one)
+		`SELECT p.id FROM persona p
+		 JOIN users u ON u.persona_id = p.id
+		 WHERE lower(u.email) = lower($1) LIMIT 1`, v.Correo).Scan(&id)
 	if err == nil {
-		return true, nil
+		return id, true, nil
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
+		return 0, false, nil
 	}
-	return false, fmt.Errorf("verificando email: %w", err)
+	return 0, false, fmt.Errorf("buscando visitador por correo: %w", err)
 }
 
-func (l *Loader) insertVisitador(ctx context.Context, v Visitador, password string) (int, error) {
+func (l *Loader) actualizar(ctx context.Context, personaID int, v Visitador) error {
+	tag, err := l.pool.Exec(ctx,
+		`UPDATE persona
+		 SET nombre = $1, primer_apellido = $2, segundo_apellido = $3, sexo = $4,
+		     correo = $5, telefono = NULLIF($6, ''), nacimiento = $7, ciudad_id = $8
+		 WHERE id = $9`,
+		v.Nombre, v.PrimerApellido, v.SegundoApellido, v.Sexo, v.Correo, v.Telefono, v.Nacimiento, v.CiudadID, personaID,
+	)
+	if err != nil {
+		return fmt.Errorf("actualizando persona %d: %w", personaID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("la persona %d no existe", personaID)
+	}
+
+	// El correo es UNIQUE en users: puede haber cambiado de.visitador por
+	// una carga anterior con otra dirección.
+	if _, err := l.pool.Exec(ctx, `UPDATE users SET email = $1 WHERE persona_id = $2`, v.Correo, personaID); err != nil {
+		return fmt.Errorf("actualizando correo del visitador %d: %w", personaID, err)
+	}
+	if _, err := l.pool.Exec(ctx,
+		`UPDATE visitador
+		 SET activo = true, status = true,
+		     latitud = COALESCE($2, latitud), longitud = COALESCE($3, longitud)
+		 WHERE persona_id = $1`, personaID, v.Latitud, v.Longitud); err != nil {
+		return fmt.Errorf("activando visitador %d: %w", personaID, err)
+	}
+	return nil
+}
+
+func (l *Loader) insertar(ctx context.Context, v Visitador, password string) (int, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return 0, fmt.Errorf("hasheando contraseña: %w", err)
@@ -154,18 +181,24 @@ func (l *Loader) insertVisitador(ctx context.Context, v Visitador, password stri
 	}
 	defer tx.Rollback(ctx)
 
+	// persona.nombre y persona.primer_apellido son NOT NULL: el CSV puede
+	// traerlos vacíos y se rellenan con un valor por defecto en vez de
+	// abortar la carga.
 	var personaID int
 	err = tx.QueryRow(ctx,
 		`INSERT INTO persona (nombre, primer_apellido, segundo_apellido, sexo, correo, telefono, ci, nacimiento, ciudad_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-		v.Nombre, v.PrimerApellido, v.SegundoApellido, v.Sexo, v.Correo, v.Telefono, v.CI, v.Nacimiento, v.CiudadID,
+		 VALUES ($1, COALESCE(NULLIF($2, ''), 'SIN APELLIDO'), $3, $4, $5, NULLIF($6, ''), NULLIF($7, ''), $8, $9)
+		 RETURNING id`,
+		orDefault(v.Nombre, "SIN NOMBRE"), v.PrimerApellido, v.SegundoApellido, v.Sexo,
+		v.Correo, v.Telefono, v.CI, v.Nacimiento, v.CiudadID,
 	).Scan(&personaID)
 	if err != nil {
 		return 0, fmt.Errorf("insertando persona: %w", err)
 	}
 
 	if _, err := tx.Exec(ctx,
-		`INSERT INTO visitador (persona_id) VALUES ($1)`, personaID,
+		`INSERT INTO visitador (persona_id, latitud, longitud) VALUES ($1, $2, $3)`,
+		personaID, v.Latitud, v.Longitud,
 	); err != nil {
 		return 0, fmt.Errorf("insertando visitador: %w", err)
 	}
@@ -183,11 +216,31 @@ func (l *Loader) insertVisitador(ctx context.Context, v Visitador, password stri
 	return personaID, nil
 }
 
-func deptoNombre(codigo string) string {
-	if codigo == "" {
-		return ""
+func orDefault(v, def string) string {
+	if strings.TrimSpace(v) == "" {
+		return def
 	}
-	return deptoPorExtension[strings.ToUpper(codigo)]
+	return v
+}
+
+// resolverCiudad traduce el código de departamento del CSV a un id de
+// ciudad. Primero prueba el catálogo, que ya trae los códigos como alias;
+// si no aparece, cae a la tabla local por si el catálogo quedó viejo.
+func resolverCiudad(ciudades *catalog.Ciudades, codigo string) (*int, string) {
+	codigo = strings.TrimSpace(codigo)
+	if codigo == "" {
+		return nil, ""
+	}
+
+	if id, ok := ciudades.IDByAlias(codigo); ok {
+		return &id, ciudades.NombrePorID(id)
+	}
+	if nombre := deptoNombre(codigo); nombre != "" {
+		if id, ok := ciudades.IDByName(nombre); ok {
+			return &id, ciudades.NombrePorID(id)
+		}
+	}
+	return nil, ""
 }
 
 const passwordCharset = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789"

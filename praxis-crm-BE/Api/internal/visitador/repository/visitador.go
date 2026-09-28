@@ -34,8 +34,8 @@ func (r *VisitadorRepository) Create(ctx context.Context, userID *int, v *models
 	}
 
 	_, err = tx.Exec(ctx,
-		`INSERT INTO visitador (persona_id, creado_por) VALUES ($1, $2)`,
-		personaID, userID,
+		`INSERT INTO visitador (persona_id, creado_por, latitud, longitud) VALUES ($1, $2, $3, $4)`,
+		personaID, userID, v.Latitud, v.Longitud,
 	)
 	if err != nil {
 		return fmt.Errorf("error creating visitador: %w", err)
@@ -46,7 +46,8 @@ func (r *VisitadorRepository) Create(ctx context.Context, userID *int, v *models
 
 func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, p.sexo, p.correo, p.telefono, p.ci, v.activo,
+		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, p.sexo, p.correo, p.telefono, p.ci,
+		        v.latitud, v.longitud, v.activo,
 		        v.creado_por, v.modificado_por, v.fecha_creacion, v.ultima_modificacion
 		 FROM visitador v
 		 JOIN persona p ON p.id = v.persona_id
@@ -60,7 +61,8 @@ func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, err
 	var visitadores []models.Visitador
 	for rows.Next() {
 		var v models.Visitador
-		if err := rows.Scan(&v.PersonaID, &v.Nombre, &v.PrimerApellido, &v.SegundoApellido, &v.Sexo, &v.Correo, &v.Telefono, &v.CI, &v.Activo,
+		if err := rows.Scan(&v.PersonaID, &v.Nombre, &v.PrimerApellido, &v.SegundoApellido, &v.Sexo, &v.Correo, &v.Telefono, &v.CI,
+			&v.Latitud, &v.Longitud, &v.Activo,
 			&v.CreadoPor, &v.ModificadoPor, &v.FechaCreacion, &v.UltimaModificacion); err != nil {
 			return nil, err
 		}
@@ -72,12 +74,14 @@ func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, err
 func (r *VisitadorRepository) GetByID(ctx context.Context, id int) (*models.Visitador, error) {
 	v := &models.Visitador{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, p.sexo, p.correo, p.telefono, p.ci, v.activo,
+		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, p.sexo, p.correo, p.telefono, p.ci,
+		        v.latitud, v.longitud, v.activo,
 		        v.creado_por, v.modificado_por, v.fecha_creacion, v.ultima_modificacion
 		 FROM visitador v
 		 JOIN persona p ON p.id = v.persona_id
 		 WHERE v.persona_id = $1`, id,
-	).Scan(&v.PersonaID, &v.Nombre, &v.PrimerApellido, &v.SegundoApellido, &v.Sexo, &v.Correo, &v.Telefono, &v.CI, &v.Activo,
+	).Scan(&v.PersonaID, &v.Nombre, &v.PrimerApellido, &v.SegundoApellido, &v.Sexo, &v.Correo, &v.Telefono, &v.CI,
+		&v.Latitud, &v.Longitud, &v.Activo,
 		&v.CreadoPor, &v.ModificadoPor, &v.FechaCreacion, &v.UltimaModificacion)
 	if err != nil {
 		return nil, fmt.Errorf("visitador not found: %w", err)
@@ -106,14 +110,20 @@ func (r *VisitadorRepository) Update(ctx context.Context, userID *int, id int, v
 		}
 	}
 
-	if v.Activo != nil {
-		_, err = tx.Exec(ctx,
-			`UPDATE visitador SET activo = $1, modificado_por = $3, ultima_modificacion = NOW() WHERE persona_id = $2`,
-			*v.Activo, id, userID,
-		)
-		if err != nil {
-			return fmt.Errorf("error updating visitador: %w", err)
-		}
+	// Se actualiza siempre: con COALESCE cada campo conserva su valor si el
+	// request no lo trae (activo o coordenadas que no vienen de la API).
+	_, err = tx.Exec(ctx,
+		`UPDATE visitador SET
+			activo = COALESCE($1, activo),
+			latitud = COALESCE($2, latitud),
+			longitud = COALESCE($3, longitud),
+			modificado_por = $4,
+			ultima_modificacion = NOW()
+		 WHERE persona_id = $5`,
+		v.Activo, v.Latitud, v.Longitud, userID, id,
+	)
+	if err != nil {
+		return fmt.Errorf("error updating visitador: %w", err)
 	}
 
 	return tx.Commit(ctx)

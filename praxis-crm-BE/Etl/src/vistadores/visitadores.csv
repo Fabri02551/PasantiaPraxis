@@ -1,12 +1,13 @@
-nombre,primer_apellido,segundo_apellido,ci,depto,telefono,nacimiento,correo
-Consuelo,Muñoz,Acosta,8257645,SC,61937005,1992-07-26,munozacostaconsuelo7@gmail.com
-Gualberto,Zenzano,Torrico,5159014,,69254055,1979-11-20,supervisor@laboratoriopraxis.com
-Paulo Andre,Sandoval,Montaño,7929606,,76405840,1994-02-01,polo.102191@gmail.com
-Karen Noelia,Castro,Ruiz,7180099,TJA,62640461,1992-09-29,k8925216@gmail.com
-Gabriela,Copa,Silos,7199168,TJA,62640456,1998-08-24,visitadoratjapraxis4@gmail.com
-Yesenia Marahi,Herrera,Chura,8363052,LP,70100737,1998-02-04,yesdreamcloud@gmail.com
-Jahaziel,Belen,Facio,9908840,LP,60121947,1999-06-28,jahaz5299@gmail.com
-Keila Belén,Espinoza,Zurita,3924704,SC,62627150,1990-09-25,espinozakeila2529@gmail.com
-Lilibeth Alejandra,Paredes,Flores,9762020,,76405646,1992-04-12,lilibethalejandrap@gmail.com
-Joshua,Alexander,Mercado,13356898,CBBA,69420903,1996-11-13,joshua_alexandercapo@hotmail.com
-Celcina,Cruz,Menacho,13038781,PT,77202277,1998-03-22,celcinacruzmenacho@gmail.com
+nombre,primer_apellido,segundo_apellido,ci,depto,telefono,nacimiento,correo,latitud,longitud
+Consuelo,Muñoz,Acosta,8257645,SC,61937005,1992-07-26,munozacostaconsuelo7@gmail.com,-17.78629,-63.18117
+Gualberto,Zenzano,Torrico,5159014,,69254055,1979-11-20,supervisor@laboratoriopraxis.com,,
+Paulo Andre,Sandoval,Montaño,7929606,,76405840,1994-02-01,polo.102191@gmail.com,,
+Karen Noelia,Castro,Ruiz,7180099,TJA,62640461,1992-09-29,k8925216@gmail.com,-21.53549,-64.72956
+Gabriela,Copa,Silos,7199168,TJA,62640456,1998-08-24,visitadoratjapraxis4@gmail.com,-21.53549,-64.72956
+Yesenia Marahi,Herrera,Chura,8363052,LP,70100737,1998-02-04,yesdreamcloud@gmail.com,-16.48969,-68.11929
+Jahaziel,Belen,Facio,9908840,LP,60121947,1999-06-28,jahaz5299@gmail.com,-16.48969,-68.11929
+Keila Belén,Espinoza,Zurita,3924704,SC,62627150,1990-09-25,espinozakeila2529@gmail.com,-17.78629,-63.18117
+Lilibeth Alejandra,Paredes,Flores,9762020,,76405646,1992-04-12,lilibethalejandrap@gmail.com,,
+Joshua,Alexander,Mercado,13356898,CBBA,69420903,1996-11-13,joshua_alexandercapo@hotmail.com,-17.3895,-66.1568
+Celcina,Cruz,Menacho,13038781,PT,77202277,1998-03-22,celcinacruzmenacho@gmail.com,-19.57261,-65.75496
+Rocio,Miranda,,,SC,,,rociomiranda@laboratoriopraxis.com,-17.78629,-63.18117

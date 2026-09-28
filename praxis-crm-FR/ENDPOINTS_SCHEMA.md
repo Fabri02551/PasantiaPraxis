@@ -224,10 +224,10 @@ accionService.update(1, {prioridad:1, status:true})
 
 ## 8. Módulo VISITADOR — `Api/internal/visitador/{models:5,routes:14,handlers:22}` ⚠️ Patrón distinto
 
-**Modelo:** `Visitador:5` `{persona_id, nombre*, primer_apellido*, segundo_apellido?, sexo?, correo*, telefono?, ci?, activo bool, created_at}` — Extiende persona, `activo` = en terreno  
-**Create:** `CreateVisitadorRequest:18` `{persona_id?, nombre*, primer_apellido*, segundo_apellido?, sexo?, correo*, telefono?, ci?}` — Handler crea `Activo=true` por defecto  
-**Update:** `UpdateVisitadorRequest:29` `{nombre?, primer_apellido?, segundo_apellido?, telefono?, activo? *bool}` (sin `ci/sexo/correo`)  
-**Tabla:** `docker/init.sql:112` `visitador (persona_id PK)`
+**Modelo:** `Visitador:5` `{persona_id, nombre*, primer_apellido*, segundo_apellido?, sexo?, correo*, telefono?, ci?, latitud? NUMERIC(10,7), longitud? NUMERIC(10,7), activo bool, created_at}` — Extiende persona, `activo` = en terreno  
+**Create:** `CreateVisitadorRequest:18` `{persona_id?, nombre*, primer_apellido*, segundo_apellido?, sexo?, correo*, telefono?, ci?, latitud?, longitud?}` — Handler crea `Activo=true` por defecto  
+**Update:** `UpdateVisitadorRequest:29` `{nombre?, primer_apellido?, segundo_apellido?, telefono?, activo? *bool, latitud?, longitud?}` (sin `ci/sexo/correo`)  
+**Tabla:** `docker/init.sql:112` `visitador (persona_id PK, latitud NUMERIC(10,7), longitud NUMERIC(10,7))`
 
 **¡Todos requieren ADMIN, incluso GET!** (`routes.go:20-24` usa `wrap := auth(adminOnly)` + `TrimPrefix` para `/{id}`)
 

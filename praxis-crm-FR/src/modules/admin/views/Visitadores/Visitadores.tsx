@@ -12,6 +12,8 @@ interface Visitador {
   nombre: string
   email: string
   telefono: string
+  latitud: number | null
+  longitud: number | null
   visitas: number
   estado: Estado
   avatar: string
@@ -28,6 +30,8 @@ const mapBEtoFE = (b: VisitadorBE, idx: number): Visitador => ({
   nombre: `${b.nombre} ${b.primer_apellido}${b.segundo_apellido ? ' ' + b.segundo_apellido : ''}`.trim(),
   email: b.correo || '',
   telefono: b.telefono || '',
+  latitud: b.latitud ?? null,
+  longitud: b.longitud ?? null,
   visitas: 0,
   estado: b.activo ? 'Activo' : 'Inactivo',
   avatar: `https://i.pravatar.cc/100?img=${10 + ((b.persona_id || idx) % 60)}`,
@@ -47,7 +51,7 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
   const [viewing, setViewing] = useState<Visitador | null>(null)
 
   // form state - sin campo estado (siempre Activo al crear)
-  const [form, setForm] = useState<Omit<Visitador, 'id' | 'avatar' | 'estado'> & { avatar?: string }>({ nombre: '', email: '', telefono: '', visitas: 0 })
+  const [form, setForm] = useState<Omit<Visitador, 'id' | 'avatar' | 'estado'> & { avatar?: string }>({ nombre: '', email: '', telefono: '', latitud: null, longitud: null, visitas: 0 })
   const [editForm, setEditForm] = useState<Visitador | null>(null)
 
   useEffect(() => {
@@ -95,6 +99,8 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
       primer_apellido: partes.slice(1).join(' ') || '—',
       correo: form.email.trim(),
       telefono: form.telefono.trim(),
+      latitud: form.latitud,
+      longitud: form.longitud,
     }
     try {
       const created = await visitadorService.create(payload)
@@ -103,7 +109,7 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
       mapped.visitas = Number(form.visitas) || 0
       setVisitadores((prev) => [...prev, mapped])
       setApiStatus(`Creado en ${ENV.API_URL} → ${mapped.nombre}`)
-      setForm({ nombre: '', email: '', telefono: '', visitas: 0 })
+      setForm({ nombre: '', email: '', telefono: '', latitud: null, longitud: null, visitas: 0 })
       setShowCreate(false)
     } catch (err) {
       console.warn('[Visitadores] create error', err)
@@ -120,6 +126,8 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
         primer_apellido: editForm.nombre.split(' ').slice(1).join(' ') || editForm.nombre,
         telefono: editForm.telefono,
         activo: editForm.estado === 'Activo',
+        latitud: editForm.latitud,
+        longitud: editForm.longitud,
       })
       setVisitadores((prev) => prev.map((v) => (v.id === editForm.id ? editForm : v)))
       setApiStatus(`Actualizado en API: ${editForm.nombre}`)
@@ -229,6 +237,8 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
               <label>Correo Electrónico<input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="correo@praxis.com" /></label>
               <label>Teléfono<input value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="+56 9 1234 5678" /></label>
               <label>Visitas (Mes)<input type="number" min={0} value={form.visitas} onChange={e => setForm({ ...form, visitas: Number(e.target.value) })} /></label>
+              <label>Latitud<input type="number" step="any" value={form.latitud ?? ''} onChange={e => setForm({ ...form, latitud: e.target.value === '' ? null : Number(e.target.value) })} placeholder="-17.7863" /></label>
+              <label>Longitud<input type="number" step="any" value={form.longitud ?? ''} onChange={e => setForm({ ...form, longitud: e.target.value === '' ? null : Number(e.target.value) })} placeholder="-63.1812" /></label>
               <div className="vt-form-actions">
                 <button type="button" className="vt-btn-cancel" onClick={() => setShowCreate(false)}>Cancelar</button>
                 <button type="submit" className="vt-btn-submit">Registrar</button>
@@ -251,6 +261,8 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
               <label>Correo Electrónico<input required type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} /></label>
               <label>Teléfono<input value={editForm.telefono} onChange={e => setEditForm({ ...editForm, telefono: e.target.value })} /></label>
               <label>Visitas (Mes)<input type="number" min={0} value={editForm.visitas} onChange={e => setEditForm({ ...editForm, visitas: Number(e.target.value) })} /></label>
+              <label>Latitud<input type="number" step="any" value={editForm.latitud ?? ''} onChange={e => setEditForm({ ...editForm, latitud: e.target.value === '' ? null : Number(e.target.value) })} /></label>
+              <label>Longitud<input type="number" step="any" value={editForm.longitud ?? ''} onChange={e => setEditForm({ ...editForm, longitud: e.target.value === '' ? null : Number(e.target.value) })} /></label>
               <div className="vt-form-actions">
                 <button type="button" className="vt-btn-cancel" onClick={() => { setEditing(null); setEditForm(null) }}>Cancelar</button>
                 <button type="submit" className="vt-btn-submit">Guardar Cambios</button>
@@ -275,6 +287,7 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
               <div className="vt-view-grid">
                 <span>Teléfono</span><strong>{viewing.telefono}</strong>
                 <span>Visitas</span><strong>{viewing.visitas}</strong>
+                <span>Ubicación</span><strong>{viewing.latitud !== null && viewing.longitud !== null ? `${viewing.latitud.toFixed(5)}, ${viewing.longitud.toFixed(5)}` : 'Sin coordenadas'}</strong>
                 <span>Estado</span><span className={`vt-badge ${viewing.estado === 'Activo' ? 'vt-badge--activo' : 'vt-badge--inactivo'}`}><span className="vt-dot" /> {viewing.estado}</span>
               </div>
               <button className="vt-btn-submit" style={{ width: '100%', marginTop: 16 }} onClick={() => setViewing(null)}>Cerrar</button>
