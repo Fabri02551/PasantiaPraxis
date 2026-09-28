@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
-import { VisitDetailExpanded, type ExpandedVisit } from '../../components/VisitDetailExpanded'
+import { useMisVisitas, visitaToACompletar, type VisitaResuelta } from '../../hooks/useMisVisitas'
+import type { VisitaACompletar } from '../CompletarVisita/CompletarVisita'
 import './Home.css'
 
 // Fix default icon issue in Vite
@@ -19,24 +20,11 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 })
 
-type Visit = {
-  id: string
-  dateLabel: string
-  time: string
-  company: string
-  detail: string
-  coords: [number, number]
-  addr: string
-  contact: string
-  phone: string
-  status: string
-  description: string
-  medico: { nombre: string; especialidad: string; hospital: string; phone: string }
+const pad = (n: number) => String(n).padStart(2, '0')
+const hoyKey = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
-
-const VISITS: Visit[] = []
-
-const route: [number, number][] = []
 
 function createColorIcon(color: string) {
   return L.divIcon({
@@ -55,31 +43,18 @@ interface HomeProps {
   onNavigate: (view: View) => void
   currentView: View
   onLogout: () => void
-  onCompletar?: (visita: { id: string; company: string; detail: string; addr: string; time: string; dateLabel?: string; medico: { nombre: string; especialidad: string; hospital: string; phone: string }; contact?: string; phone?: string; status?: string }) => void
-}
-
-function toExpanded(v: Visit): ExpandedVisit {
-  return {
-    id: v.id,
-    time: v.time,
-    dateLabel: v.dateLabel,
-    company: v.company,
-    detail: v.detail,
-    addr: v.addr,
-    contact: v.contact,
-    phone: v.phone,
-    status: v.status,
-    description: v.description,
-    coords: v.coords,
-    medico: v.medico,
-  }
+  onCompletar?: (visita: VisitaACompletar) => void
 }
 
 export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, onLogout, onCompletar }) => {
   const center: [number, number] = [-0.1807, -78.4678]
+  const { porVisitar, loading } = useMisVisitas()
   const [menuOpen, setMenuOpen] = useState(false)
-  const [detail, setDetail] = useState<Visit | null>(null)
-  const [expanded, setExpanded] = useState<ExpandedVisit | null>(null)
+  const [detail, setDetail] = useState<VisitaResuelta | null>(null)
+
+  const hoy = hoyKey()
+  const pendientesHoy = useMemo(() => porVisitar.filter((v) => v.fecha === hoy), [porVisitar, hoy])
+  const pendientesHoySur = pendientesHoy.length > 0 ? pendientesHoy : porVisitar.slice(0, 4)
 
   return (
     <div className="visitador-page">
@@ -104,7 +79,7 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
         <section className="map-card">
           <div className="map-badge">
             <span className="badge-dot" />
-            {VISITS.length} Visitas Pendientes
+            {loading ? 'Cargando…' : `${porVisitar.length} Visitas Pendientes`}
           </div>
           <div className="map-wrapper">
             <MapContainer
@@ -118,13 +93,18 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              {route.length > 0 && <Polyline positions={route} pathOptions={{ color: '#F9B233', weight: 4, opacity: 0.9 }} />}
-              {VISITS.slice(0, 4).map((v, idx) => (
-                <Marker key={v.id} position={v.coords} icon={createColorIcon(markerColors[idx % markerColors.length])}>
+              {pendientesHoySur.length > 1 && (
+                <Polyline
+                  positions={pendientesHoySur.map((v) => v.destino.coords)}
+                  pathOptions={{ color: '#F9B233', weight: 4, opacity: 0.9 }}
+                />
+              )}
+              {pendientesHoySur.slice(0, 4).map((v, idx) => (
+                <Marker key={v.id} position={v.destino.coords} icon={createColorIcon(markerColors[idx % markerColors.length])}>
                   <Popup>
-                    <strong>{v.company}</strong>
+                    <strong>{v.destino.nombre}</strong>
                     <br />
-                    {v.detail}
+                    {v.destino.subtitulo || 'Médico/Institución'}
                   </Popup>
                 </Marker>
               ))}
@@ -151,24 +131,26 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
         <section className="visits-card">
           <div className="visits-header">
             <h2>Visitas programadas</h2>
-            <span style={{ fontSize: 11, color: '#7e8aa6', fontWeight: 600 }}>{VISITS.filter(v=>v.dateLabel==='Hoy').length} hoy</span>
+            <span style={{ fontSize: 11, color: '#7e8aa6', fontWeight: 600 }}>{pendientesHoy.length} hoy</span>
           </div>
 
-          {VISITS.length === 0 ? (
-            <p style={{ fontSize: 12, color: '#7e8aa6', padding: '12px 0', textAlign: 'center' }}>No hay visitas programadas - sin datos en la base de datos</p>
+          {pendientesHoy.length === 0 ? (
+            <p style={{ fontSize: 12, color: '#7e8aa6', padding: '12px 0', textAlign: 'center' }}>
+              {loading ? 'Cargando…' : 'No hay visitas programadas para hoy'}
+            </p>
           ) : (
             <ul className="visits-list">
-              {VISITS.filter(v=>v.dateLabel==='Hoy').map((v) => (
-                <li key={v.id} className="visit-item" onClick={() => setDetail(v)} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && setDetail(v)} style={{ cursor: 'pointer' }}>
+              {pendientesHoy.map((v) => (
+                <li key={v.id} className="visit-item" onClick={() => setDetail(v)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setDetail(v)} style={{ cursor: 'pointer' }}>
                   <div className="visit-date">
-                    <span className="visit-date-label">{v.dateLabel}</span>
-                    <span className="visit-time">{v.time}</span>
+                    <span className="visit-date-label">{v.fecha === hoy ? 'Hoy' : v.fecha ?? '—'}</span>
+                    <span className="visit-time">{v.hora}</span>
                   </div>
                   <div className="visit-info">
-                    <span className="visit-company">{v.company}</span>
-                    <span className="visit-detail">{v.detail}</span>
+                    <span className="visit-company">{v.destino.nombre}</span>
+                    <span className="visit-detail">{v.destino.subtitulo || (v.tipo === 'institucion' ? 'Institución' : 'Médico')}</span>
                   </div>
-                  <span className={`visit-status-badge status-${v.status.toLowerCase().replace(' ', '-')}`}>{v.status}</span>
+                  <span className="visit-status-badge status-pendiente">{v.tipo === 'institucion' ? 'Institución' : 'Médico'}</span>
                 </li>
               ))}
             </ul>
@@ -181,87 +163,58 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
 
       {detail && (
         <div className="visit-detail-overlay" onClick={() => setDetail(null)}>
-          <div className="visit-detail-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Detalle de ${detail.company}`}>
+          <div className="visit-detail-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Detalle de ${detail.destino.nombre}`}>
             <div className="visit-detail-header">
-              <span className="visit-detail-badge">{detail.time} · {detail.dateLabel}</span>
-              <span className={`visit-detail-status status-${detail.status.toLowerCase().replace(' ', '-')}`}>{detail.status}</span>
-              <button
-                className="visit-detail-expand"
-                onClick={() => {
-                  setExpanded(toExpanded(detail))
-                }}
-                aria-label="Ver detalle completo"
-                title="Ver detalle completo con mapa y médico"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M15 3h6v6" />
-                  <path d="M9 21H3v-6" />
-                  <path d="M21 3l-7 7" />
-                  <path d="M3 21l7-7" />
-                </svg>
-              </button>
+              <span className="visit-detail-badge">{detail.hora} · {detail.fecha ?? 'Sin fecha'}</span>
+              <span className="visit-detail-status">{detail.tipo === 'institucion' ? 'Institución' : 'Médico'}</span>
               <button className="visit-detail-close" onClick={() => setDetail(null)} aria-label="Cerrar">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <h3 className="visit-detail-title">{detail.company}</h3>
+            <h3 className="visit-detail-title">{detail.destino.nombre}</h3>
+            <p className="visit-detail-subtitle">{detail.destino.subtitulo || (detail.tipo === 'institucion' ? 'Institución de salud' : 'Médico')}</p>
             <p className="visit-detail-addr">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7a99" strokeWidth="1.8">
                 <path d="M12 21s-6-4.5-6-10a6 6 0 0 1 12 0c0 5.5-6 10-6 10z" />
                 <circle cx="12" cy="11" r="2" />
               </svg>
-              {detail.addr}
+              {detail.destino.direccion}
             </p>
-            <p className="visit-detail-subtitle">{detail.detail}</p>
             <div className="visit-detail-grid">
               <div className="visit-detail-field">
-                <span className="visit-detail-label">CONTACTO</span>
-                <span className="visit-detail-value">{detail.contact}</span>
+                <span className="visit-detail-label">TIPO</span>
+                <span className="visit-detail-value">{detail.tipo === 'institucion' ? 'Institución' : 'Médico'}</span>
               </div>
               <div className="visit-detail-field">
-                <span className="visit-detail-label">TELÉFONO</span>
-                <span className="visit-detail-value">{detail.phone}</span>
+                <span className="visit-detail-label">MODALIDAD</span>
+                <span className="visit-detail-value">{detail.destino.particular ? 'Particular' : 'Programada'}</span>
               </div>
             </div>
             <div className="visit-detail-field">
-              <span className="visit-detail-label">DESCRIPCIÓN</span>
-              <p className="visit-detail-desc">{detail.description}</p>
+              <span className="visit-detail-label">DESTINO</span>
+              <p className="visit-detail-desc">{detail.destino.nombre} · {detail.destino.subtitulo}</p>
             </div>
             <div style={{ marginTop: 12, background: '#f8f9fb', border: '1px solid #eef1f5', borderRadius: 10, padding: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
               <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg,#1B2A4E,#2d9c9c)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
-                {detail.medico.nombre.split(' ').filter(w=>w.length>2).slice(0,2).map(w=>w[0]).join('').slice(0,2)}
+                {detail.destino.nombre.split(' ').filter((w) => w.length > 2).slice(0, 2).map((w) => w[0]).join('').slice(0, 2)}
               </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#1B2A4E' }}>{detail.medico.nombre}</div>
-                <div style={{ fontSize: 11, color: '#2d9c9c' }}>{detail.medico.especialidad}</div>
-                <div style={{ fontSize: 11, color: '#6b7a99' }}>{detail.medico.hospital} · {detail.medico.phone}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1B2A4E' }}>{detail.destino.nombre}</div>
+                <div style={{ fontSize: 11, color: '#2d9c9c' }}>{detail.destino.subtitulo || 'Médico/Institución'}</div>
+                <div style={{ fontSize: 11, color: '#6b7a99' }}>{detail.destino.direccion}</div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <button className="visit-detail-primary" style={{ flex: 1 }} onClick={() => setExpanded(toExpanded(detail))}>
-                Ver Detalle Completo
-              </button>
               <button
                 className="visit-detail-primary"
                 style={{ flex: 1, background: '#F9B233', color: '#fff', border: 'none' }}
                 onClick={() => {
-                  const visita = detail
+                  const v = detail
                   setDetail(null)
-                  if (visita && onCompletar) {
-                    onCompletar({
-                      id: visita.id,
-                      company: visita.company,
-                      detail: visita.detail,
-                      addr: visita.addr,
-                      time: visita.time,
-                      dateLabel: visita.dateLabel,
-                      medico: visita.medico,
-                      contact: visita.contact,
-                      phone: visita.phone,
-                      status: visita.status,
-                    })
+                  if (onCompletar) {
+                    onCompletar(visitaToACompletar(v))
                   } else {
                     onNavigate('registro')
                   }
@@ -273,7 +226,8 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
           </div>
         </div>
       )}
-      {expanded && <VisitDetailExpanded visit={expanded} onClose={() => setExpanded(null)} />}
     </div>
   )
 }
+
+export default VisitadorHome

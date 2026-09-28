@@ -116,7 +116,7 @@ func main() {
 	laboratorioRepo := laboratoriorepo.NewLaboratorioRepository(pool)
 	laboratorioSvc := laboratoriosvc.NewLaboratorioService(laboratorioRepo)
 	laboratorioHandler := laboratoriohandlers.NewLaboratorioHandler(laboratorioSvc)
-	laboratorioroutes.Register(mux, laboratorioHandler)
+	laboratorioroutes.Register(mux, laboratorioHandler, cfg.JWTSecret)
 
 	// Institucion module
 	institucionRepo := institucionrepo.NewInstitucionRepository(pool)

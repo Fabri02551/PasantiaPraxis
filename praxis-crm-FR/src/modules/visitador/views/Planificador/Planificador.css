@@ -79,6 +79,26 @@
 
 .plan-select:focus { border-color: #2d9c9c; box-shadow: 0 0 0 3px rgba(45,156,156,0.12); }
 
+.plan-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #e2e6ed;
+  border-radius: 10px;
+  background: #fff;
+}
+.plan-search:focus-within { border-color: #2d9c9c; box-shadow: 0 0 0 3px rgba(45,156,156,0.12); }
+.plan-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  color: #1b2a4e;
+  background: transparent;
+}
+
 .plan-hint { font-size: 11px; color: #8a9ab5; }
 
 .plan-visitas-head {

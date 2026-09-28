@@ -1,7 +1,12 @@
 import { useState, useMemo, useEffect } from 'react'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
+import { authService, type CurrentUser } from '../../../auth/services/auth.service'
 import { medicoService } from '../../../core/services/medico.service'
-import { normalizeUbicaciones, hospitalFromDireccion } from '../../../core/utils/medicoDireccion'
+import { institucionService } from '../../../core/services/institucion.service'
+import { personaService } from '../../../core/services/persona.service'
+import { especialidadService } from '../../../core/services/especialidad.service'
+import { visitaService } from '../../../core/services/visita.service'
+import { normalizeUbicaciones, hospitalFromDireccion, firstDireccionTexto, DEFAULT_COORDS } from '../../../core/utils/medicoDireccion'
 import './Planificador.css'
 
 type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
@@ -13,9 +18,16 @@ interface Props {
 }
 
 type Ubicacion = { id: string; direccion: string; detalle: string; coords: [number, number] }
-type MedicoPlan = { id: string; nombre: string; especialidad: string; ubicaciones: Ubicacion[] }
 
-const MEDICOS: MedicoPlan[] = []
+// Destino = un médico o una institución de la cartera del visitador.
+type DestinoPlan = {
+  tipo: 'medico' | 'institucion'
+  key: string // `${tipo}-${id}`
+  id: number // persona_id (médico) | institucion.id
+  nombre: string
+  subtitulo: string // especialidad | tipo de contrato
+  ubicaciones: Ubicacion[]
+}
 
 type VisitaTentativa = {
   id: string
@@ -26,59 +38,126 @@ type VisitaTentativa = {
   showTime: boolean
 }
 
+const NUEVA_VISITA = (): VisitaTentativa => ({
+  id: `v${Date.now()}`,
+  fecha: null,
+  hora: '',
+  period: 'AM',
+  showDate: false,
+  showTime: false,
+})
+
 export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false)
-  const [medicos, setMedicos] = useState<MedicoPlan[]>(MEDICOS)
-  const [selectedMedico, setSelectedMedico] = useState<string>('')
-  const [selectedUbicacion, setSelectedUbicacion] = useState<string>('')
-  const [visitas, setVisitas] = useState<VisitaTentativa[]>([
-    { id: 'v1', fecha: null, hora: '', period: 'AM', showDate: false, showTime: false },
-  ])
+  const [destinos, setDestinos] = useState<DestinoPlan[]>([])
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
+  const [carteraConteo, setCarteraConteo] = useState('cargando…')
+  const [busqueda, setBusqueda] = useState('')
+  const [selectedDestino, setSelectedDestino] = useState('')
+  const [selectedUbicacion, setSelectedUbicacion] = useState('')
+  const [visitas, setVisitas] = useState<VisitaTentativa[]>([NUEVA_VISITA()])
+  const [saving, setSaving] = useState(false)
 
-  // Calendar state for date picker – single month view per picker; we will use a global current month for simplicity
+  // Calendar state for date picker – single month view per picker
   const [calMonth, setCalMonth] = useState(() => new Date())
 
   useEffect(() => {
     let cancelled = false
-    medicoService
-      .list()
-      .then((data) => {
+    Promise.all([
+      authService.getMe(),
+      medicoService.list().catch(() => []),
+      institucionService.list().catch(() => []),
+      especialidadService.list().catch(() => []),
+    ])
+      .then(async ([me, medicosRaw, institucionesRaw, especialidadesRaw]) => {
         if (cancelled) return
-        if (Array.isArray(data) && data.length > 0) {
-          const mapped: MedicoPlan[] = data.map((b) => ({
-            id: String(b.persona_id),
-            nombre: `Médico ${b.matricula || b.persona_id}`,
-            especialidad: String(b.especialidad_id ?? 'General'),
-            ubicaciones: (() => {
-              const ubicaciones = normalizeUbicaciones(b.direccion)
-              if (ubicaciones.length > 0) return ubicaciones
-              const fallback = hospitalFromDireccion(b.direccion) || 'Sin dirección'
-              return [{ id: 'u1', direccion: fallback, detalle: '', coords: [-0.18, -78.46] as [number, number] }]
-            })(),
-          }))
-          if (!cancelled) {
-            setMedicos(mapped)
-            setSelectedMedico(mapped[0].id)
-            setSelectedUbicacion(mapped[0].ubicaciones[0]?.id || '')
-          }
+        const yo = me.persona_id
+        const medicosMios = (Array.isArray(medicosRaw) ? medicosRaw : []).filter((m) => m.visitador_id === yo)
+        const institucionesMias = (Array.isArray(institucionesRaw) ? institucionesRaw : []).filter((i) => i.visitador_id === yo)
+        const especialidadDe = new Map<number, string>()
+        if (Array.isArray(especialidadesRaw)) {
+          especialidadesRaw.forEach((es) => especialidadDe.set(es.id, es.nombre))
         }
+
+        const medicos: DestinoPlan[] = await Promise.all(medicosMios.map(async (b) => {
+          let nombre = `Médico ${b.matricula || b.persona_id}`
+          try {
+            const p = await personaService.getById(b.persona_id)
+            const apellidos = [p.primer_apellido, p.segundo_apellido].filter(Boolean).join(' ')
+            if (p.nombre) nombre = `${p.nombre}${apellidos ? ` ${apellidos}` : ''}`
+          } catch { /* sin persona, queda el fallback */ }
+          const ubi = normalizeUbicaciones(b.direccion)
+          const ubicaciones: Ubicacion[] = ubi.length > 0
+            ? ubi
+            : [{ id: 'u1', direccion: hospitalFromDireccion(b.direccion) || 'Sin dirección', detalle: '', coords: DEFAULT_COORDS }]
+          return {
+            tipo: 'medico' as const,
+            key: `medico-${b.persona_id}`,
+            id: b.persona_id,
+            nombre,
+            subtitulo: especialidadDe.get(b.especialidad_id) ?? String(b.especialidad_id),
+            ubicaciones,
+          }
+        }))
+
+        const instituciones: DestinoPlan[] = institucionesMias.map((b) => ({
+          tipo: 'institucion' as const,
+          key: `institucion-${b.id}`,
+          id: b.id,
+          nombre: b.nombre || `Institución ${b.id}`,
+          subtitulo: b.tipo_contrato || 'Institución',
+          ubicaciones: [{ id: 'u1', direccion: firstDireccionTexto(b.direccion) || 'Sin dirección registrada', detalle: '', coords: DEFAULT_COORDS }],
+        }))
+
+        if (cancelled) return
+        const todos = [...medicos, ...instituciones]
+        setCurrentUser(me)
+        setDestinos(todos)
+        setSelectedDestino(todos[0]?.key ?? '')
+        setSelectedUbicacion(todos[0]?.ubicaciones[0]?.id ?? '')
+        setCarteraConteo(`${medicos.length} médicos · ${instituciones.length} instituciones`)
       })
-      .catch(() => {
-        // sin datos en BD, permanece vacío sin fallback
+      .catch((err) => {
+        if (cancelled) return
+        console.warn('[Planificador] API no disponible', err)
+        setDestinos([])
+        setCarteraConteo('sin conexión a la API')
       })
     return () => {
       cancelled = true
     }
   }, [])
 
-  const medico = useMemo(() => medicos.find((m) => m.id === selectedMedico) || null, [medicos, selectedMedico])
-  const ubicaciones = medico?.ubicaciones || []
+  const destino = useMemo(() => destinos.find((d) => d.key === selectedDestino) || null, [destinos, selectedDestino])
+  const ubicaciones = destino?.ubicaciones || []
 
-  // when medico changes, reset ubicacion to first
-  const handleMedicoChange = (id: string) => {
-    setSelectedMedico(id)
-    const m = medicos.find((x) => x.id === id)
-    if (m) setSelectedUbicacion(m.ubicaciones[0]?.id || '')
+  // Buscador por nombre, especialidad/tipo o institución de la cartera.
+  const destinosFiltrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase()
+    if (!q) return destinos
+    return destinos.filter((d) =>
+      d.nombre.toLowerCase().includes(q) ||
+      d.subtitulo.toLowerCase().includes(q) ||
+      (d.tipo === 'institucion' ? 'institución' : 'médico').includes(q),
+    )
+  }, [busqueda, destinos])
+
+  const medicosFiltrados = destinosFiltrados.filter((d) => d.tipo === 'medico')
+  const institucionesFiltradas = destinosFiltrados.filter((d) => d.tipo === 'institucion')
+
+  // Si el destino seleccionado queda fuera del filtro, elegir el primero visible.
+  useEffect(() => {
+    if (destinosFiltrados.length === 0) return
+    if (!destinosFiltrados.some((d) => d.key === selectedDestino)) {
+      setSelectedDestino(destinosFiltrados[0].key)
+      setSelectedUbicacion(destinosFiltrados[0].ubicaciones[0]?.id ?? '')
+    }
+  }, [busqueda, destinosFiltrados, selectedDestino])
+
+  const handleDestinoChange = (key: string) => {
+    setSelectedDestino(key)
+    const d = destinos.find((x) => x.key === key)
+    if (d) setSelectedUbicacion(d.ubicaciones[0]?.id || '')
   }
 
   const updateVisita = (id: string, patch: Partial<VisitaTentativa>) => {
@@ -86,30 +165,78 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
   }
 
   const addVisita = () => {
-    setVisitas(prev => [...prev, { id: `v${Date.now()}`, fecha: null, hora: '', period: 'AM', showDate: false, showTime: false }])
+    setVisitas(prev => [...prev, NUEVA_VISITA()])
   }
 
   const removeVisita = (id: string) => {
     setVisitas(prev => (prev.length <= 1 ? prev : prev.filter(v => v.id !== id)))
   }
 
-  const handleRegistrar = () => {
-    if (!medico) {
-      alert('No hay médicos en la base de datos - sin datos para planificar')
+  // Combina fecha + hora (AM/PM) en un Date local.
+  const resuelveFecha = (v: VisitaTentativa): Date | null => {
+    if (!v.fecha) return null
+    const d = new Date(v.fecha)
+    let hh = 0
+    let mm = 0
+    if (v.hora) {
+      const [hs, ms] = v.hora.split(':')
+      hh = parseInt(hs, 10) || 0
+      mm = parseInt(ms, 10) || 0
+      if (v.period === 'PM' && hh < 12) hh += 12
+      if (v.period === 'AM' && hh === 12) hh = 0
+    }
+    d.setHours(hh, mm, 0, 0)
+    return d
+  }
+
+  const handleRegistrar = async () => {
+    if (!currentUser) {
+      alert('No se pudo identificar al visitador - vuelve a iniciar sesión')
       return
     }
-    const ubic = ubicaciones.find((u) => u.id === selectedUbicacion)
-    const payload = {
-      medico,
-      ubicacion: ubic,
-      visitas: visitas.map((v) => ({
-        fecha: v.fecha ? v.fecha.toLocaleDateString('es-BO') : null,
-        fechaISO: v.fecha?.toISOString() ?? null,
-        hora: v.hora ? `${v.hora} ${v.period}` : null,
-      })),
+    if (!destino) {
+      alert('No hay destinos en tu cartera para planificar (médicos o instituciones asignados a ti)')
+      return
     }
-    console.log('[Planificador] registrar', payload)
-    alert(`Planificación registrada para ${medico.nombre} en ${ubic?.direccion} con ${visitas.length} visita(s) tentativa(s)`)
+    const sinFecha = visitas.filter((v) => !v.fecha)
+    if (sinFecha.length > 0) {
+      alert(`Todas las visitas tentativas deben tener fecha seleccionada (falta la ${sinFecha[0].id === visitas[0].id ? 'primera' : 'alguna'}).`)
+      return
+    }
+
+    const miPersona = currentUser.persona_id
+    if (!miPersona) {
+      alert('No se pudo identificar al visitador - vuelve a iniciar sesión')
+      return
+    }
+
+    setSaving(true)
+    const creadas: unknown[] = []
+    const errores: string[] = []
+    for (const v of visitas) {
+      const ft = resuelveFecha(v)
+      if (!ft) continue
+      try {
+        const creada = await visitaService.crear({
+          id_visitador: miPersona,
+          id_medico: destino.tipo === 'medico' ? destino.id : null,
+          institucion_id: destino.tipo === 'institucion' ? destino.id : null,
+          fecha_visita_tentativa: ft.toISOString(),
+        })
+        creadas.push(creada)
+      } catch (err) {
+        errores.push(err instanceof Error ? err.message : String(err))
+      }
+    }
+    setSaving(false)
+
+    if (errores.length > 0) {
+      alert(`Se crearon ${creadas.length} de ${visitas.length} visita(s).\nErrores:\n- ${errores.join('\n- ')}`)
+      return
+    }
+    const nombreDestino = `${destino.nombre} (${destino.tipo === 'medico' ? 'médico' : 'institución'})`
+    alert(`Planificación registrada para ${nombreDestino} en ${ubicaciones.find((u) => u.id === selectedUbicacion)?.direccion ?? '…'}: ${visitas.length} visita(s) tentativa(s) quedaron en estado "por visitar".`)
+    setVisitas([NUEVA_VISITA()])
   }
 
   // helpers for calendar rendering
@@ -247,27 +374,59 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
       <div className="plan-content">
         <div className="plan-card">
           <h2 className="plan-title">Planificar visita</h2>
-          <p className="plan-sub">Selecciona médico y ubicación para proponer fechas tentativas.</p>
+          <p className="plan-sub">Selecciona un médico o institución de <strong>tu cartera</strong> y propone fechas tentativas.</p>
+          <p className="plan-sub" style={{ marginTop: 2 }}>Tu cartera: {carteraConteo}</p>
 
           <div className="plan-field">
-            <label className="plan-label">Médico</label>
-            {medicos.length === 0 ? (
-              <p style={{ fontSize: 12, color: '#7e8aa6', padding: '8px 0' }}>No hay médicos - sin datos en BD</p>
+            <label className="plan-label">Buscar en tu cartera</label>
+            <div className="plan-search">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a9ab5" strokeWidth="2">
+                <circle cx="11" cy="11" r="7" />
+                <path d="M20 20l-3.5-3.5" />
+              </svg>
+              <input className="plan-search-input" placeholder="Médico, institución, especialidad…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+            </div>
+          </div>
+
+          <div className="plan-field">
+            <label className="plan-label">Médico / Institución</label>
+            {destinos.length === 0 ? (
+              <p style={{ fontSize: 12, color: '#7e8aa6', padding: '8px 0' }}>No hay médicos ni instituciones en tu cartera - sin datos asignados</p>
+            ) : destinosFiltrados.length === 0 ? (
+              <p style={{ fontSize: 12, color: '#7e8aa6', padding: '8px 0' }}>Sin resultados para "{busqueda}".</p>
             ) : (
-              <select className="plan-select" value={selectedMedico} onChange={(e) => handleMedicoChange(e.target.value)}>
-                {medicos.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.nombre} — {m.especialidad}
-                  </option>
-                ))}
-              </select>
+              <>
+                <select className="plan-select" value={selectedDestino} onChange={(e) => handleDestinoChange(e.target.value)}>
+                  {medicosFiltrados.length > 0 && (
+                    <optgroup label={`Médicos de tu cartera (${medicosFiltrados.length})`}>
+                      {medicosFiltrados.map((m) => (
+                        <option key={m.key} value={m.key}>
+                          {m.nombre} — {m.subtitulo}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {institucionesFiltradas.length > 0 && (
+                    <optgroup label={`Instituciones de tu cartera (${institucionesFiltradas.length})`}>
+                      {institucionesFiltradas.map((i) => (
+                        <option key={i.key} value={i.key}>
+                          {i.nombre} — {i.subtitulo}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+                {destino && (
+                  <span className="plan-hint">{destino.tipo === 'medico' ? 'Médico' : 'Institución'} asignado a tu cartera</span>
+                )}
+              </>
             )}
           </div>
 
           <div className="plan-field">
             <label className="plan-label">Ubicación</label>
             {ubicaciones.length === 0 ? (
-              <p style={{ fontSize: 12, color: '#7e8aa6', padding: '8px 0' }}>Sin ubicaciones - sin datos en BD</p>
+              <p style={{ fontSize: 12, color: '#7e8aa6', padding: '8px 0' }}>Sin ubicaciones registradas</p>
             ) : (
               <>
                 <select className="plan-select" value={selectedUbicacion} onChange={(e) => setSelectedUbicacion(e.target.value)}>
@@ -302,13 +461,13 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
 
                 <div className="plan-visita-grid">
                   <div className="plan-field" style={{ margin: 0 }}>
-                    <label className="plan-label">Fecha tentativa</label>
+                    <label className="plan-label">Fecha tentativa *</label>
                     <button
                       type="button"
                       className={`plan-picker-btn ${v.fecha ? 'has-value' : ''}`}
                       onClick={() => updateVisita(v.id, { showDate: !v.showDate, showTime: false })}
                     >
-                      {v.fecha ? v.fecha.toLocaleDateString('es-BO', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : 'Seleccionar fecha'}
+                      {v.fecha ? v.fecha.toLocaleDateString('es-BO', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : 'Seleccionar fecha tentativa'}
                     </button>
                     {v.showDate && renderCalendar(v.id)}
                   </div>
@@ -328,20 +487,24 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
 
                 {(v.fecha || v.hora) && (
                   <div className="plan-visita-preview">
-                    Selección: {v.fecha ? v.fecha.toLocaleDateString('es-BO') : '—'} {v.hora ? `a las ${v.hora} ${v.period}` : ''}
+                    Tentativa {(v.fecha ? `el ${v.fecha.toLocaleDateString('es-BO')}` : '')} {(v.hora ? `a las ${v.hora} ${v.period}` : '')}
                   </div>
                 )}
               </div>
             ))}
           </div>
 
+          <p className="plan-hint" style={{ marginTop: 6 }}>
+            Cada visita se guarda con fecha <strong>tentativa</strong> y estado <strong>"por visitar"</strong>.
+          </p>
+
           <button type="button" className="plan-add-btn" onClick={addVisita}>
             + Agregar visita
           </button>
         </div>
 
-        <button type="button" className="plan-submit" onClick={handleRegistrar}>
-          Registrar planificación
+        <button type="button" className="plan-submit" onClick={handleRegistrar} disabled={saving || destinos.length === 0}>
+          {saving ? 'Guardando…' : 'Registrar planificación'}
         </button>
       </div>
     </div>

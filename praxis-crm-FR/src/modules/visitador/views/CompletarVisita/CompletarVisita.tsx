@@ -1,5 +1,10 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
+import { medicoService } from '../../../core/services/medico.service'
+import { institucionService } from '../../../core/services/institucion.service'
+import { personaService } from '../../../core/services/persona.service'
+import { laboratorioService } from '../../../core/services/laboratorio.service'
+import { visitaService, type VisitaBE } from '../../../core/services/visita.service'
 import './CompletarVisita.css'
 
 type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
@@ -7,6 +12,7 @@ type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'no
 type MedicoInfo = { nombre: string; especialidad: string; hospital: string; phone: string }
 
 export type VisitaACompletar = {
+  visitaId?: number
   id: string
   company: string
   detail: string
@@ -26,13 +32,37 @@ interface Props {
   visita: VisitaACompletar | null
 }
 
+type LabRow = {
+  laboratorio_id: number
+  nombre: string
+  area: string
+  costoUnit: number
+  cantidad: number
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100
+
 export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, onLogout, visita }) => {
   const [menuOpen, setMenuOpen] = useState(false)
   const [observaciones, setObservaciones] = useState('')
   const [exigencias, setExigencias] = useState('')
+  const [papeleta, setPapeleta] = useState('')
+  const [satisfaccion, setSatisfaccion] = useState('')
   const [hasSignature, setHasSignature] = useState(false)
   const [isDrawing, setIsDrawing] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  const [visitData, setVisitData] = useState<VisitaBE | null>(null)
+  const [destino, setDestino] = useState({ nombre: visita?.company ?? '', tipo: 'Médico', esParticular: false, ciudadId: null as number | null, faltante: '' })
+  const [rows, setRows] = useState<LabRow[]>([])
+  const [busqueda, setBusqueda] = useState('')
+  const [cargando, setCargando] = useState(true)
+  const [guardandoCotiz, setGuardandoCotiz] = useState(false)
+  const [guardandoVisita, setGuardandoVisita] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [guardado, setGuardado] = useState(false)
+
+  const videoId = visita?.visitaId
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -49,6 +79,119 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
   }, [])
+
+  useEffect(() => {
+    if (!videoId) {
+      setCargando(false)
+      return
+    }
+    let muerto = false
+    setCargando(true)
+    setGuardado(false)
+    ;(async () => {
+      try {
+        const v = await visitaService.getById(videoId)
+        if (muerto) return
+        setVisitData(v)
+
+        const existentes = await visitaService.getLaboratorios(videoId).catch(() => [])
+
+        let esParticular = false
+        let ciudadId: number | null = null
+        let nombre = visita?.company ?? `Visita #${videoId}`
+        let subtitulo = visita?.detail ?? ''
+
+        if (v.id_medico) {
+          try {
+            const m = await medicoService.getById(v.id_medico)
+            const p = await personaService.getById(v.id_medico)
+            esParticular = !!m?.es_particular
+            ciudadId = p?.ciudad_id ?? null
+            const full = p ? [p.nombre, p.primer_apellido, p.segundo_apellido].filter(Boolean).join(' ').trim() : ''
+            if (full) nombre = full
+            subtitulo = `${m?.matricula ? `Mat. ${m.matricula}` : 'Médico'}${esParticular ? ' · Particular' : ''}`
+          } catch {
+            /* sin datos extra */
+          }
+          setDestino({ nombre, tipo: 'Médico', esParticular, ciudadId, faltante: subtitulo })
+        } else if (v.institucion_id) {
+          try {
+            const i = await institucionService.getById(v.institucion_id)
+            esParticular = !!i?.es_particular
+            ciudadId = i?.ciudad_id ?? null
+            nombre = i?.nombre || nombre
+            subtitulo = i?.tipo_contrato || 'Institución'
+          } catch {
+            /* sin datos extra */
+          }
+          setDestino({ nombre, tipo: 'Institución', esParticular, ciudadId, faltante: subtitulo })
+        } else {
+          setDestino({ nombre, tipo: '—', esParticular, ciudadId, faltante: subtitulo })
+        }
+
+        const precios = await laboratorioService.precios(ciudadId ?? undefined).catch(() => [])
+        const porId = new Map(existentes.map((l) => [l.laboratorio_id, l.cantidad]))
+        setRows(
+          precios.map((p) => ({
+            laboratorio_id: p.id,
+            nombre: p.nombre,
+            area: p.area,
+            costoUnit: round2(esParticular ? p.costo * (1 + p.comision_extra) : p.costo),
+            cantidad: porId.get(p.id) ?? 0,
+          })),
+        )
+      } catch (err) {
+        if (!muerto) setMsg('No se pudo cargar la visita: ' + String(err))
+      } finally {
+        if (!muerto) setCargando(false)
+      }
+    })()
+
+    setObservaciones('')
+    setExigencias('')
+    setPapeleta('')
+    setSatisfaccion('')
+    setHasSignature(false)
+    return () => {
+      muerto = true
+    }
+  }, [videoId])
+
+  const filtereds = useMemo(() => {
+    const q = busqueda.trim().toLowerCase()
+    if (!q) return rows
+    return rows.filter((r) => r.nombre.toLowerCase().includes(q) || r.area.toLowerCase().includes(q))
+  }, [rows, busqueda])
+
+  const totalCotiz = useMemo(() => round2(rows.reduce((acc, r) => acc + r.costoUnit * r.cantidad, 0)), [rows])
+  const totalItems = rows.reduce((acc, r) => acc + (r.cantidad > 0 ? 1 : 0), 0)
+
+  const setCant = (id: number, cant: number) => {
+    setRows((prev) => prev.map((r) => (r.laboratorio_id === id ? { ...r, cantidad: Math.max(0, cant) } : r)))
+  }
+
+  const guardarCotizacion = async () => {
+    if (!videoId) return
+    setGuardandoCotiz(true)
+    setMsg('')
+    try {
+      await visitaService.addLaboratorios(
+        videoId,
+        rows.filter((r) => r.cantidad > 0).map((r) => ({ laboratorio_id: r.laboratorio_id, cantidad: r.cantidad })),
+      )
+      const prevIds = new Set((await visitaService.getLaboratorios(videoId).catch(() => [])).map((l) => l.laboratorio_id))
+      for (const id of prevIds) {
+        if (!rows.some((r) => r.laboratorio_id === id && r.cantidad > 0)) {
+          await visitaService.removeLaboratorio(videoId, id)
+        }
+      }
+      setMsg('Cotización guardada')
+    } catch (err) {
+      setMsg('Error guardando la cotización: ' + String(err))
+    } finally {
+      setGuardandoCotiz(false)
+    }
+  }
 
   const getPos = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current!
@@ -95,21 +238,37 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
     setHasSignature(false)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!visita) {
+    if (!videoId) {
       alert('No hay visita seleccionada')
       return
     }
-    console.log('[CompletarVisita] payload', {
-      visita,
-      observaciones,
-      exigencias,
-      hasSignature,
-      fecha: new Date().toISOString(),
-    })
-    alert(`Visita completada para ${visita.medico.nombre} - ${visita.company}`)
-    onNavigate('home')
+    if (!hasSignature) {
+      alert('Complete la firma digital antes de terminar la visita')
+      return
+    }
+    setGuardandoVisita(true)
+    setMsg('')
+    try {
+      const firma = canvasRef.current?.toDataURL('image/png')
+      const obs = observaciones.trim() || exigencias.trim() ? { observaciones: observaciones.trim(), exigencias: exigencias.trim() } : undefined
+      await visitaService.registrar(videoId, {
+        fecha_visita: new Date().toISOString(),
+        firma,
+        observacion: obs,
+        papeleta: parseInt(papeleta || '0', 10) || 0,
+        satisfaccion: parseInt(satisfaccion || '0', 10) || 0,
+        duracion: 0,
+      })
+      alert(`Visita #${videoId} registrada correctamente`)
+      setGuardado(true)
+      onNavigate('home')
+    } catch (err) {
+      setMsg('Error al registrar la visita: ' + String(err))
+    } finally {
+      setGuardandoVisita(false)
+    }
   }
 
   if (!visita) {
@@ -131,6 +290,8 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
     )
   }
 
+  const yaRealizada = visitData?.registrada || visitData?.estado === 'realizada'
+
   return (
     <div className="completar-page">
       <header className="completar-header">
@@ -148,30 +309,139 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
       <div className="completar-content">
         <form className="completar-form" onSubmit={handleSubmit}>
           <div className="completar-visita-info">
-            <h2 className="completar-company">{visita.company}</h2>
-            <p className="completar-detail">{visita.detail}</p>
+            <h2 className="completar-company">{destino.nombre}</h2>
+            <p className="completar-detail">{destino.faltante}</p>
             <p className="completar-addr">{visita.addr} · {visita.time} {visita.dateLabel ? `· ${visita.dateLabel}` : ''}</p>
-            {visita.status && <span className={`completar-status status-${visita.status.toLowerCase().replace(' ','-')}`}>{visita.status}</span>}
+            <span className={`completar-status status-${(yaRealizada ? 'realizada' : 'por-visitar')}`}>
+              {yaRealizada ? 'Realizada' : 'Por visitar'} · {destino.tipo}
+            </span>{' '}
+            <span className="completar-status" style={{ background: destino.esParticular ? '#fef6e7' : '#eef1f5', color: destino.esParticular ? '#92400e' : '#6b7a99' }}>
+              {destino.esParticular ? 'Particular' : destino.ciudadId != null ? 'Programada' : '—'}
+            </span>
+            {cargando && <p style={{ fontSize: 12, color: '#7e8aa6', marginTop: 8 }}>Cargando datos de la visita…</p>}
           </div>
 
-          {/* Detalles del médico como texto, no en recuadro */}
+          {!cargando && !yaRealizada && (
+            <div className="cotizacion-card" style={{ border: '1px solid #eef1f5', borderRadius: 12, padding: 14, background: '#fbfcfe' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                <h3 className="completar-medico-title" style={{ margin: 0 }}>Cotización de Laboratorios</h3>
+                <span style={{ fontSize: 11, color: '#7e8aa6' }}>
+                  Ciudad: {destino.ciudadId != null ? `#${destino.ciudadId}` : 'sin ciudad asignada'}{destino.esParticular ? ' · con comisión particular' : ''}
+                </span>
+              </div>
+              <p style={{ fontSize: 11, color: '#7e8aa6', margin: '6px 0 10px' }}>Ajuste la cantidad de cada estudio; el subtotal se aplica al ingreso de la visita.</p>
+
+              <input
+                className="form-input"
+                style={{ width: '100%', marginBottom: 10, padding: '8px 10px', borderRadius: 8, border: '1px solid #dbe1ec', fontSize: 13 }}
+                placeholder="Buscar estudio por nombre o área…"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+              />
+
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ color: '#6b7a99', textAlign: 'left' }}>
+                      <th style={{ padding: '6px 4px' }}>Estudio</th>
+                      <th style={{ padding: '6px 4px' }}>Área</th>
+                      <th style={{ padding: '6px 4px', textAlign: 'right' }}>Costo unit.</th>
+                      <th style={{ padding: '6px 4px', textAlign: 'center' }}>Cantidad</th>
+                      <th style={{ padding: '6px 4px', textAlign: 'right' }}>Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtereds.map((r) => (
+                      <tr key={r.laboratorio_id} style={{ borderTop: '1px solid #eef1f5' }}>
+                        <td style={{ padding: '8px 4px', fontWeight: 600, color: '#1b2a4e' }}>{r.nombre}</td>
+                        <td style={{ padding: '8px 4px', color: '#6b7a99' }}>{r.area}</td>
+                        <td style={{ padding: '8px 4px', textAlign: 'right', whiteSpace: 'nowrap' }}>${r.costoUnit.toFixed(2)}</td>
+                        <td style={{ padding: '8px 4px', textAlign: 'center' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                            <button type="button" onClick={() => setCant(r.laboratorio_id, r.cantidad - 1)} disabled={r.cantidad === 0} style={{ width: 24, height: 24, borderRadius: 6, border: '1px solid #dbe1ec', background: '#fff', cursor: 'pointer', fontWeight: 700 }}>−</button>
+                            <input
+                              type="number"
+                              min={0}
+                              value={r.cantidad}
+                              onChange={(e) => setCant(r.laboratorio_id, parseInt(e.target.value || '0', 10))}
+                              style={{ width: 48, padding: '4px 2px', textAlign: 'center', borderRadius: 6, border: '1px solid #dbe1ec', fontSize: 12 }}
+                            />
+                            <button type="button" onClick={() => setCant(r.laboratorio_id, r.cantidad + 1)} style={{ width: 24, height: 24, borderRadius: 6, border: '1px solid #dbe1ec', background: '#fff', cursor: 'pointer', fontWeight: 700 }}>+</button>
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px 4px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600, color: '#1b2a4e' }}>${round2(r.costoUnit * r.cantidad).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                    {filtereds.length === 0 && (
+                      <tr>
+                        <td colSpan={5} style={{ padding: '14px 4px', color: '#7e8aa6', textAlign: 'center' }}>Sin estudios para esta ciudad / filtro</td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={3} style={{ padding: '10px 4px' }} />
+                      <td style={{ padding: '10px 4px', textAlign: 'right', fontWeight: 700, color: '#1b2a4e' }}>{totalItems} estudios</td>
+                      <td style={{ padding: '10px 4px', textAlign: 'right', fontWeight: 700, color: '#0e502e', fontSize: 14 }}>${totalCotiz.toFixed(2)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button type="button" className="btn-submit" style={{ marginTop: 0, flex: 1 }} disabled={guardandoCotiz} onClick={guardarCotizacion}>
+                  {guardandoCotiz ? 'Guardando…' : 'Guardar cotización'}
+                </button>
+                {msg && <span style={{ fontSize: 12, color: msg.startsWith('Error') ? '#b91c1c' : '#0e502e', fontWeight: 600 }}>{msg}</span>}
+              </div>
+            </div>
+          )}
+
           <div className="completar-medico-text">
             <h3 className="completar-medico-title">Médico asignado</h3>
-            <p className="completar-medico-line"><strong>Nombre:</strong> {visita.medico.nombre}</p>
-            <p className="completar-medico-line"><strong>Especialidad:</strong> {visita.medico.especialidad}</p>
-            <p className="completar-medico-line"><strong>Hospital:</strong> {visita.medico.hospital}</p>
-            <p className="completar-medico-line"><strong>Teléfono:</strong> {visita.medico.phone}</p>
+            <p className="completar-medico-line"><strong>Nombre:</strong> {destino.nombre}</p>
+            <p className="completar-medico-line"><strong>Tipo:</strong> {destino.tipo}</p>
+            <p className="completar-medico-line"><strong>Hospital:</strong> {visita.medico.hospital || visita.addr}</p>
+            {visita.phone && <p className="completar-medico-line"><strong>Teléfono:</strong> {visita.phone}</p>}
             {visita.contact && <p className="completar-medico-line"><strong>Contacto:</strong> {visita.contact}</p>}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Boletas (papeleta)</label>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                className="form-input"
+                placeholder="0"
+                value={papeleta}
+                onChange={(e) => setPapeleta(e.target.value)}
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Satisfacción (0–5)</label>
+              <input
+                type="number"
+                min={0}
+                max={5}
+                step={1}
+                className="form-input"
+                placeholder="0"
+                value={satisfaccion}
+                onChange={(e) => setSatisfaccion(e.target.value)}
+              />
+            </div>
           </div>
 
           <div className="form-group">
             <label className="form-label">Observaciones</label>
-            <textarea className="form-textarea" rows={3} placeholder="Detalle los puntos clave observados..." value={observaciones} onChange={e => setObservaciones(e.target.value)} />
+            <textarea className="form-textarea" rows={3} placeholder="Detalle los puntos clave observados..." value={observaciones} onChange={(e) => setObservaciones(e.target.value)} />
           </div>
 
           <div className="form-group">
             <label className="form-label">Exigencias / Acuerdos</label>
-            <textarea className="form-textarea" rows={3} placeholder="Plazos, acuerdos, exigencias del cliente..." value={exigencias} onChange={e => setExigencias(e.target.value)} />
+            <textarea className="form-textarea" rows={3} placeholder="Plazos, acuerdos, exigencias del cliente..." value={exigencias} onChange={(e) => setExigencias(e.target.value)} />
           </div>
 
           <div className="form-group">
@@ -194,7 +464,12 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
             </div>
           </div>
 
-          <button type="submit" className="btn-submit">Completar visita</button>
+          {yaRealizada && <p style={{ fontSize: 13, color: '#0e502e', fontWeight: 600 }}>Esta visita ya fue registrada como realizada.</p>}
+          {guardado && <p style={{ fontSize: 13, color: '#0e502e', fontWeight: 600 }}>Visita registrada correctamente.</p>}
+
+          <button type="submit" className="btn-submit" disabled={cargando || yaRealizada || guardandoVisita}>
+            {guardandoVisita ? 'Registrando…' : yaRealizada ? 'Ya completada' : 'Completar visita'}
+          </button>
         </form>
       </div>
     </div>

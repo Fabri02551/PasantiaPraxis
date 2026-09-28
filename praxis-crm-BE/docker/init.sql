@@ -176,7 +176,8 @@ CREATE TABLE visita (
     duracion SMALLINT DEFAULT 0,
     ingreso DECIMAL(10,2) DEFAULT 0,
     papeleta INTEGER DEFAULT 0,
-    registrada BOOLEAN DEFAULT false
+    registrada BOOLEAN DEFAULT false,
+    estado VARCHAR(20) NOT NULL DEFAULT 'por_visitar'
 );
 
 CREATE INDEX idx_vm_visitador ON visita(id_visitador);
@@ -210,6 +211,7 @@ CREATE TABLE visita_laboratorio (
     visita_id INTEGER NOT NULL REFERENCES visita(id) ON DELETE CASCADE,
     laboratorio_id INTEGER NOT NULL REFERENCES laboratorio(id) ON DELETE CASCADE,
     costo NUMERIC(10,2) NOT NULL DEFAULT 0,
+    cantidad INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (visita_id, laboratorio_id)
 );

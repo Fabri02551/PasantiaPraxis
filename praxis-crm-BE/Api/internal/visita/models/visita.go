@@ -21,6 +21,7 @@ type Visita struct {
 	Ingreso              string          `json:"ingreso"`
 	Papeleta             int             `json:"papeleta"`
 	Registrada           bool            `json:"registrada"`
+	Estado               string          `json:"estado"`
 }
 
 // CreateVisitaRequest es lo que llena el admin al programar una visita:
@@ -57,8 +58,15 @@ type VisitaLaboratorio struct {
 	Nombre        string  `json:"nombre"`
 	Area          string  `json:"area"`
 	Costo         float64 `json:"costo"`
+	Cantidad      int     `json:"cantidad"`
+}
+
+// AddLaboratorioItem estudio con la cantidad solicitada en la cotización.
+type AddLaboratorioItem struct {
+	LaboratorioID int `json:"laboratorio_id"`
+	Cantidad      int `json:"cantidad"`
 }
 
 type AddLaboratoriosRequest struct {
-	Laboratorios []int `json:"laboratorios"`
+	Laboratorios []AddLaboratorioItem `json:"laboratorios"`
 }

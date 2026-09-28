@@ -10,8 +10,9 @@ import (
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/institucion/models"
 )
 
-const selectCols = `id, nombre, razon_social, COALESCE(direccion, '{}'::jsonb), telefono, correo,
-	tipo_contrato, nit, visitador_id, ciudad_id, es_particular, COALESCE(clasificacion, 0), status,
+const selectCols = `id, nombre, razon_social, COALESCE(direccion, '{}'::jsonb),
+	COALESCE(telefono, ''), COALESCE(correo, ''), COALESCE(tipo_contrato, ''), COALESCE(nit, ''),
+	visitador_id, ciudad_id, COALESCE(es_particular, false), COALESCE(clasificacion, 0), COALESCE(status, true),
 	creado_por, modificado_por, fecha_creacion, ultima_modificacion`
 
 type InstitucionRepository struct {

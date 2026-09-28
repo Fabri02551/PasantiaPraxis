@@ -7,7 +7,7 @@ import { personaService } from '../../../core/services/persona.service'
 import { especialidadService } from '../../../core/services/especialidad.service'
 import { ENV } from '../../../core/config/env'
 import { displayMedico } from '../../../core/utils/medicoPrefix'
-import { hospitalFromDireccion } from '../../../core/utils/medicoDireccion'
+import { hospitalFromDireccion, firstDireccionTexto } from '../../../core/utils/medicoDireccion'
 import './Cartera.css'
 
 type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
@@ -26,33 +26,6 @@ type EntradaCartera = {
   sexo?: string
   subtitulo: string // especialidad (médico) | tipo de contrato (institución)
   ubicacion: string // hospital | dirección
-}
-
-// Dirección de una institución: `institucion.direccion` es JSONB y puede venir
-// como objeto, array o incluso string serializado por cargas viejas.
-const extractDireccion = (dir: unknown): string => {
-  if (dir === null || dir === undefined || dir === '') return ''
-  let parsed: unknown = dir
-  if (typeof dir === 'string') {
-    try {
-      parsed = JSON.parse(dir)
-    } catch {
-      return dir
-    }
-  }
-  const primero = (o: Record<string, unknown>) =>
-    (typeof o.direccion === 'string' && o.direccion.trim()) ||
-    (typeof o.nombre === 'string' && o.nombre.trim()) ||
-    (typeof o.detalle === 'string' && o.detalle.trim()) ||
-    ''
-  if (Array.isArray(parsed)) {
-    const o = (parsed[0] ?? {}) as Record<string, unknown>
-    return primero(o)
-  }
-  if (typeof parsed === 'object' && parsed !== null) {
-    return primero(parsed as Record<string, unknown>)
-  }
-  return ''
 }
 
 export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout }) => {
@@ -106,8 +79,8 @@ export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout
           id: String(b.id),
           tipo: 'institucion' as const,
           nombre: b.nombre || `Institución ${b.id}`,
-          subtitulo: b.tipo_contrato || 'Institución',
-          ubicacion: extractDireccion(b.direccion) || 'Sin dirección registrada',
+subtitulo: b.tipo_contrato || 'Institución',
+            ubicacion: firstDireccionTexto(b.direccion) || 'Sin dirección registrada',
         }))
 
         if (cancelled) return

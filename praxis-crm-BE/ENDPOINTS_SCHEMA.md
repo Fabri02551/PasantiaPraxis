@@ -310,18 +310,50 @@ await visitadorService.list() // ya lleva Authorization
 
 ---
 
-## 12. No implementado (tablas en DB pero sin endpoint — para futuro CRUD)
+## 12. Módulo INSTITUCION — `Api/internal/institucion/routes/routes.go`
+
+| Método | Ruta | Permiso | Handler |
+|---|---|---|---|
+| `GET` | `/api/instituciones` | **admin o visitador** (el visitador lee su cartera) | `h.GetAll:26` |
+| `GET` | `/api/instituciones/{id}` | **admin o visitador** | `h.GetByID:39` |
+| `POST` | `/api/instituciones` | admin | `h.Create:52` |
+| `PUT` | `/api/instituciones/{id}` | admin | `h.Update:81` |
+| `DELETE` | `/api/instituciones/{id}` | admin | `h.Delete:102` |
+
+**Modelo:** `Institucion` (`models/institucion.go`) `{id, nombre, razon_social, direccion json.RawMessage, telefono?, correo?, tipo_contrato?, nit?, visitador_id? int FK visitador.persona_id, ciudad_id?, es_particular?, clasificacion#, status, creado_por?, modificado_por?, fecha_creacion?, ultima_modificacion?}`.
+- **Cartera:** filtrar por `visitador_id == persona_id` del visitador logueado (GET con Bearer).
+- `institucion.direccion` es JSONB: objeto/array/string viejo → usar `firstDireccionTexto` en el FE.
+
+## 13. Módulo VISITA (planificador) — `Api/internal/visita/routes/routes.go`
+
+| Método | Ruta | Permiso | Handler |
+|---|---|---|---|
+| `GET` | `/api/visitas` | admin o visitador (autenticado) | `h.GetAll:21` |
+| `GET` | `/api/visitas/{id}` | admin o visitador | `h.GetByID:30` |
+| `POST` | `/api/visitas` | **admin o visitador** — si rol `visitador`, `id_visitador` se fuerza al `persona_id` del token | `h.Create:46` |
+| `PUT` | `/api/visitas/{id}` | admin | `h.Update:74` |
+| `DELETE` | `/api/visitas/{id}` | admin | `h.Delete:117` |
+| `POST` | `/api/visitas/{id}/registrar` | admin o visitador (visita real) | `h.Registrar:96` |
+| `GET/POST/DELETE` | `/api/visitas/{id}/laboratorios[/{laboratorio_id}]` | admin o visitador | `h.GetLaboratorios:131` |
+
+**Create (tentativa del planificador):** `CreateVisitaRequest:28` `{id_visitador* (obligatorio admin, automático visitador), id_medico* OR institucion_id*, fecha_visita_tentativa* (timestamp ISO)}` → visita `ingreso=0, registrada=false`.
+- **FE:** `src/modules/core/services/visita.service.ts` — el Planificador crea 1 visita por tentativa (médico → `id_medico=p.persona_id`, institución → `institucion_id=i.id`).
+- **Registrar (visita real):** `RegistrarVisitaRequest:44` `{fecha_visita*, latitud?, longitud?, firma?, observacion?, satisfaccion#, duracion#, papeleta#}` llena la visita (via `completar-visita`).
+
+---
+
+## 14. No implementado (tablas en DB pero sin endpoint — para futuro CRUD)
 
 - `laboratorio`, `laboratorio_ciudad`, `visitador_medico` (`docker/init.sql:52,68,122`) — existen en DB pero no hay `Api/internal/laboratorio` ni `visitador_medico` routes. Si el FE necesita `LaboratoriosView` / `Historial` / `VisitRegistration`, hay que crear `Api/internal/laboratorio/handlers|routes` siguiendo patrón `ciudad`.
 
 ---
 
-## 13. Archivos Clave
+## 15. Archivos Clave
 
 - **Backend entry:** `Api/cmd/api/main.go:46` `config.Load()` + `database.NewPool` + registro módulos + `middleware.CORS(mux)` → `http.Server Addr=":"+cfg.Port`
 - **DB init:** `docker/init.sql:1` (ciudad, persona, especialidad, laboratorio, medico, accion, visitador, users)
 - **Frontend env:** `praxis-crm-FR/.env.example:1` `VITE_API_URL`, `vite.config.ts:7` proxy, `nginx.conf:7` `proxy_pass praxis-api:8080`
 - **Frontend auth:** `src/modules/auth/services/auth.service.ts:1`, `src/modules/core/lib/storage.ts:1`, `src/modules/auth/views/Login/Login.tsx:21`
-- **Frontend services CRUD:** `src/modules/core/services/{ciudad,especialidad,persona,medico,accion,visitador}.service.ts`
+- **Frontend services CRUD:** `src/modules/core/services/{ciudad,especialidad,persona,medico,accion,visitador,institucion,visita}.service.ts`
 
 > Para hacer CRUD en el frontend, jalá **exactamente** los atributos listados en `Create*Request` / `Update*Request` de cada `models/*.go` — el FE ya tiene wrappers listos en `core/services/` con fallback mock donde el BE no trae nombres (ver `Medicos.tsx:30` y `Visitadores.tsx:55`).

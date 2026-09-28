@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
+import { useMisVisitas, type VisitaResuelta } from '../../hooks/useMisVisitas'
 import './Historial.css'
 
 type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
@@ -10,33 +11,54 @@ interface Props {
   onLogout: () => void
 }
 
-type EstadoHistorial = 'Realizada' | 'Por visitar' | 'Propuesta'
-
-type HistorialVisit = {
-  id: string
-  fecha: string // e.g. "12 Oct 2024"
-  hora: string // e.g. "10:00 AM"
-  company: string
-  detail: string
-  estado: EstadoHistorial
-  medico: { nombre: string; especialidad: string; hospital: string; phone: string }
-  addr: string
-  descripcion: string
-}
-
-const HISTORIAL: HistorialVisit[] = []
+type EstadoHistorial = 'Realizada' | 'Por visitar'
 
 type Filtro = 'Todas' | EstadoHistorial
 
+const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+
+function fechaCorta(key: string) {
+  const [y, m, d] = key.split('-').map(Number)
+  return `${d} ${MONTHS[(m || 1) - 1]} ${y}`
+}
+
+function toHistorial(v: VisitaResuelta) {
+  const realizado = v.registrada || v.estado === 'realizada'
+  return {
+    id: String(v.id),
+    fecha: v.fecha ? fechaCorta(v.fecha) : 'Sin fecha',
+    hora: v.hora || '—',
+    company: v.destino.nombre,
+    detail: v.destino.subtitulo || (v.tipo === 'institucion' ? 'Institución' : 'Médico'),
+    estado: (realizado ? 'Realizada' : 'Por visitar') as EstadoHistorial,
+    medico: {
+      nombre: v.destino.nombre,
+      especialidad: v.destino.subtitulo,
+      hospital: v.destino.direccion,
+      phone: '',
+    },
+    addr: v.destino.direccion,
+    descripcion: `${realizado ? 'Visita realizada' : 'Visita pendiente de completar'} · ${v.destino.particular ? 'Particular' : 'Programada'}`,
+  }
+}
+
 export const HistorialView: React.FC<Props> = ({ onNavigate, currentView, onLogout }) => {
+  const { visitas, loading } = useMisVisitas()
   const [menuOpen, setMenuOpen] = useState(false)
   const [filtro, setFiltro] = useState<Filtro>('Todas')
-  const [selected, setSelected] = useState<HistorialVisit | null>(null)
+  const [selected, setSelected] = useState<ReturnType<typeof toHistorial> | null>(null)
+
+  const historial = useMemo(() => visitas.map(toHistorial), [visitas])
 
   const filtered = useMemo(() => {
-    if (filtro === 'Todas') return HISTORIAL
-    return HISTORIAL.filter(v => v.estado === filtro)
-  }, [filtro])
+    if (filtro === 'Todas') return historial
+    return historial.filter((v) => v.estado === filtro)
+  }, [historial, filtro])
+
+  const selectMejor = (id: string) => {
+    const h = historial.find((x) => x.id === id)
+    if (h) setSelected(h)
+  }
 
   return (
     <div className="historial-page">
@@ -60,18 +82,20 @@ export const HistorialView: React.FC<Props> = ({ onNavigate, currentView, onLogo
 
       <div className="historial-content">
         <div className="historial-filters">
-          {(['Todas', 'Realizada', 'Por visitar', 'Propuesta'] as Filtro[]).map(f => (
+          {(['Todas', 'Realizada', 'Por visitar'] as Filtro[]).map((f) => (
             <button key={f} className={`historial-filter-btn ${filtro === f ? 'active' : ''}`} onClick={() => setFiltro(f)}>
               {f === 'Realizada' ? 'Realizadas' : f}
             </button>
           ))}
         </div>
 
-        <div className="historial-count">{filtered.length} visitas</div>
+        <div className="historial-count">
+          {filtered.length} visitas{loading ? ' · cargando…' : ''}
+        </div>
 
         <ul className="historial-list">
-          {filtered.map(v => (
-            <li key={v.id} className="historial-card" onClick={() => setSelected(v)} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && setSelected(v)}>
+          {filtered.map((v) => (
+            <li key={v.id} className="historial-card" onClick={() => selectMejor(v.id)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && selectMejor(v.id)}>
               <div className="historial-card-top">
                 <span className="historial-fecha">{v.fecha} · {v.hora}</span>
                 <span className={`historial-estado estado-${v.estado.toLowerCase().replace(' ', '-')}`}>{v.estado}</span>
@@ -83,17 +107,17 @@ export const HistorialView: React.FC<Props> = ({ onNavigate, currentView, onLogo
                   <circle cx="12" cy="8" r="4" />
                   <path d="M5 20a7 7 0 0 1 14 0" />
                 </svg>
-                {v.medico.nombre} · {v.medico.especialidad}
+                {v.medico.nombre} · {v.medico.especialidad || 'Médico/Institución'}
               </div>
             </li>
           ))}
         </ul>
 
-        {filtered.length === 0 && <p className="historial-empty">No hay visitas en historial - sin datos en BD</p>}
+        {filtered.length === 0 && <p className="historial-empty">{loading ? 'Cargando…' : 'No hay visitas en historial todavía'}</p>}
 
         {selected && (
           <div className="historial-overlay" onClick={() => setSelected(null)}>
-            <div className="historial-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
+            <div className="historial-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
               <div className="historial-modal-header">
                 <h3>{selected.company}</h3>
                 <button className="historial-modal-close" onClick={() => setSelected(null)} aria-label="Cerrar">
@@ -128,12 +152,13 @@ export const HistorialView: React.FC<Props> = ({ onNavigate, currentView, onLogo
                   <p className="historial-modal-desc">{selected.descripcion}</p>
                 </div>
                 <div className="historial-medico-card">
-                  <div className="historial-medico-avatar">{selected.medico.nombre.split(' ').slice(1).map(w => w[0]).join('').slice(0,2).toUpperCase()}</div>
+                  <div className="historial-medico-avatar">
+                    {selected.medico.nombre.split(' ').filter((w) => w.length > 2).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}
+                  </div>
                   <div>
                     <div className="historial-medico-nombre">{selected.medico.nombre}</div>
-                    <div className="historial-medico-esp">{selected.medico.especialidad}</div>
+                    <div className="historial-medico-esp">{selected.medico.especialidad || 'Médico/Institución'}</div>
                     <div className="historial-medico-hosp">{selected.medico.hospital}</div>
-                    <div className="historial-medico-phone">{selected.medico.phone}</div>
                   </div>
                 </div>
               </div>

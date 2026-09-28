@@ -22,14 +22,14 @@ func NewVisitaRepository(pool *pgxpool.Pool) *VisitaRepository {
 }
 
 const scanCols = `id, id_visitador, id_medico, institucion_id, fecha_visita, fecha_visita_tentativa,
-	latitud, longitud, firma, observacion, satisfaccion, duracion, ingreso, papeleta, registrada`
+	latitud, longitud, firma, observacion, satisfaccion, duracion, ingreso, papeleta, registrada, estado`
 
 func scanVisita(scan func(dest ...any) error) (*models.Visita, error) {
 	var v models.Visita
 	err := scan(
 		&v.ID, &v.IDVisitador, &v.IDMedico, &v.InstitucionID, &v.FechaVisita, &v.FechaVisitaTentativa,
 		&v.Latitud, &v.Longitud, &v.Firma, &v.Observacion, &v.Satisfaccion,
-		&v.Duracion, &v.Ingreso, &v.Papeleta, &v.Registrada,
+		&v.Duracion, &v.Ingreso, &v.Papeleta, &v.Registrada, &v.Estado,
 	)
 	if err != nil {
 		return nil, err
@@ -68,12 +68,13 @@ func (r *VisitaRepository) GetByID(ctx context.Context, id int) (*models.Visita,
 	return v, nil
 }
 
-// Create programada por el admin: visitador, médico o institución y fecha tentativa.
+// Create programada por el visitador (planificador) o el admin: visitador,
+// médico o institución y fecha tentativa. Estado inicial: por_visitar.
 func (r *VisitaRepository) Create(ctx context.Context, req models.CreateVisitaRequest) (*models.Visita, error) {
 	v, err := scanVisita(func(dest ...any) error {
 		return r.pool.QueryRow(ctx,
-			`INSERT INTO visita (id_visitador, id_medico, institucion_id, fecha_visita_tentativa, ingreso, registrada)
-			 VALUES ($1, $2, $3, $4, 0, false)
+			`INSERT INTO visita (id_visitador, id_medico, institucion_id, fecha_visita_tentativa, ingreso, registrada, estado)
+			 VALUES ($1, $2, $3, $4, 0, false, 'por_visitar')
 			 RETURNING `+scanCols,
 			req.IDVisitador, req.IDMedico, req.InstitucionID, req.FechaVisitaTentativa,
 		).Scan(dest...)
@@ -106,6 +107,7 @@ func (r *VisitaRepository) Update(ctx context.Context, id int, req models.Update
 }
 
 // Registrar llena la visita real; la fecha tentativa ya estaba guardada.
+// Cambia el estado de por_visitar a realizada.
 func (r *VisitaRepository) Registrar(ctx context.Context, id int, req models.RegistrarVisitaRequest) (*models.Visita, error) {
 	if req.FechaVisita == nil {
 		return nil, fmt.Errorf("fecha_visita es requerida")
@@ -122,7 +124,8 @@ func (r *VisitaRepository) Registrar(ctx context.Context, id int, req models.Reg
 		        satisfaccion = $7,
 		        duracion = $8,
 		        papeleta = $9,
-		        registrada = true
+		        registrada = true,
+		        estado = 'realizada'
 		 WHERE id = $1
 			 RETURNING `+scanCols,
 			id, req.FechaVisita, req.Latitud, req.Longitud, req.Firma, observacion(req.Observacion),
@@ -148,7 +151,7 @@ func (r *VisitaRepository) Delete(ctx context.Context, id int) error {
 
 func (r *VisitaRepository) GetLaboratorios(ctx context.Context, visitaID int) ([]models.VisitaLaboratorio, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT vl.laboratorio_id, l.nombre, l.area, vl.costo
+		`SELECT vl.laboratorio_id, l.nombre, l.area, vl.costo, vl.cantidad
 		 FROM visita_laboratorio vl
 		 JOIN laboratorio l ON l.id = vl.laboratorio_id
 		 WHERE vl.visita_id = $1
@@ -161,7 +164,7 @@ func (r *VisitaRepository) GetLaboratorios(ctx context.Context, visitaID int) ([
 	var labs []models.VisitaLaboratorio
 	for rows.Next() {
 		var x models.VisitaLaboratorio
-		if err := rows.Scan(&x.LaboratorioID, &x.Nombre, &x.Area, &x.Costo); err != nil {
+		if err := rows.Scan(&x.LaboratorioID, &x.Nombre, &x.Area, &x.Costo, &x.Cantidad); err != nil {
 			return nil, err
 		}
 		labs = append(labs, x)
@@ -169,17 +172,17 @@ func (r *VisitaRepository) GetLaboratorios(ctx context.Context, visitaID int) ([
 	return labs, nil
 }
 
-// AddLaboratorios agrega estudios a una visita calculando el precio según la
-// ciudad del médico (o de la institución) y su comisión si es particular, y
-// actualiza el ingreso.
-func (r *VisitaRepository) AddLaboratorios(ctx context.Context, visitaID int, labIDs []int) ([]models.VisitaLaboratorio, error) {
+// AddLaboratorios agrega o actualiza estudios (con cantidad) a una visita,
+// calculando el precio unitario según la ciudad del médico (o de la institución)
+// y su comisión si es particular, y actualiza el ingreso.
+func (r *VisitaRepository) AddLaboratorios(ctx context.Context, visitaID int, items []models.AddLaboratorioItem) ([]models.VisitaLaboratorio, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
-	for _, labID := range labIDs {
+	for _, item := range items {
 		var esParticular bool
 		var costo, comision float64
 		err := tx.QueryRow(ctx,
@@ -194,7 +197,7 @@ func (r *VisitaRepository) AddLaboratorios(ctx context.Context, visitaID int, la
 			        ON lc.laboratorio_id = l.id
 			       AND lc.ciudad_id = COALESCE(p.ciudad_id, i.ciudad_id)
 			 WHERE v.id = $1`,
-			visitaID, labID,
+			visitaID, item.LaboratorioID,
 		).Scan(&esParticular, &costo, &comision)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -209,9 +212,11 @@ func (r *VisitaRepository) AddLaboratorios(ctx context.Context, visitaID int, la
 		costo = math.Round(costo*100) / 100
 
 		_, err = tx.Exec(ctx,
-			`INSERT INTO visita_laboratorio (visita_id, laboratorio_id, costo)
-			 VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-			visitaID, labID, costo)
+			`INSERT INTO visita_laboratorio (visita_id, laboratorio_id, costo, cantidad)
+			 VALUES ($1, $2, $3, $4)
+			 ON CONFLICT (visita_id, laboratorio_id)
+			 DO UPDATE SET costo = EXCLUDED.costo, cantidad = EXCLUDED.cantidad`,
+			visitaID, item.LaboratorioID, costo, item.Cantidad)
 		if err != nil {
 			return nil, err
 		}
@@ -257,7 +262,7 @@ func (r *VisitaRepository) RemoveLaboratorio(ctx context.Context, visitaID, labo
 func (r *VisitaRepository) recalcularIngreso(ctx context.Context, tx pgx.Tx, visitaID int) error {
 	var ingreso float64
 	if err := tx.QueryRow(ctx,
-		`SELECT COALESCE(SUM(costo), 0) FROM visita_laboratorio WHERE visita_id = $1`,
+		`SELECT COALESCE(SUM(costo * cantidad), 0) FROM visita_laboratorio WHERE visita_id = $1`,
 		visitaID,
 	).Scan(&ingreso); err != nil {
 		return err

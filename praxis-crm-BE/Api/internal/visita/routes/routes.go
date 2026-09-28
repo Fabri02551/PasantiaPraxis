@@ -15,8 +15,9 @@ func Register(mux *http.ServeMux, h *handlers.VisitaHandler, authSecret string) 
 	mux.Handle("GET /api/visitas", auth(http.HandlerFunc(h.GetAll)))
 	mux.Handle("GET /api/visitas/{id}", auth(http.HandlerFunc(h.GetByID)))
 
-	// Admin programa la visita (médico + fecha tentativa)
-	mux.Handle("POST /api/visitas", auth(adminOnly(http.HandlerFunc(h.Create))))
+	// Admin o el propio visitador programa la visita (médico/institución + fecha
+	// tentativa). El planificador del visitador solo crea para sí mismo.
+	mux.Handle("POST /api/visitas", auth(visitadorOrAdmin(http.HandlerFunc(h.Create))))
 	mux.Handle("PUT /api/visitas/{id}", auth(adminOnly(http.HandlerFunc(h.Update))))
 	mux.Handle("DELETE /api/visitas/{id}", auth(adminOnly(http.HandlerFunc(h.Delete))))
 

@@ -39,3 +39,24 @@ func (h *LaboratorioHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	}
 	response.JSON(w, http.StatusOK, lab)
 }
+
+// Precios consume la cotización del visitador: lista los estudios con su costo
+// según ?ciudad_id (optativo). GET /api/laboratorios/precios?ciudad_id=N
+func (h *LaboratorioHandler) Precios(w http.ResponseWriter, r *http.Request) {
+	var ciudadID *int
+	if v := r.URL.Query().Get("ciudad_id"); v != "" {
+		id, err := strconv.Atoi(v)
+		if err != nil {
+			response.Error(w, http.StatusBadRequest, "ciudad_id inválido")
+			return
+		}
+		ciudadID = &id
+	}
+
+	items, err := h.svc.GetPreciosPorCiudad(r.Context(), ciudadID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, items)
+}

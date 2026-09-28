@@ -58,3 +58,28 @@ export const hospitalFromDireccion = (raw: unknown): string => {
   if (!first) return ''
   return first.hospital || first.direccion || ''
 }
+
+/**
+ * Primer texto de dirección que se encuentre en un JSONB que puede venir como
+ * objeto {direccion|nombre|detalle}, array o string serializado (cargas viejas).
+ * Pensado para `institucion.direccion`.
+ */
+export const firstDireccionTexto = (dir: unknown): string => {
+  if (dir === null || dir === undefined || dir === '') return ''
+  let parsed: unknown = dir
+  if (typeof dir === 'string') {
+    try {
+      parsed = JSON.parse(dir)
+    } catch {
+      return dir
+    }
+  }
+  const primero = (o: Record<string, unknown>): string =>
+    (typeof o.direccion === 'string' && o.direccion.trim()) ||
+    (typeof o.nombre === 'string' && o.nombre.trim()) ||
+    (typeof o.detalle === 'string' && o.detalle.trim()) ||
+    ''
+  if (Array.isArray(parsed)) return primero((parsed[0] ?? {}) as Record<string, unknown>)
+  if (typeof parsed === 'object' && parsed !== null) return primero(parsed as Record<string, unknown>)
+  return ''
+}

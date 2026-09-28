@@ -22,3 +22,7 @@ func (s *LaboratorioService) GetAll(ctx context.Context) ([]models.Laboratorio, 
 func (s *LaboratorioService) GetByID(ctx context.Context, id int) (*models.Laboratorio, error) {
 	return s.repo.GetByID(ctx, id)
 }
+
+func (s *LaboratorioService) GetPreciosPorCiudad(ctx context.Context, ciudadID *int) ([]models.LaboratorioPrecio, error) {
+	return s.repo.GetPreciosPorCiudad(ctx, ciudadID)
+}

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/middleware"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/pkg/response"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/visita/models"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/visita/services"
@@ -42,12 +43,24 @@ func (h *VisitaHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, visita)
 }
 
-// Create: el admin programa la visita con el médico o institución y la fecha tentativa.
+// Create: programa la visita con el médico o institución y la fecha tentativa.
+// Si quien crea es un visitador, la visita se fuerza para él mismo (su
+// persona_id del token), protegiendo contra crear visitas para otro usuario.
 func (h *VisitaHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateVisitaRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.Error(w, http.StatusBadRequest, "json inválido")
 		return
+	}
+
+	role, _ := r.Context().Value(middleware.RoleKey).(string)
+	if role == "visitador" {
+		pid := middleware.UserPersonaID(r.Context())
+		if pid == nil {
+			response.Error(w, http.StatusUnauthorized, "token sin persona_id")
+			return
+		}
+		req.IDVisitador = *pid
 	}
 
 	if req.IDVisitador == 0 {
@@ -158,6 +171,16 @@ func (h *VisitaHandler) AddLaboratorios(w http.ResponseWriter, r *http.Request) 
 	if len(req.Laboratorios) == 0 {
 		response.Error(w, http.StatusBadRequest, "laboratorios es requerido")
 		return
+	}
+	for _, it := range req.Laboratorios {
+		if it.LaboratorioID == 0 {
+			response.Error(w, http.StatusBadRequest, "laboratorio_id inválido")
+			return
+		}
+		if it.Cantidad < 1 {
+			response.Error(w, http.StatusBadRequest, "cantidad debe ser mayor a 0")
+			return
+		}
 	}
 
 	labs, err := h.svc.AddLaboratorios(r.Context(), id, req)

@@ -66,3 +66,40 @@ func (r *LaboratorioRepository) GetByID(ctx context.Context, id int) (*models.La
 	}
 	return l, nil
 }
+
+// GetPreciosPorCiudad devuelve el costo por estudio para la cotización.
+// Con ciudadID: costo = laboratorio_ciudad.costo (0 si la ciudad no lo ofrece).
+// Sin ciudadID: costo = precio base del laboratorio.
+func (r *LaboratorioRepository) GetPreciosPorCiudad(ctx context.Context, ciudadID *int) ([]models.LaboratorioPrecio, error) {
+	var query string
+	var args []any
+	if ciudadID != nil {
+		query = `SELECT l.id, l.nombre, l.area, COALESCE(lc.costo, 0)::float8, l.comision_extra::float8
+		  FROM laboratorio l
+		  LEFT JOIN laboratorio_ciudad lc ON lc.laboratorio_id = l.id AND lc.ciudad_id = $1
+		  WHERE l.status = true
+		  ORDER BY l.area, l.nombre`
+		args = append(args, *ciudadID)
+	} else {
+		query = `SELECT l.id, l.nombre, l.area, l.precio::float8, l.comision_extra::float8
+		  FROM laboratorio l
+		  WHERE l.status = true
+		  ORDER BY l.area, l.nombre`
+	}
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []models.LaboratorioPrecio
+	for rows.Next() {
+		var lp models.LaboratorioPrecio
+		if err := rows.Scan(&lp.ID, &lp.Nombre, &lp.Area, &lp.Costo, &lp.ComisionExtra); err != nil {
+			return nil, err
+		}
+		items = append(items, lp)
+	}
+	return items, nil
+}
