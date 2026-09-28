@@ -1,0 +1,31 @@
+# Contexto de build de la imagen: lo que se lista aca NO se copia al
+# contenedor. Sirve para que "docker build" no se mande node_modules
+# (cientos de MB) que ademas pisan lo que instala "npm ci".
+node_modules
+dist
+dist-ssr
+coverage
+.vite
+*.tsbuildinfo
+
+# .env queda afuera a proposito: la configuracion entra por el proxy de
+# nginx, no por variables horneadas en el bundle. Asi ningun secreto
+# queda metido dentro de la imagen.
+.env
+.env.*
+!.env.example
+
+# Nada de esto hace falta para construir
+.git
+.gitignore
+.gitattributes
+docs
+.github
+.vscode
+.idea
+Dockerfile
+.dockerignore
+docker-compose*.yml
+compose*.yml
+README.md
+*.log

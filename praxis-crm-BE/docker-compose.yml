@@ -1,0 +1,219 @@
+name: praxis-crm
+
+# Ajustes de postgres que necesita la replicacion fisica.
+# - max_wal_senders / max_replication_slots: conexiones de salida
+#   que acepta la primaria (una por cada standby).
+# - wal_keep_size: red de seguridad por si se cae el slot.
+# - wal_log_hints: imprescindible para que pg_rewind funcione en
+#   el failback (tambien sirve data_checksums, pero esto no
+#   requiere recrear el cluster).
+x-postgres-tuning: &postgres-tuning
+  - postgres
+  # --- replicacion ---
+  - -c
+  - wal_level=replica
+  - -c
+  - max_wal_senders=10
+  - -c
+  - max_replication_slots=10
+  - -c
+  - wal_keep_size=1GB
+  - -c
+  - wal_log_hints=on
+  - -c
+  - hot_standby=on
+  - -c
+  - hot_standby_feedback=on
+  # --- general ---
+  - -c
+  - max_connections=100
+  - -c
+  - log_checkpoints=on
+  - -c
+  - log_line_prefix=%m [%p] %q%u@%d
+
+x-postgres-env: &postgres-env
+  POSTGRES_DB: ${POSTGRES_DB:-praxis_crm}
+  POSTGRES_USER: ${POSTGRES_USER:-praxis}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-praxis_secret}
+
+services:
+  # ============================================================
+  # db - primaria
+  # ============================================================
+  db:
+    image: postgres:16-alpine
+    container_name: praxis-db
+    restart: unless-stopped
+    command: *postgres-tuning
+    environment:
+      <<: *postgres-env
+      # Las credenciales de replicacion y de rewind viven aqui para
+      # que failover.sh las lea de .env al hacer el failback. El
+      # contenedor no las usa para nada mas.
+      REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_secret}
+      REWIND_USER: ${REWIND_USER:-rewind_user}
+      REWIND_PASSWORD: ${REWIND_PASSWORD:-rewind_user_secret}
+    ports:
+      - "${DB_PUBLISHED_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/init:/docker-entrypoint-initdb.d:ro
+      # Necesario para que failover.sh pueda ejecutar rewind-target.sh
+      # sobre este volumen con el postgres parado.
+      - ./docker/scripts:/scripts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ============================================================
+  # db-mirror - espejo de solo lectura (hot standby)
+  #
+  # Replica fisica por streaming de WAL de "db". No acepta
+  # escrituras. Se crea sola con un pg_basebackup la primera vez
+  # (ver docker/scripts/mirror-init.sh).
+  #
+  # OJO: replicar (streaming) no es lo mismo que restaurar. Para
+  # levantar datos antiguos usa los .dump del servicio "backup":
+  #   docker compose exec -T db psql -U praxis -d postgres -c "DROP DATABASE praxis_crm WITH (FORCE);"
+  #   docker compose exec -T db createdb -U praxis praxis_crm
+  #   docker compose exec -T db pg_restore -U praxis -d praxis_crm --no-owner < backups/latest.dump
+  # ============================================================
+  db-mirror:
+    image: postgres:16-alpine
+    container_name: praxis-db-mirror
+    restart: unless-stopped
+    # OJO: este depends_on implica que "up -d db-mirror" tambien
+    # levanta db. En el arranque normal esta bien, pero tras un
+    # failover la db vieja esta APAGADA A PROPOSITO para evitar
+    # split-brain y no debe resucitar. Por eso failover.sh siempre
+    # usa "up -d --no-deps".
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["sh", "/scripts/mirror-init.sh"]
+    environment:
+      <<: *postgres-env
+      PRIMARY_HOST: db
+      PRIMARY_PORT: "5432"
+      REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_secret}
+      REPLICATION_SLOT: ${REPLICATION_SLOT:-praxis_mirror_slot}
+      APPLICATION_NAME: praxis_mirror
+    ports:
+      # 5433 para poder leer la replica desde el host sin chocar
+      # con el 5432 de la primaria.
+      - "${MIRROR_PUBLISHED_PORT:-5433}:5432"
+    volumes:
+      - mirror_pgdata:/var/lib/postgresql/data
+      - ./docker/scripts:/scripts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ============================================================
+  # backup - pg_dump automatico diario
+  #
+  # Un dump al arrancar y despues uno por dia a BACKUP_AT, en
+  # formato custom comprimido, con retencion por antiguedad y un
+  # piso de KEEP_MIN archivos. Los .dump quedan en ./backups del
+  # host, que es lo unico que sobrevive a "docker compose down -v".
+  # ============================================================
+  backup:
+    image: postgres:16-alpine
+    container_name: praxis-backup
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["sh", "/scripts/backup.sh"]
+    environment:
+      # DB_HOST sigue a la primaria activa: si se hizo failover a
+      # db-mirror, los backups pasan a salir de ahi automaticamente.
+      DB_HOST: ${DB_HOST:-db}
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB:-praxis_crm}
+      DB_USER: ${POSTGRES_USER:-praxis}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-praxis_secret}
+      BACKUP_DIR: /backups
+      BACKUP_AT: ${BACKUP_AT:-02:00}
+      RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      KEEP_MIN: ${BACKUP_KEEP_MIN:-7}
+      RUN_ON_START: ${BACKUP_RUN_ON_START:-true}
+    volumes:
+      - ./backups:/backups
+      - ./docker/scripts:/scripts:ro
+
+  # ============================================================
+  # api
+  #
+  # El depends_on queda por comodidad del arranque normal. Durante un
+  # failover hay que levantar la api SIN tocar db, asi que ahi siempre
+  # se usa "up -d --no-deps" (ver docker/failover.sh).
+  # ============================================================
+  api:
+    build:
+      context: ./Api
+      dockerfile: Dockerfile
+    container_name: praxis-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      API_PORT: "8080"
+      APP_ENV: development
+      # DB_HOST es el unico punto de conmutacion del failover:
+      # db (normal) <-> db-mirror (promovido). Se cambia en .env.
+      DATABASE_URL: postgres://${POSTGRES_USER:-praxis}:${POSTGRES_PASSWORD:-praxis_secret}@${DB_HOST:-db}:5432/${POSTGRES_DB:-praxis_crm}?sslmode=disable
+      JWT_SECRET: change-me-in-production
+      JWT_EXPIRATION_HOURS: "24"
+    depends_on:
+      db:
+        condition: service_healthy
+    # La imagen es alpine, asi que tiene el wget de busybox para
+    # pegarle al GET /health que expone cmd/api/main.go. El servicio
+    # "fr" espera a que este healthcheck pase antes de arrancar.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ============================================================
+  # fr - frontend (SPA de Vite servida por nginx)
+  #
+  # El navegador pide rutas relativas ("/api/...") y nginx las
+  # reenvia al servicio "api". Por eso el front no necesita ninguna
+  # variable VITE_* ni saber la URL del backend, y no hay CORS.
+  #
+  # Este contenedor NO se recrea durante un failover: la api si, pero
+  # nginx re-resuelve el nombre "api" en cada pedido, asi que lo unico
+  # que se nota son unos segundos de 502 mientras la API vuelve. La
+  # SPA en si sigue sirviéndose. Ver el bloque "resolver" en nginx.conf.
+  # ============================================================
+  fr:
+    build:
+      # Vive en el repo hermano. Docker build sube el contexto desde
+      # ahi, asi que este compose solo funciona con las dos carpetas
+      # en el mismo nivel del checkout.
+      context: ../praxis-crm-FR
+      dockerfile: Dockerfile
+    container_name: praxis-fr
+    restart: unless-stopped
+    ports:
+      - "${FR_PUBLISHED_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  mirror_pgdata:
