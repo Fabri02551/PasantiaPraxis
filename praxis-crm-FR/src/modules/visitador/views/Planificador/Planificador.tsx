@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
 import { medicoService } from '../../../core/services/medico.service'
+import { normalizeUbicaciones, hospitalFromDireccion } from '../../../core/utils/medicoDireccion'
 import './Planificador.css'
 
 type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
@@ -44,22 +45,15 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
       .then((data) => {
         if (cancelled) return
         if (Array.isArray(data) && data.length > 0) {
-          const mapped: MedicoPlan[] = data.map((b, idx) => ({
-            id: String((b as unknown as { persona_id?: number }).persona_id || idx + 1),
-            nombre: (b as unknown as { nombre?: string }).nombre || `Médico ${(b as unknown as { codigo?: string }).codigo || idx + 1}`,
-            especialidad: String((b as unknown as { especialidad?: string }).especialidad || (b as unknown as { especialidad_id?: number }).especialidad_id || 'General'),
+          const mapped: MedicoPlan[] = data.map((b) => ({
+            id: String(b.persona_id),
+            nombre: `Médico ${b.matricula || b.persona_id}`,
+            especialidad: String(b.especialidad_id ?? 'General'),
             ubicaciones: (() => {
-              try {
-                const d = (b as unknown as { direccion?: unknown }).direccion
-                if (typeof d === 'string') {
-                  const p = JSON.parse(d)
-                  return Array.isArray(p) ? (p as Ubicacion[]) : [{ id: 'u1', direccion: String(d), detalle: '', coords: [-0.18, -78.46] as [number, number] }]
-                }
-                if (Array.isArray(d)) return d as Ubicacion[]
-              } catch {
-                // ignore
-              }
-              return [{ id: 'u1', direccion: (b as unknown as { institucion?: string }).institucion || 'Sin dirección', detalle: '', coords: [-0.18, -78.46] as [number, number] }]
+              const ubicaciones = normalizeUbicaciones(b.direccion)
+              if (ubicaciones.length > 0) return ubicaciones
+              const fallback = hospitalFromDireccion(b.direccion) || 'Sin dirección'
+              return [{ id: 'u1', direccion: fallback, detalle: '', coords: [-0.18, -78.46] as [number, number] }]
             })(),
           }))
           if (!cancelled) {

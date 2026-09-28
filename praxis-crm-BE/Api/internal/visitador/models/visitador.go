@@ -12,7 +12,10 @@ type Visitador struct {
 	Telefono        string    `json:"telefono"`
 	CI              string    `json:"ci"`
 	Activo          bool      `json:"activo"`
-	CreatedAt       time.Time `json:"created_at"`
+	CreadoPor       *int      `json:"creado_por,omitempty"`
+	ModificadoPor   *int      `json:"modificado_por,omitempty"`
+	FechaCreacion   time.Time `json:"fecha_creacion"`
+	UltimaModificacion time.Time `json:"ultima_modificacion"`
 }
 
 type CreateVisitadorRequest struct {

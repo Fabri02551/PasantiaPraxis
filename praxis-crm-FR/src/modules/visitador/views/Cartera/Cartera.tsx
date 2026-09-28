@@ -5,6 +5,7 @@ import { medicoService } from '../../../core/services/medico.service'
 import { personaService } from '../../../core/services/persona.service'
 import { ENV } from '../../../core/config/env'
 import { displayMedico } from '../../../core/utils/medicoPrefix'
+import { hospitalFromDireccion } from '../../../core/utils/medicoDireccion'
 import './Cartera.css'
 
 type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
@@ -34,11 +35,11 @@ export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout
       .then(async (data) => {
         if (cancelled) return
         if (Array.isArray(data) && data.length > 0) {
-          const mapped: Medico[] = await Promise.all(data.map(async (b, idx) => {
+          const mapped: Medico[] = await Promise.all(data.map(async (b) => {
             let sexo: string | undefined
             let primerApellido = ''
             let segundoApellido = ''
-            let nombre = (b as unknown as { nombre?: string }).nombre || `Médico ${b.codigo || b.persona_id}`
+            let nombre = `Médico ${b.matricula || b.persona_id}`
             try {
               const p = await personaService.getById(b.persona_id)
               nombre = p.nombre || nombre
@@ -48,12 +49,12 @@ export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout
               if (primerApellido) nombre = `${nombre} ${primerApellido}${segundoApellido ? ' ' + segundoApellido : ''}`.trim()
             } catch { /* fallback */ }
             return {
-              id: String(b.persona_id || idx + 1),
+              id: String(b.persona_id),
               nombre,
               sexo,
-              especialidad: String((b as unknown as { especialidad?: string }).especialidad || b.especialidad_id || 'General'),
-              hospital: b.institucion || 'Sin institución',
-              visitadorAsignado: (b as unknown as { visitadorAsignado?: string | null }).visitadorAsignado ?? null,
+              especialidad: String(b.especialidad_id ?? 'General'),
+              hospital: hospitalFromDireccion(b.direccion) || 'Sin institución',
+              visitadorAsignado: null,
             }
           }))
           if (cancelled) return

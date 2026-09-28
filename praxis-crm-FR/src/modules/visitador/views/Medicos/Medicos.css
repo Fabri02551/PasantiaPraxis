@@ -275,3 +275,34 @@
     max-width: 600px;
   }
 }
+
+/* Bloqueo visual mientras el alta se guarda: evita el doble clic y deja
+   claro que la escritura en la BD está en curso. */
+.medicos-busy {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(27, 42, 78, 0.35);
+  backdrop-filter: blur(2px);
+  color: #1B2A4E;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.medicos-busy-spinner {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.55);
+  border-top-color: #1B2A4E;
+  animation: medicosBusySpin 700ms linear infinite;
+}
+
+@keyframes medicosBusySpin {
+  to { transform: rotate(360deg); }
+}

@@ -13,10 +13,21 @@ import (
 type contextKey string
 
 const RoleKey contextKey = "role"
+const PersonaIDKey contextKey = "persona_id"
 
 type Claims struct {
-	Role string `json:"role"`
+	Role      string `json:"role"`
+	PersonaID *int   `json:"persona_id"`
 	jwt.RegisteredClaims
+}
+
+// UserPersonaID devuelve el persona_id del usuario autenticado (nil si el
+// token no lo incluye, p.ej. tokens emitidos antes de este campo).
+func UserPersonaID(ctx context.Context) *int {
+	if id, ok := ctx.Value(PersonaIDKey).(*int); ok {
+		return id
+	}
+	return nil
 }
 
 func Auth(secret string) func(http.Handler) http.Handler {
@@ -47,6 +58,7 @@ func Auth(secret string) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), RoleKey, claims.Role)
+			ctx = context.WithValue(ctx, PersonaIDKey, claims.PersonaID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

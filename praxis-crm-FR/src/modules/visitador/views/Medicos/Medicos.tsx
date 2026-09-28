@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
 import { medicoService } from '../../../core/services/medico.service'
 import { personaService } from '../../../core/services/persona.service'
@@ -6,6 +6,8 @@ import { especialidadService, type Especialidad } from '../../../core/services/e
 import { ENV } from '../../../core/config/env'
 import { MapPicker } from '../../../admin/components/MapPicker/MapPicker'
 import { displayMedico } from '../../../core/utils/medicoPrefix'
+import { normalizeUbicaciones, hospitalFromDireccion, type UbicacionMedico } from '../../../core/utils/medicoDireccion'
+import { Toast } from '../../../core/components/Toast/Toast'
 import './Medicos.css'
 import '../../../admin/views/Visitadores/Visitadores.css'
 
@@ -17,7 +19,7 @@ interface Props {
   onLogout: () => void
 }
 
-type Ubicacion = { id: string; direccion: string; detalle: string; coords: [number, number]; hospital?: string }
+type Ubicacion = UbicacionMedico
 
 export type Medico = {
   id: string
@@ -25,7 +27,7 @@ export type Medico = {
   primerApellido?: string
   segundoApellido?: string
   sexo?: string
-  codigo?: string
+  matricula?: string
   especialidad: string
   hospital: string
   visitadorAsignado: string | null
@@ -46,8 +48,17 @@ export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout
   const [loading, setLoading] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [especialidades, setEspecialidades] = useState<Especialidad[]>([])
+  // Ref, no solo state: setSaving(true) no actualiza `saving` hasta el
+  // siguiente render, así que dos clics rápidos aún pasarían la validación.
+  const savingRef = useRef(false)
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
+  const showToast = useCallback((msg: string, type: 'success' | 'error' | 'info') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 4000)
+  }, [])
   const [form, setForm] = useState({
-    nombre: '', primerApellido: '', segundoApellido: '', sexo: '', codigo: '',
+    nombre: '', primerApellido: '', segundoApellido: '', sexo: '', matricula: '',
     especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '',
     ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: [-0.1807, -78.4678] as [number, number] }],
   })
@@ -60,12 +71,11 @@ export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout
       .then(async (data) => {
         if (cancelled) return
         if (Array.isArray(data) && data.length > 0) {
-          const mapped: Medico[] = await Promise.all(data.map(async (b, idx) => {
-            let nombre = (b as unknown as { nombre?: string }).nombre || `Médico ${b.codigo || b.persona_id}`
+          const mapped: Medico[] = await Promise.all(data.map(async (b) => {
+            let nombre = `Médico ${b.matricula || b.persona_id}`
             let primerApellido = ''
             let segundoApellido = ''
             let sexo: string | undefined
-            let codigo = b.codigo
             try {
               const p = await personaService.getById(b.persona_id)
               nombre = p.nombre || nombre
@@ -74,28 +84,16 @@ export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout
               sexo = p.sexo || undefined
             } catch { /* fallback */ }
             return {
-              id: String(b.persona_id || idx + 1),
+              id: String(b.persona_id),
               nombre,
               primerApellido,
               segundoApellido,
               sexo,
-              codigo,
-              especialidad: String((b as unknown as { especialidad?: string }).especialidad || b.especialidad_id || 'General'),
-              hospital: b.institucion || 'Sin institución',
-              visitadorAsignado: (b as unknown as { visitadorAsignado?: string | null }).visitadorAsignado ?? null,
-              ubicaciones: (() => {
-                const raw = b.direccion
-                if (!raw) return []
-                try {
-                  const arr = typeof raw === 'string' ? JSON.parse(raw as string) : raw
-                  if (Array.isArray(arr)) return (arr as unknown[]).map((u, i) => {
-                    const o = u as Record<string, unknown>
-                    const coords = Array.isArray(o.coords) && (o.coords as unknown[]).length === 2 ? (o.coords as [number, number]) : ([-0.1807, -78.4678] as [number, number])
-                    return { id: typeof o.id === 'string' ? o.id : `u${i}`, direccion: typeof o.direccion === 'string' ? o.direccion : '', detalle: typeof o.detalle === 'string' ? o.detalle : '', coords }
-                  }) as Ubicacion[]
-                } catch { return [] }
-                return []
-              })(),
+              matricula: b.matricula || '',
+              especialidad: String(b.especialidad_id ?? 'General'),
+              hospital: hospitalFromDireccion(b.direccion) || 'Sin institución',
+              visitadorAsignado: null,
+              ubicaciones: normalizeUbicaciones(b.direccion),
             }
           }))
           if (cancelled) return
@@ -136,46 +134,71 @@ export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.nombre.trim() || !form.primerApellido.trim()) return
-    const direccionPayload = form.ubicaciones[0] ? JSON.stringify(form.ubicaciones) : undefined
+    if (savingRef.current) return
+    if (!form.nombre.trim() || !form.primerApellido.trim()) {
+      showToast('Nombre y primer apellido son obligatorios', 'error')
+      return
+    }
+    if (!form.matricula.trim()) {
+      showToast('La matrícula es obligatoria', 'error')
+      return
+    }
+    if (!form.especialidad) {
+      showToast('La especialidad es obligatoria', 'error')
+      return
+    }
+    if (!form.sexo) {
+      showToast('El sexo es obligatorio', 'error')
+      return
+    }
+
+    const ubicaciones = form.ubicaciones.filter(u => u.direccion.trim() || u.detalle.trim())
+    const matricula = form.matricula.trim()
+    savingRef.current = true
+    setSaving(true)
     try {
-      const persona = await personaService.create({
-        nombre: form.nombre.trim(),
-        primer_apellido: form.primerApellido.trim(),
-        segundo_apellido: form.segundoApellido.trim() || null,
-        sexo: form.sexo || '',
-        correo: form.email?.trim() || '',
-        telefono: form.telefono?.trim() || '',
-        ci: form.ci?.trim() || '',
-      } as unknown as Omit<import('../../../core/services/persona.service').Persona, 'id' | 'status' | 'created_at'>)
-      const pid = (persona as unknown as { id: number }).id
-      const codigo = form.codigo.trim()
-      const especialidadId = form.especialidad ? Number(form.especialidad) : undefined
+      // Un solo POST: el backend inserta persona + medico en una transacción.
       const created = await medicoService.create({
-        persona_id: pid,
-        codigo,
-        especialidad_id: Number.isFinite(especialidadId as number) ? especialidadId : undefined,
-        direccion: direccionPayload ? (JSON.parse(direccionPayload) as unknown) : undefined,
-      } as never)
-      const fallback: Medico = {
-        id: String((created as unknown as { persona_id?: number })?.persona_id || pid),
+        matricula,
+        especialidad_id: Number(form.especialidad),
+        persona: {
+          nombre: form.nombre.trim(),
+          primer_apellido: form.primerApellido.trim(),
+          segundo_apellido: form.segundoApellido.trim(),
+          sexo: form.sexo,
+          correo: form.email.trim(),
+          telefono: form.telefono.trim(),
+          ci: form.ci.trim(),
+        },
+        direccion: ubicaciones,
+        notas: form.descripcion.trim() ? { descripcion: form.descripcion.trim() } : undefined,
+      })
+      const row: Medico = {
+        id: String(created.persona_id),
         nombre: form.nombre.trim(),
         primerApellido: form.primerApellido.trim(),
         segundoApellido: form.segundoApellido.trim(),
         sexo: form.sexo,
-        codigo,
-        especialidad: form.especialidad ? ((especialidades ?? []).find(es => String(es.id) === form.especialidad)?.nombre || form.especialidad) : 'General',
-        hospital: 'Sin institución',
+        matricula,
+        especialidad: (especialidades ?? []).find(es => String(es.id) === form.especialidad)?.nombre || form.especialidad,
+        hospital: hospitalFromDireccion(ubicaciones) || 'Sin institución',
         visitadorAsignado: null,
-        ubicaciones: form.ubicaciones,
+        ubicaciones: ubicaciones.length > 0 ? ubicaciones : form.ubicaciones,
       }
-      setMedicos(prev => [...prev, fallback])
-      setApiStatus(`Creado en API: ${displayMedico(fallback.sexo, nombreCompleto(fallback))} (${codigo})`)
-      setForm({ nombre: '', primerApellido: '', segundoApellido: '', sexo: '', codigo: '', especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '', ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: [-0.1807, -78.4678] }] })
+      setMedicos(prev => [...prev, row])
+      setApiStatus(`Creado en API: ${displayMedico(row.sexo, nombreCompleto(row))} (${matricula})`)
+      showToast(`Médico registrado ✓ ${row.nombre} ${row.primerApellido} · ${matricula}`, 'success')
+      setForm({ nombre: '', primerApellido: '', segundoApellido: '', sexo: '', matricula: '', especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '', ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: [-0.1807, -78.4678] }] })
       setShowCreate(false)
     } catch (err) {
       console.warn('[Medicos] create error', err)
-      setApiStatus(`Error al crear médico: ${err instanceof Error ? err.message : String(err)}`)
+      const msg = err instanceof Error ? err.message : String(err)
+      setApiStatus(`Error al crear médico: ${msg}`)
+      showToast(`No se guardó ✗ ${msg}`, 'error')
+      setShowCreate(false)
+    } finally {
+      savingRef.current = false
+      setSaving(false)
     }
   }
 
@@ -265,23 +288,23 @@ export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout
         )}
 
         {showCreate && (
-          <div className="vt-overlay" onClick={() => setShowCreate(false)} style={{ zIndex: 3000 }}>
+          <div className="vt-overlay" onClick={() => { if (!savingRef.current) setShowCreate(false) }} style={{ zIndex: 3000 }}>
             <div className="vt-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
               <div className="vt-modal-head"><h3>Nuevo Médico</h3><button className="vt-modal-close" onClick={() => setShowCreate(false)} aria-label="Cerrar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button></div>
               <form onSubmit={handleCreate} className="vt-form">
                 <label>Nombre <span style={reqStyle}>* obligatorio</span><input required value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej. Juan" /></label>
                 <label>Primer Apellido <span style={reqStyle}>* obligatorio</span><input required value={form.primerApellido} onChange={e => setForm({ ...form, primerApellido: e.target.value })} placeholder="Ej. Pérez" /></label>
                 <label>Segundo Apellido <span style={optStyle}>(opcional)</span><input value={form.segundoApellido} onChange={e => setForm({ ...form, segundoApellido: e.target.value })} placeholder="Ej. López" /></label>
-                <label>Sexo <span style={optStyle}>(opcional)</span>
-                  <select value={form.sexo} onChange={e => setForm({ ...form, sexo: e.target.value })}>
+                <label>Sexo <span style={reqStyle}>* obligatorio</span>
+                  <select required value={form.sexo} onChange={e => setForm({ ...form, sexo: e.target.value })}>
                     <option value="">Seleccione sexo</option>
                     <option value="masculino">Masculino</option>
                     <option value="femenino">Femenino</option>
                   </select>
                 </label>
-                <label>Matrícula <span style={reqStyle}>* obligatorio</span><input value={form.codigo} onChange={e => setForm({ ...form, codigo: e.target.value })} placeholder="MED-12345 (autogenerado si vacío)" /></label>
-                <label>Especialidad <span style={optStyle}>(opcional)</span>
-                  <select value={form.especialidad} onChange={e => setForm({ ...form, especialidad: e.target.value })}>
+                <label>Matrícula <span style={reqStyle}>* obligatorio</span><input required value={form.matricula} onChange={e => setForm({ ...form, matricula: e.target.value })} placeholder="MED-12345" /></label>
+                <label>Especialidad <span style={reqStyle}>* obligatorio</span>
+                  <select required value={form.especialidad} onChange={e => setForm({ ...form, especialidad: e.target.value })}>
                     <option value="">Seleccione especialidad</option>
                     {(especialidades ?? []).map(es => <option key={es.id} value={String(es.id)}>{es.nombre} ({es.codigo})</option>)}
                   </select>
@@ -305,11 +328,20 @@ export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout
                   ))}
                   <button type="button" className="vt-btn vt-btn--ver" onClick={() => setForm({ ...form, ubicaciones: [...form.ubicaciones, { id: `u${Date.now()}`, direccion: '', detalle: '', coords: [-0.1807, -78.4678] }] })} style={{ alignSelf: 'flex-start' }}>+ Agregar ubicación</button>
                 </div>
-                <div className="vt-form-actions"><button type="button" className="vt-btn-cancel" onClick={() => setShowCreate(false)}>Cancelar</button><button type="submit" className="vt-btn-submit">Registrar</button></div>
+                <div className="vt-form-actions"><button type="button" className="vt-btn-cancel" onClick={() => setShowCreate(false)} disabled={saving}>Cancelar</button><button type="submit" className="vt-btn-submit" disabled={saving}>{saving ? 'Guardando…' : 'Registrar'}</button></div>
               </form>
             </div>
           </div>
         )}
+
+        {saving && (
+          <div className="medicos-busy" role="status" aria-live="polite">
+            <span className="medicos-busy-spinner" />
+            <span>Guardando en la base de datos…</span>
+          </div>
+        )}
+
+        {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
       </div>
     </div>
   )

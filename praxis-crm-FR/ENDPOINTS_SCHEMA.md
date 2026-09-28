@@ -116,9 +116,11 @@ especialidadService.update(1, {codigo:"CARD-02", status:true})
 |---|---|---|
 | `GET` | `/api/personas` | NO |
 | `GET` | `/api/personas/{id}` | NO |
-| `POST` | `/api/personas` | SI admin |
+| `POST` | `/api/personas` | SI admin o visitador |
 | `PUT` | `/api/personas/{id}` | SI admin |
-| `DELETE` | `/api/personas/{id}` | SI admin |
+| `DELETE` | `/api/personas/{id}` | SI admin (soft delete) |
+
+**Nota de nulabilidad:** en la tabla `correo`, `telefono` y `ci` son VARCHAR NULL, pero el modelo Go los declara `string` (no puntero). El repositorio los lee con `COALESCE(correo, '')` en la constante `personaCols`; sin eso pgx falla con `cannot scan NULL into *string` y `GetAll`/`GetByID` devuelven error, lo que hacía que los médicos salieran sin nombre. Los `INSERT`/`UPDATE` usan `NULLIF($n, '')` para no guardar cadenas vacías.
 
 ```ts
 personaService.create({nombre:"Ana", primer_apellido:"García", correo:"ana@praxis.com", ciudad_id:1})
@@ -129,30 +131,72 @@ personaService.update(1, {telefono:"+591 70000000", status:true})
 
 ## 6. Módulo MEDICO — `Api/internal/medico/models:8` (extiende Persona)
 
-**Modelo:** `Medico:8` `{persona_id int PK/FK persona.id, codigo* UNIQUE, especialidad_id *int FK, institucion string, direccion json.RawMessage, clasificacion int 0-5, frecuencia_visita string, notas json.RawMessage, status bool, created_at}`  
-**Create:** `CreateMedicoRequest:21` `{persona_id*, codigo*, especialidad_id?, institucion?, direccion?, clasificacion?, frecuencia_visita?, notas?}`  
-**Update:** `UpdateMedicoRequest:32` `{codigo?, especialidad_id?, institucion?, direccion?, clasificacion?, frecuencia_visita?, notas?, status?}`  
-**Tabla:** `docker/init.sql:80` `medico (persona_id PK, codigo UNIQUE, direccion JSONB, notas JSONB)`
+**Modelo:** `Medico:8` `{persona_id int PK/FK persona.id, codigo? string UNIQUE, matricula string UNIQUE NOT NULL, especialidad_id int NOT NULL FK especialidad.id, visitador_id? int FK visitador.persona_id, es_particular bool, direccion json.RawMessage, clasificacion int 0-5, frecuencia_visita string, notas json.RawMessage, status bool, creado_por? int, modificado_por? int, fecha_creacion, ultima_modificacion}`  
+**Create:** `CreateMedicoRequest:26` `{persona_id*, matricula*, especialidad_id*, codigo?, visitador_id?, es_particular?, direccion?, clasificacion?, frecuencia_visita?, notas?}`  
+**Update:** `UpdateMedicoRequest:39` `{matricula?, especialidad_id?, codigo?, visitador_id?, es_particular?, direccion?, clasificacion?, frecuencia_visita?, notas?, status?}`  
+**Tabla:** `docker/init.sql:96` `medico (persona_id PK/FK persona, matricula UNIQUE NOT NULL, especialidad_id NOT NULL FK especialidad RESTRICT, direccion JSONB, notas JSONB)`
+
+**No existe columna `institucion` ni `created_at`** en la tabla `medico`. El nombre, apellidos, sexo, teléfono, correo y CI del médico viven en `persona`, hay que pedirlos a `/api/personas/{id}`.
 
 | Método | Path | Auth | Nota |
 |---|---|---|---|
 | `GET` | `/api/medicos` | NO | lista todos |
 | `GET` | `/api/medicos/{persona_id}` | NO | `r.PathValue("persona_id")` |
-| `POST` | `/api/medicos` | SI admin | `201` requiere `codigo != ""` |
+| `POST` | `/api/medicos` | SI admin o visitador | `201`. Ver abajo |
 | `PUT` | `/api/medicos/{persona_id}` | SI admin | |
-| `DELETE` | `/api/medicos/{persona_id}` | SI admin | `médico eliminado` |
+| `DELETE` | `/api/medicos/{persona_id}` | SI admin | soft delete (`status=false`), mensaje `médico eliminado` |
+
+### Alta atómica (persona + médico en una transacción)
+
+Si `POST /api/medicos` incluye el objeto `persona`, el backend inserta **persona y médico dentro de una única transacción** (`MedicoRepository.CreateCompleto`, mismo patrón que `visitador`). Si el `INSERT` de médico falla, se hace rollback y **no queda ninguna persona huérfana**. Esta es la única forma en que el frontend debe hacer el alta.
+
+Si viene `persona_id` (persona ya existente) en vez de `persona`, se comporta como antes: un solo `INSERT` en `medico`.
+
+Códigos de respuesta:
+
+| Código | Causa |
+|---|---|
+| `400` | falta `matricula`, falta `especialidad_id`, falta `sexo`, falta `nombre`/`primer_apellido`, o la especialidad no existe (violación de FK) |
+| `409` | `matricula` o `codigo` duplicado, o la persona ya es médico |
 
 ```ts
-// Crear médico: primero crear persona, luego médico
-const p = await personaService.create({nombre:"Roberto", primer_apellido:"García", correo:"r@praxis.com"})
-await medicoService.create({persona_id: p.id, codigo:"MED-001", institucion:"Hospital Ángeles", direccion:{lat:-0.18,lng:-78.46}, especialidad_id:1})
-
-// Frontend ya mapea a Medico FE {id, nombre, especialidad, hospital, visitadorAsignado} en visitador/views/Medicos/Medicos.tsx:21
-medicoService.list()
-medicoService.remove(1)
+// Alta correcta: UN solo POST, atómico. No hace falta el POST /api/personas previo.
+const medico = await medicoService.create({
+  matricula: "MED-001",          // obligatorio: NOT NULL UNIQUE
+  especialidad_id: 1,            // obligatorio: NOT NULL
+  persona: {                     // se inserta en la misma transacción
+    nombre: "Roberto",
+    primer_apellido: "García",
+    segundo_apellido: "Flores",
+    sexo: "masculino",           // obligatorio: el handler lo valida
+    correo: "r@praxis.com",
+    telefono: "70000000",
+    ci: "1234567",
+  },
+  direccion: [{id:"u0", direccion:"Av. Arce 2158", detalle:"Consultorio 5", coords:[-16.4897,-68.1193]}],
+  notas: { descripcion: "Cliente preferente" },
+})
+// medico.persona_id es el id de la persona recién creada
 ```
 
-**Frontend ya creado:** `src/modules/core/services/medico.service.ts:5`, `src/modules/visitador/views/Medicos/Medicos.tsx:30`, `src/modules/admin/views/MedicosAdmin/MedicosAdmin.tsx:49`, `src/modules/visitador/views/Cartera/Cartera.tsx:17` (filtra por `visitadorAsignado`).
+**Importante:** `direccion` y `notas` son columnas **JSONB**. Se debe enviar el objeto/array ya parseado, nunca `JSON.stringify(...)` — si se envía un string, Postgres lo guarda como un *string* JSON y la vista ya no puede leerlo como lista de ubicaciones.
+
+**Anti doble clic en el frontend:** además de `disabled` en el botón, hay que usar un `useRef` como guardia. `setSaving(true)` no actualiza el valor de `saving` hasta el siguiente render, así que dos clics muy seguidos pasarían la validación de state. El patrón usado en `MedicosAdmin.tsx` / `Medicos.tsx`:
+
+```ts
+const savingRef = useRef(false)
+const [saving, setSaving] = useState(false)
+
+const handleCreate = async (e) => {
+  e.preventDefault()
+  if (savingRef.current) return      // guarda real, no depende del render
+  savingRef.current = true
+  setSaving(true)
+  try { /* ... */ } finally { savingRef.current = false; setSaving(false) }
+}
+```
+
+**Frontend:** `src/modules/core/services/medico.service.ts`, `src/modules/core/utils/medicoDireccion.ts` (`normalizeUbicaciones` / `hospitalFromDireccion`), `src/modules/core/components/Toast/Toast.tsx`, `src/modules/admin/views/MedicosAdmin/MedicosAdmin.tsx`, `src/modules/visitador/views/Medicos/Medicos.tsx`, `src/modules/visitador/views/Cartera/Cartera.tsx` (filtra por `visitadorAsignado`).
 
 ---
 

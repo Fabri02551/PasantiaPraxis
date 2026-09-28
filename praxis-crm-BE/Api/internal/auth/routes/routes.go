@@ -11,4 +11,9 @@ func Register(mux *http.ServeMux, h *handlers.AuthHandler, authSecret string) {
 	mux.HandleFunc("POST /api/auth/login", h.Login)
 	mux.Handle("POST /api/auth/register",
 		middleware.Auth(authSecret)(middleware.RequireRole("admin")(http.HandlerFunc(h.Register))))
+	// Perfil del usuario autenticado: el persona_id se toma del token.
+	mux.Handle("GET /api/auth/me",
+		middleware.Auth(authSecret)(http.HandlerFunc(h.Me)))
+	mux.Handle("PUT /api/auth/me",
+		middleware.Auth(authSecret)(http.HandlerFunc(h.UpdateMe)))
 }

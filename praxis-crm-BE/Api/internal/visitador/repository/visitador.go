@@ -16,7 +16,7 @@ func NewVisitadorRepository(pool *pgxpool.Pool) *VisitadorRepository {
 	return &VisitadorRepository{pool: pool}
 }
 
-func (r *VisitadorRepository) Create(ctx context.Context, v *models.Visitador) error {
+func (r *VisitadorRepository) Create(ctx context.Context, userID *int, v *models.Visitador) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("error starting transaction: %w", err)
@@ -34,8 +34,8 @@ func (r *VisitadorRepository) Create(ctx context.Context, v *models.Visitador) e
 	}
 
 	_, err = tx.Exec(ctx,
-		`INSERT INTO visitador (persona_id) VALUES ($1)`,
-		personaID,
+		`INSERT INTO visitador (persona_id, creado_por) VALUES ($1, $2)`,
+		personaID, userID,
 	)
 	if err != nil {
 		return fmt.Errorf("error creating visitador: %w", err)
@@ -46,10 +46,11 @@ func (r *VisitadorRepository) Create(ctx context.Context, v *models.Visitador) e
 
 func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, p.sexo, p.correo, p.telefono, p.ci, v.activo, v.created_at
+		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, p.sexo, p.correo, p.telefono, p.ci, v.activo,
+		        v.creado_por, v.modificado_por, v.fecha_creacion, v.ultima_modificacion
 		 FROM visitador v
 		 JOIN persona p ON p.id = v.persona_id
-		 ORDER BY v.created_at DESC`,
+		 ORDER BY v.fecha_creacion DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -59,7 +60,8 @@ func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, err
 	var visitadores []models.Visitador
 	for rows.Next() {
 		var v models.Visitador
-		if err := rows.Scan(&v.PersonaID, &v.Nombre, &v.PrimerApellido, &v.SegundoApellido, &v.Sexo, &v.Correo, &v.Telefono, &v.CI, &v.Activo, &v.CreatedAt); err != nil {
+		if err := rows.Scan(&v.PersonaID, &v.Nombre, &v.PrimerApellido, &v.SegundoApellido, &v.Sexo, &v.Correo, &v.Telefono, &v.CI, &v.Activo,
+			&v.CreadoPor, &v.ModificadoPor, &v.FechaCreacion, &v.UltimaModificacion); err != nil {
 			return nil, err
 		}
 		visitadores = append(visitadores, v)
@@ -70,18 +72,20 @@ func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, err
 func (r *VisitadorRepository) GetByID(ctx context.Context, id int) (*models.Visitador, error) {
 	v := &models.Visitador{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, p.sexo, p.correo, p.telefono, p.ci, v.activo, v.created_at
+		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, p.sexo, p.correo, p.telefono, p.ci, v.activo,
+		        v.creado_por, v.modificado_por, v.fecha_creacion, v.ultima_modificacion
 		 FROM visitador v
 		 JOIN persona p ON p.id = v.persona_id
 		 WHERE v.persona_id = $1`, id,
-	).Scan(&v.PersonaID, &v.Nombre, &v.PrimerApellido, &v.SegundoApellido, &v.Sexo, &v.Correo, &v.Telefono, &v.CI, &v.Activo, &v.CreatedAt)
+	).Scan(&v.PersonaID, &v.Nombre, &v.PrimerApellido, &v.SegundoApellido, &v.Sexo, &v.Correo, &v.Telefono, &v.CI, &v.Activo,
+		&v.CreadoPor, &v.ModificadoPor, &v.FechaCreacion, &v.UltimaModificacion)
 	if err != nil {
 		return nil, fmt.Errorf("visitador not found: %w", err)
 	}
 	return v, nil
 }
 
-func (r *VisitadorRepository) Update(ctx context.Context, id int, v *models.UpdateVisitadorRequest) error {
+func (r *VisitadorRepository) Update(ctx context.Context, userID *int, id int, v *models.UpdateVisitadorRequest) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("error starting transaction: %w", err)
@@ -104,8 +108,8 @@ func (r *VisitadorRepository) Update(ctx context.Context, id int, v *models.Upda
 
 	if v.Activo != nil {
 		_, err = tx.Exec(ctx,
-			`UPDATE visitador SET activo = $1 WHERE persona_id = $2`,
-			*v.Activo, id,
+			`UPDATE visitador SET activo = $1, modificado_por = $3, ultima_modificacion = NOW() WHERE persona_id = $2`,
+			*v.Activo, id, userID,
 		)
 		if err != nil {
 			return fmt.Errorf("error updating visitador: %w", err)

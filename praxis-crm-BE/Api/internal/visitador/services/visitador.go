@@ -15,8 +15,8 @@ func NewVisitadorService(repo *repository.VisitadorRepository) *VisitadorService
 	return &VisitadorService{repo: repo}
 }
 
-func (s *VisitadorService) Create(ctx context.Context, v *models.Visitador) error {
-	return s.repo.Create(ctx, v)
+func (s *VisitadorService) Create(ctx context.Context, userID *int, v *models.Visitador) error {
+	return s.repo.Create(ctx, userID, v)
 }
 
 func (s *VisitadorService) List(ctx context.Context) ([]models.Visitador, error) {
@@ -27,8 +27,8 @@ func (s *VisitadorService) GetByID(ctx context.Context, id int) (*models.Visitad
 	return s.repo.GetByID(ctx, id)
 }
 
-func (s *VisitadorService) Update(ctx context.Context, id int, v *models.UpdateVisitadorRequest) error {
-	return s.repo.Update(ctx, id, v)
+func (s *VisitadorService) Update(ctx context.Context, userID *int, id int, v *models.UpdateVisitadorRequest) error {
+	return s.repo.Update(ctx, userID, id, v)
 }
 
 func (s *VisitadorService) Delete(ctx context.Context, id int) error {

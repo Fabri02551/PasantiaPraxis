@@ -29,6 +29,14 @@ import (
 	especialidadrepo "gitlab.com/labpraxis/praxis-crm-be/api/internal/especialidad/repository"
 	especialidadroutes "gitlab.com/labpraxis/praxis-crm-be/api/internal/especialidad/routes"
 	especialidadsvc "gitlab.com/labpraxis/praxis-crm-be/api/internal/especialidad/services"
+	institucionhandlers "gitlab.com/labpraxis/praxis-crm-be/api/internal/institucion/handlers"
+	institucionrepo "gitlab.com/labpraxis/praxis-crm-be/api/internal/institucion/repository"
+	institucionroutes "gitlab.com/labpraxis/praxis-crm-be/api/internal/institucion/routes"
+	institucionsvc "gitlab.com/labpraxis/praxis-crm-be/api/internal/institucion/services"
+	laboratoriohandlers "gitlab.com/labpraxis/praxis-crm-be/api/internal/laboratorio/handlers"
+	laboratoriorepo "gitlab.com/labpraxis/praxis-crm-be/api/internal/laboratorio/repository"
+	laboratorioroutes "gitlab.com/labpraxis/praxis-crm-be/api/internal/laboratorio/routes"
+	laboratoriosvc "gitlab.com/labpraxis/praxis-crm-be/api/internal/laboratorio/services"
 	medicohandlers "gitlab.com/labpraxis/praxis-crm-be/api/internal/medico/handlers"
 	medicorepo "gitlab.com/labpraxis/praxis-crm-be/api/internal/medico/repository"
 	medicoroutes "gitlab.com/labpraxis/praxis-crm-be/api/internal/medico/routes"
@@ -103,6 +111,18 @@ func main() {
 	accionSvc := accionsvc.NewAccionService(accionRepo)
 	accionHandler := accionhandlers.NewAccionHandler(accionSvc)
 	accionroutes.Register(mux, accionHandler, cfg.JWTSecret)
+
+	// Laboratorio module
+	laboratorioRepo := laboratoriorepo.NewLaboratorioRepository(pool)
+	laboratorioSvc := laboratoriosvc.NewLaboratorioService(laboratorioRepo)
+	laboratorioHandler := laboratoriohandlers.NewLaboratorioHandler(laboratorioSvc)
+	laboratorioroutes.Register(mux, laboratorioHandler)
+
+	// Institucion module
+	institucionRepo := institucionrepo.NewInstitucionRepository(pool)
+	institucionSvc := institucionsvc.NewInstitucionService(institucionRepo)
+	institucionHandler := institucionhandlers.NewInstitucionHandler(institucionSvc)
+	institucionroutes.Register(mux, institucionHandler, cfg.JWTSecret)
 
 	// Visitador module
 	visitadorRepo := vrepo.NewVisitadorRepository(pool)

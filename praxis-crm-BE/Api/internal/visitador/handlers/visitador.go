@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/middleware"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/pkg/response"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/visitador/models"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/visitador/services"
@@ -30,6 +31,10 @@ func (h *VisitadorHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "nombre y primer apellido son requeridos")
 		return
 	}
+	if req.Sexo == "" {
+		response.Error(w, http.StatusBadRequest, "sexo es requerido")
+		return
+	}
 
 	v := &models.Visitador{
 		Nombre:          req.Nombre,
@@ -42,7 +47,7 @@ func (h *VisitadorHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Activo:          true,
 	}
 
-	if err := h.svc.Create(r.Context(), v); err != nil {
+	if err := h.svc.Create(r.Context(), middleware.UserPersonaID(r.Context()), v); err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -101,7 +106,7 @@ func (h *VisitadorHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.Update(r.Context(), id, &req); err != nil {
+	if err := h.svc.Update(r.Context(), middleware.UserPersonaID(r.Context()), id, &req); err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}

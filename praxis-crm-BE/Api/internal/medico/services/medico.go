@@ -23,14 +23,23 @@ func (s *MedicoService) GetByID(ctx context.Context, personaID int) (*models.Med
 	return s.repo.GetByID(ctx, personaID)
 }
 
-func (s *MedicoService) Create(ctx context.Context, req models.CreateMedicoRequest) (*models.Medico, error) {
-	return s.repo.Create(ctx, req)
+func (s *MedicoService) Create(ctx context.Context, userID *int, req models.CreateMedicoRequest) (*models.Medico, error) {
+	return s.repo.Create(ctx, userID, req)
 }
 
-func (s *MedicoService) Update(ctx context.Context, personaID int, req models.UpdateMedicoRequest) (*models.Medico, error) {
-	return s.repo.Update(ctx, personaID, req)
+// CreateCompleto crea persona + médico de forma atómica.
+func (s *MedicoService) CreateCompleto(ctx context.Context, userID *int, p models.PersonaInput, req models.CreateMedicoRequest) (*models.Medico, error) {
+	return s.repo.CreateCompleto(ctx, userID, p, req)
 }
 
-func (s *MedicoService) Delete(ctx context.Context, personaID int) error {
-	return s.repo.Delete(ctx, personaID)
+func (s *MedicoService) Update(ctx context.Context, userID *int, personaID int, req models.UpdateMedicoRequest) (*models.Medico, error) {
+	return s.repo.Update(ctx, userID, personaID, req)
+}
+
+func (s *MedicoService) Delete(ctx context.Context, userID *int, personaID int) error {
+	return s.repo.Delete(ctx, userID, personaID)
+}
+
+func (s *MedicoService) GetPersonaSexo(ctx context.Context, personaID int) (string, error) {
+	return s.repo.GetPersonaSexo(ctx, personaID)
 }

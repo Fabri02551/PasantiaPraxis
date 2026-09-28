@@ -135,6 +135,44 @@
   background: #fcfcfd;
 }
 
+.profile-status {
+  font-size: 13px;
+  color: #7e8aa6;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.profile-status-error {
+  color: #e35d5d;
+  font-weight: 600;
+}
+
+.profile-error {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid #f8c2c2;
+  border-radius: 16px;
+  padding: 8px;
+}
+
+.btn-retry {
+  height: 42px;
+  background: #fff;
+  border: 1px solid #d8e6e6;
+  border-radius: 10px;
+  color: #2d9c9c;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-retry:hover {
+  background: #f4fbfb;
+}
+
 .btn-edit {
   height: 44px;
   background: #fff;
@@ -271,6 +309,29 @@
   border-color: #e35d5d;
 }
 
+.profile-modal-form .form-input:disabled {
+  background: #f4f6f9;
+  color: #7e8aa6;
+  cursor: not-allowed;
+}
+
+.form-hint {
+  font-size: 11px;
+  color: #7e8aa6;
+}
+
+.profile-save-error {
+  background: #fdecec;
+  border: 1px solid #f8c2c2;
+  color: #e35d5d;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  padding: 10px;
+  border-radius: 8px;
+  margin: 0;
+}
+
 .field-error {
   font-size: 11.5px;
   color: #e35d5d;
@@ -325,6 +386,16 @@
 
 .btn-save:hover {
   background: #258f8f;
+}
+
+.btn-save:disabled {
+  background: #9ccfcf;
+  cursor: not-allowed;
+}
+
+.btn-cancel:disabled {
+  color: #b3bccc;
+  cursor: not-allowed;
 }
 
 @media (min-width: 768px) {

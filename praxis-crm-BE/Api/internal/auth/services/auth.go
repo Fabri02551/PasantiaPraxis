@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -76,8 +77,68 @@ func (s *AuthService) GetByID(ctx context.Context, id string) (*models.UserWithP
 	return s.repo.GetByID(ctx, id)
 }
 
+// GetProfile devuelve los datos del usuario autenticado, resueltos por el
+// persona_id que viene en el token.
+func (s *AuthService) GetProfile(ctx context.Context, personaID int) (*models.ProfileResponse, error) {
+	user, err := s.repo.GetByPersonaID(ctx, personaID)
+	if err != nil {
+		return nil, err
+	}
+	return user.ToProfile(), nil
+}
+
+func (s *AuthService) UpdateProfile(ctx context.Context, personaID int, req models.UpdateProfileRequest) (*models.ProfileResponse, error) {
+	req.Nombre = strings.TrimSpace(req.Nombre)
+	req.PrimerApellido = strings.TrimSpace(req.PrimerApellido)
+	req.Sexo = strings.ToLower(strings.TrimSpace(req.Sexo))
+	req.Telefono = strings.TrimSpace(req.Telefono)
+	req.CI = strings.TrimSpace(req.CI)
+
+	if req.SegundoApellido != nil {
+		if trimmed := strings.TrimSpace(*req.SegundoApellido); trimmed != "" {
+			req.SegundoApellido = &trimmed
+		} else {
+			req.SegundoApellido = nil
+		}
+	}
+
+	if req.Nacimiento != nil {
+		if trimmed := strings.TrimSpace(*req.Nacimiento); trimmed != "" {
+			if _, err := time.Parse("2006-01-02", trimmed); err != nil {
+				return nil, errors.New("fecha de nacimiento inválida, se espera yyyy-mm-dd")
+			}
+			req.Nacimiento = &trimmed
+		} else {
+			req.Nacimiento = nil
+		}
+	}
+
+	if req.Nombre == "" || req.PrimerApellido == "" {
+		return nil, errors.New("nombre y primer apellido son requeridos")
+	}
+	if len(req.Nombre) > 255 || len(req.PrimerApellido) > 255 {
+		return nil, errors.New("nombre o primer apellido demasiado largo")
+	}
+	if len(req.Telefono) > 50 {
+		return nil, errors.New("teléfono demasiado largo")
+	}
+	if len(req.CI) > 50 {
+		return nil, errors.New("CI demasiado largo")
+	}
+	if len(req.Sexo) > 20 {
+		return nil, errors.New("sexo inválido")
+	}
+
+	user, err := s.repo.UpdatePersona(ctx, personaID, req)
+	if err != nil {
+		return nil, err
+	}
+	return user.ToProfile(), nil
+}
+
 type Claims struct {
-	Role string `json:"role"`
+	Role      string `json:"role"`
+	PersonaID *int   `json:"persona_id"`
 	jwt.RegisteredClaims
 }
 
@@ -85,7 +146,8 @@ func (s *AuthService) generateToken(user *models.User) (*models.TokenResponse, e
 	expiresAt := time.Now().Add(s.cfg.JWTExpiration)
 
 	claims := &Claims{
-		Role: user.Role,
+		Role:      user.Role,
+		PersonaID: user.PersonaID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

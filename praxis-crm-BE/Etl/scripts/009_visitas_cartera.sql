@@ -1,7 +1,7 @@
 -- ============================================================
 -- Praxis CRM - Migración: cartera medicos + visitas extendidas
 -- Agrega es_particular y visitador_id a medico, nuevas columnas
--- a visitador_medico y crea laboratorio / laboratorio_ciudad.
+-- a visita y crea laboratorio / laboratorio_ciudad.
 -- ============================================================
 
 -- Medico: es_particular + visitador asignado (cartera)
@@ -9,16 +9,18 @@ ALTER TABLE medico ADD COLUMN IF NOT EXISTS es_particular BOOLEAN DEFAULT false;
 ALTER TABLE medico ADD COLUMN IF NOT EXISTS visitador_id INTEGER REFERENCES visitador(persona_id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_medico_visitador ON medico(visitador_id);
 
--- Visitador_medico: visita extendida
-ALTER TABLE visitador_medico ADD COLUMN IF NOT EXISTS id SERIAL;
-ALTER TABLE visitador_medico ADD COLUMN IF NOT EXISTS fecha_visita_tentativa TIMESTAMPTZ;
-ALTER TABLE visitador_medico ADD COLUMN IF NOT EXISTS latitud NUMERIC(10,7);
-ALTER TABLE visitador_medico ADD COLUMN IF NOT EXISTS longitud NUMERIC(10,7);
-ALTER TABLE visitador_medico ADD COLUMN IF NOT EXISTS firma TEXT DEFAULT '';
+-- Visita: visita extendida
+ALTER TABLE visita ADD COLUMN IF NOT EXISTS id SERIAL;
+ALTER TABLE visita ADD COLUMN IF NOT EXISTS fecha_visita_tentativa TIMESTAMPTZ;
+ALTER TABLE visita ADD COLUMN IF NOT EXISTS latitud NUMERIC(10,7);
+ALTER TABLE visita ADD COLUMN IF NOT EXISTS longitud NUMERIC(10,7);
+ALTER TABLE visita ADD COLUMN IF NOT EXISTS firma TEXT DEFAULT '';
+ALTER TABLE visita ADD COLUMN IF NOT EXISTS institucion_id INTEGER REFERENCES institucion(id) ON DELETE SET NULL;
 
 -- La PK compuesta (visitador, medico, fecha) se reemplaza por id serial
-ALTER TABLE visitador_medico DROP CONSTRAINT IF EXISTS visitador_medico_pkey;
-ALTER TABLE visitador_medico ADD PRIMARY KEY (id);
+ALTER TABLE visita DROP CONSTRAINT IF EXISTS visita_pkey;
+ALTER TABLE visita DROP CONSTRAINT IF EXISTS visitador_medico_pkey;
+ALTER TABLE visita ADD PRIMARY KEY (id);
 
 -- Laboratorio / costos por ciudad (no creadas en BD existente)
 CREATE TABLE IF NOT EXISTS laboratorio (

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { AdminLayout } from '../../components/AdminLayout/AdminLayout'
 import type { AdminView } from '../../components/AdminSidebar/AdminSidebar'
 import { MapContainer, TileLayer, Marker } from 'react-leaflet'
@@ -13,6 +13,8 @@ import { personaService } from '../../../core/services/persona.service'
 import { especialidadService, type Especialidad } from '../../../core/services/especialidad.service'
 import { ENV } from '../../../core/config/env'
 import { displayMedico } from '../../../core/utils/medicoPrefix'
+import { normalizeUbicaciones, hospitalFromDireccion, type UbicacionMedico } from '../../../core/utils/medicoDireccion'
+import { Toast } from '../../../core/components/Toast/Toast'
 import './MedicosAdmin.css'
 import '../Visitadores/Visitadores.css'
 
@@ -20,7 +22,7 @@ import '../Visitadores/Visitadores.css'
 delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({ iconRetinaUrl: markerIcon2x, iconUrl: markerIcon, shadowUrl: markerShadow })
 
-type Ubicacion = { id: string; direccion: string; detalle: string; coords: [number, number]; hospital?: string }
+type Ubicacion = UbicacionMedico
 
 type MedicoAdmin = {
   id: string
@@ -28,7 +30,7 @@ type MedicoAdmin = {
   primerApellido: string
   segundoApellido: string
   sexo: string
-  codigo: string
+  matricula: string
   especialidad: string
   hospital: string
   telefono: string
@@ -50,40 +52,27 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
   const [deleting, setDeleting] = useState<MedicoAdmin | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState<Omit<MedicoAdmin, 'id'>>({
-    nombre: '', primerApellido: '', segundoApellido: '', sexo: '', codigo: '',
+    nombre: '', primerApellido: '', segundoApellido: '', sexo: '', matricula: '',
     especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '',
     ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: [-0.1807, -78.4678] }],
   })
   const [especialidades, setEspecialidades] = useState<Especialidad[]>([])
   const [apiStatus, setApiStatus] = useState(`API: ${ENV.API_URL}`)
   const [loading, setLoading] = useState(false)
-
-  const parseUbicaciones = (raw: unknown, fallbackHospital?: string): Ubicacion[] => {
-    if (!raw) return fallbackHospital ? [{ id: 'u0', direccion: fallbackHospital, detalle: '', coords: [-0.1807, -78.4678] }] : []
-    try {
-      const arr = typeof raw === 'string' ? JSON.parse(raw as string) : raw
-      if (Array.isArray(arr)) {
-        return (arr as unknown[]).map((u, i) => {
-          const o = u as Record<string, unknown>
-          const coords = Array.isArray(o.coords) && (o.coords as unknown[]).length === 2 ? (o.coords as [number, number]) : ([-0.1807, -78.4678] as [number, number])
-          return {
-            id: typeof o.id === 'string' ? o.id : `u${i}`,
-            direccion: typeof o.direccion === 'string' ? o.direccion : (typeof o.hospital === 'string' ? o.hospital : ''),
-            detalle: typeof o.detalle === 'string' ? o.detalle : '',
-            coords,
-            hospital: typeof o.hospital === 'string' ? o.hospital : undefined,
-          }
-        })
-      }
-    } catch { /* ignore parse error */ }
-    if (typeof raw === 'string' && (raw as string).trim()) return [{ id: 'u0', direccion: raw as string, detalle: '', coords: [-0.1807, -78.4678] }]
-    return fallbackHospital ? [{ id: 'u0', direccion: fallbackHospital, detalle: '', coords: [-0.1807, -78.4678] }] : []
-  }
+  const [saving, setSaving] = useState(false)
+  // Ref, no solo state: setSaving(true) no actualiza `saving` hasta el
+  // siguiente render, así que dos clics rápidos aún pasarían la validación.
+  const savingRef = useRef(false)
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
+  const showToast = useCallback((msg: string, type: 'success' | 'error' | 'info') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 4000)
+  }, [])
 
   const mapBEList = async (list: MedicoBE[]): Promise<MedicoAdmin[]> => {
     const enriched = await Promise.all(
       list.map(async (b) => {
-        let nombre = `Médico ${b.codigo || b.persona_id}`
+        let nombre = `Médico ${b.matricula || b.persona_id}`
         let primerApellido = ''
         let segundoApellido = ''
         let sexo = ''
@@ -106,14 +95,16 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
           primerApellido,
           segundoApellido,
           sexo,
-          codigo: b.codigo || '',
+          matricula: b.matricula || '',
           especialidad: String(b.especialidad_id ?? ''),
-          hospital: b.institucion || '',
+          hospital: hospitalFromDireccion(b.direccion),
           telefono,
           email,
           ci,
-          descripcion: typeof b.notas === 'string' ? b.notas : '',
-          ubicaciones: parseUbicaciones(b.direccion, b.institucion),
+          descripcion: b.notas && typeof b.notas === 'object' && !Array.isArray(b.notas)
+            ? Object.entries(b.notas as Record<string, unknown>).map(([k, v]) => `${k}: ${String(v)}`).join('\n')
+            : (typeof b.notas === 'string' ? b.notas : ''),
+          ubicaciones: normalizeUbicaciones(b.direccion),
         } as MedicoAdmin
       }),
     )
@@ -161,86 +152,132 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.nombre.trim() || !form.primerApellido.trim()) return
-    const direccionPayload = form.ubicaciones[0] ? JSON.stringify(form.ubicaciones) : undefined
+    if (savingRef.current) return
+
+    if (!form.nombre.trim() || !form.primerApellido.trim()) {
+      showToast('Nombre y primer apellido son obligatorios', 'error')
+      return
+    }
+    if (!form.matricula.trim()) {
+      showToast('La matrícula es obligatoria', 'error')
+      return
+    }
+    if (!form.especialidad) {
+      showToast('La especialidad es obligatoria', 'error')
+      return
+    }
+    if (!form.sexo) {
+      showToast('El sexo es obligatorio', 'error')
+      return
+    }
+
+    const ubicaciones = form.ubicaciones.filter(u => u.direccion.trim() || u.detalle.trim())
+    const matricula = form.matricula.trim()
+    savingRef.current = true
+    setSaving(true)
     try {
-      const persona = await personaService.create({
-        nombre: form.nombre.trim(),
-        primer_apellido: form.primerApellido.trim(),
-        segundo_apellido: form.segundoApellido.trim() || null,
-        sexo: form.sexo || '',
-        correo: form.email?.trim() || '',
-        telefono: form.telefono?.trim() || '',
-        ci: form.ci?.trim() || '',
-      } as unknown as Omit<import('../../../core/services/persona.service').Persona, 'id' | 'status' | 'created_at'>)
-      const pid = (persona as unknown as { id: number }).id
-      const codigo = form.codigo.trim()
-      const especialidadId = form.especialidad ? Number(form.especialidad) : undefined
+      // Un solo POST: el backend inserta persona + medico en una transacción.
+      // Si algo falla, no queda ninguna persona huérfana.
       const created = await medicoService.create({
-        persona_id: pid,
-        codigo,
-        especialidad_id: Number.isFinite(especialidadId as number) ? especialidadId : undefined,
-        direccion: direccionPayload ? (JSON.parse(direccionPayload) as unknown) : undefined,
-      } as never)
-      const mappedList = await mapBEList([created as MedicoBE])
-      const mapped = mappedList[0] ?? null
-      if (mapped) {
-        // enriquecer con datos locales por si BE no devuelve todo
-        mapped.nombre = form.nombre.trim()
-        mapped.primerApellido = form.primerApellido.trim()
-        mapped.segundoApellido = form.segundoApellido.trim()
-        mapped.sexo = form.sexo
-        mapped.codigo = codigo
-        mapped.especialidad = form.especialidad
-        mapped.telefono = form.telefono
-        mapped.email = form.email
-        mapped.ci = form.ci
-        mapped.descripcion = form.descripcion
-        mapped.ubicaciones = form.ubicaciones.filter(u => u.direccion.trim() || u.detalle.trim()).map((u, i) => ({ ...u, id: `u${i}` }))
-        if (mapped.ubicaciones.length === 0) mapped.ubicaciones = [{ id: 'u0', direccion: '', detalle: '', coords: [-0.1807, -78.4678] }]
-        setMedicos(prev => [...prev, mapped])
-      } else {
-        // fallback si map falla, añade visual
-        const fallback: MedicoAdmin = {
-          id: String(pid),
+        matricula,
+        especialidad_id: Number(form.especialidad),
+        persona: {
           nombre: form.nombre.trim(),
-          primerApellido: form.primerApellido.trim(),
-          segundoApellido: form.segundoApellido.trim(),
+          primer_apellido: form.primerApellido.trim(),
+          segundo_apellido: form.segundoApellido.trim(),
           sexo: form.sexo,
-          codigo,
-          especialidad: form.especialidad,
-          hospital: '',
-          telefono: form.telefono,
-          email: form.email,
-          ci: form.ci,
-          descripcion: form.descripcion,
-          ubicaciones: form.ubicaciones,
-        }
-        setMedicos(prev => [...prev, fallback])
+          correo: form.email.trim(),
+          telefono: form.telefono.trim(),
+          ci: form.ci.trim(),
+        },
+        direccion: ubicaciones,
+        notas: form.descripcion.trim() ? { descripcion: form.descripcion.trim() } : undefined,
+      })
+      const [mapped] = await mapBEList([created])
+      const row: MedicoAdmin = mapped ?? {
+        id: String(created.persona_id),
+        nombre: form.nombre.trim(),
+        primerApellido: form.primerApellido.trim(),
+        segundoApellido: form.segundoApellido.trim(),
+        sexo: form.sexo,
+        matricula,
+        especialidad: form.especialidad,
+        hospital: hospitalFromDireccion(ubicaciones),
+        telefono: form.telefono.trim(),
+        email: form.email.trim(),
+        ci: form.ci.trim(),
+        descripcion: form.descripcion.trim(),
+        ubicaciones: ubicaciones.length > 0 ? ubicaciones : form.ubicaciones,
       }
-      setApiStatus(`Creado en API: ${form.nombre} ${form.primerApellido} (${codigo})`)
-      setForm({ nombre: '', primerApellido: '', segundoApellido: '', sexo: '', codigo: '', especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '', ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: [-0.1807, -78.4678] }] })
+      setMedicos(prev => [...prev, row])
+      setApiStatus(`Creado en API: ${form.nombre} ${form.primerApellido} (${matricula})`)
+      showToast(`Médico registrado ✓ ${row.nombre} ${row.primerApellido} · ${matricula}`, 'success')
+      setForm({ nombre: '', primerApellido: '', segundoApellido: '', sexo: '', matricula: '', especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '', ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: [-0.1807, -78.4678] }] })
       setShowCreate(false)
     } catch (err) {
       console.warn('[MedicosAdmin] create error', err)
-      setApiStatus(`Error al crear médico: ${err instanceof Error ? err.message : String(err)} — no se guardó (solo DB)`)
+      const msg = err instanceof Error ? err.message : String(err)
+      setApiStatus(`Error al crear médico: ${msg}`)
+      showToast(`No se guardó ✗ ${msg}`, 'error')
+      setShowCreate(false)
+    } finally {
+      savingRef.current = false
+      setSaving(false)
     }
   }
 
   const handleEditSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editForm) return
+    if (!editForm || savingRef.current) return
+    const pid = Number(editForm.id)
+    if (!Number.isFinite(pid)) {
+      showToast('Id de persona inválido', 'error')
+      return
+    }
+    const especialidadId = editForm.especialidad ? Number(editForm.especialidad) : null
+    if (especialidadId === null || !Number.isFinite(especialidadId)) {
+      showToast('La especialidad es obligatoria', 'error')
+      return
+    }
+    const ubicaciones = editForm.ubicaciones.filter(u => u.direccion.trim() || u.detalle.trim())
+    savingRef.current = true
+    setSaving(true)
     try {
-      const pid = Number(editForm.id) || 1
-      const especialidadId = editForm.especialidad ? Number(editForm.especialidad) : undefined
-      await medicoService.update(pid, { especialidad_id: Number.isFinite(especialidadId as number) ? especialidadId : null as unknown as number, direccion: JSON.stringify(editForm.ubicaciones) as unknown as never } as never)
-      setMedicos(prev => prev.map(m => (m.id === editForm.id ? editForm : m)))
+      await personaService.update(pid, {
+        nombre: editForm.nombre.trim(),
+        primer_apellido: editForm.primerApellido.trim(),
+        segundo_apellido: editForm.segundoApellido.trim(),
+        sexo: editForm.sexo,
+        correo: editForm.email.trim(),
+        telefono: editForm.telefono.trim(),
+        ci: editForm.ci.trim(),
+      })
+      // direccion y notas son JSONB: se manda el objeto, no JSON.stringify.
+      await medicoService.update(pid, {
+        matricula: editForm.matricula.trim() || undefined,
+        especialidad_id: especialidadId,
+        direccion: ubicaciones,
+        notas: editForm.descripcion.trim() ? { descripcion: editForm.descripcion.trim() } : undefined,
+      })
+      const row: MedicoAdmin = {
+        ...editForm,
+        matricula: editForm.matricula.trim() || editForm.matricula,
+        hospital: hospitalFromDireccion(ubicaciones),
+        ubicaciones: ubicaciones.length > 0 ? ubicaciones : editForm.ubicaciones,
+      }
+      setMedicos(prev => prev.map(m => (m.id === editForm.id ? row : m)))
       setApiStatus(`Actualizado en API: ${displayMedico(editForm.sexo, `${editForm.nombre} ${editForm.primerApellido}`)}`)
+      showToast(`Médico actualizado ✓ ${row.nombre} ${row.primerApellido}`, 'success')
       setEditing(null)
       setEditForm(null)
     } catch (err) {
       console.warn('[MedicosAdmin] update error', err)
-      setApiStatus(`Error al actualizar: ${err instanceof Error ? err.message : String(err)} — no se guardó (solo DB)`)
+      const msg = err instanceof Error ? err.message : String(err)
+      setApiStatus(`Error al actualizar: ${msg}`)
+      showToast(`No se actualizó ✗ ${msg}`, 'error')
+    } finally {
+      savingRef.current = false
+      setSaving(false)
     }
   }
 
@@ -252,10 +289,13 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
       await medicoService.remove(pid)
       setMedicos(prev => prev.filter(m => m.id !== deleting.id))
       setApiStatus(`Eliminado en API: ${displayMedico(deleting.sexo, deleting.nombre)}`)
+      showToast(`Médico eliminado ✓ ${deleting.nombre}`, 'success')
       setDeleting(null)
     } catch (err) {
       console.warn('[MedicosAdmin] delete error', err)
-      setApiStatus(`Error al eliminar: ${err instanceof Error ? err.message : String(err)} — no se eliminó (solo DB)`)
+      const msg = err instanceof Error ? err.message : String(err)
+      setApiStatus(`Error al eliminar: ${msg}`)
+      showToast(`No se eliminó ✗ ${msg}`, 'error')
     }
   }
 
@@ -290,7 +330,7 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
                   <td>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <span style={{ fontWeight: 700, fontSize: 12 }}>{displayMedico(m.sexo, nombreCompleto(m))}</span>
-                      <span style={{ fontSize: 11, color: '#7e8aa6' }}>{m.email}{m.codigo ? ` · ${m.codigo}` : ''}</span>
+                      <span style={{ fontSize: 11, color: '#7e8aa6' }}>{m.email}{m.matricula ? ` · ${m.matricula}` : ''}</span>
                     </div>
                   </td>
                   <td><span className="medicos-espec">{m.especialidad ? ((especialidades ?? []).find(e => String(e.id) === m.especialidad)?.nombre || m.especialidad) : '—'}</span></td>
@@ -319,7 +359,7 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
               <span style={{ fontSize: 12, color: '#2d9c9c', fontWeight: 600 }}>{viewing.especialidad ? ((especialidades ?? []).find(e => String(e.id) === viewing.especialidad)?.nombre || viewing.especialidad) : 'Sin especialidad'} · {viewing.hospital || 'Sin institución'}</span>
               <p style={{ fontSize: 12, color: '#1B2A4E', margin: 0 }}>{viewing.descripcion || 'Sin descripción'}</p>
               <div className="vt-view-grid">
-                <span>Matrícula</span><strong>{viewing.codigo || '—'}</strong>
+                <span>Matrícula</span><strong>{viewing.matricula || '—'}</strong>
                 <span>Sexo</span><strong>{viewing.sexo ? (viewing.sexo.toLowerCase().startsWith('f') ? 'Femenino' : viewing.sexo.toLowerCase().startsWith('m') ? 'Masculino' : viewing.sexo) : '—'}</strong>
                 <span>CI</span><strong>{viewing.ci || '—'}</strong>
                 <span>Teléfono</span><strong>{viewing.telefono || '—'}</strong>
@@ -352,23 +392,23 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
       )}
 
       {showCreate && (
-        <div className="vt-overlay" onClick={() => setShowCreate(false)}>
+        <div className="vt-overlay" onClick={() => { if (!savingRef.current) setShowCreate(false) }}>
           <div className="vt-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal>
             <div className="vt-modal-head"><h3>Nuevo Médico</h3><button className="vt-modal-close" onClick={() => setShowCreate(false)} aria-label="Cerrar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button></div>
             <form onSubmit={handleCreate} className="vt-form">
               <label>Nombre <span style={reqLabelStyle}>* obligatorio</span><input required value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej. Juan" /></label>
               <label>Primer Apellido <span style={reqLabelStyle}>* obligatorio</span><input required value={form.primerApellido} onChange={e => setForm({ ...form, primerApellido: e.target.value })} placeholder="Ej. Pérez" /></label>
               <label>Segundo Apellido <span style={optLabelStyle}>(opcional)</span><input value={form.segundoApellido} onChange={e => setForm({ ...form, segundoApellido: e.target.value })} placeholder="Ej. López" /></label>
-              <label>Sexo <span style={optLabelStyle}>(opcional)</span>
-                <select value={form.sexo} onChange={e => setForm({ ...form, sexo: e.target.value })}>
+              <label>Sexo <span style={reqLabelStyle}>* obligatorio</span>
+                <select required value={form.sexo} onChange={e => setForm({ ...form, sexo: e.target.value })}>
                   <option value="">Seleccione sexo</option>
                   <option value="masculino">Masculino</option>
                   <option value="femenino">Femenino</option>
                 </select>
               </label>
-              <label>Matrícula <span style={reqLabelStyle}>* obligatorio</span><input value={form.codigo} onChange={e => setForm({ ...form, codigo: e.target.value })} placeholder="Ej. MED-12345 (autogenerado si vacío)" /></label>
-              <label>Especialidad <span style={optLabelStyle}>(opcional)</span>
-                <select value={form.especialidad} onChange={e => setForm({ ...form, especialidad: e.target.value })}>
+              <label>Matrícula <span style={reqLabelStyle}>* obligatorio</span><input required value={form.matricula} onChange={e => setForm({ ...form, matricula: e.target.value })} placeholder="Ej. MED-12345" /></label>
+              <label>Especialidad <span style={reqLabelStyle}>* obligatorio</span>
+                <select required value={form.especialidad} onChange={e => setForm({ ...form, especialidad: e.target.value })}>
                   <option value="">Seleccione especialidad</option>
                   {(especialidades ?? []).map(es => <option key={es.id} value={String(es.id)}>{es.nombre} ({es.codigo})</option>)}
                 </select>
@@ -392,7 +432,7 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
                 ))}
                 <button type="button" className="vt-btn vt-btn--ver" onClick={() => setForm({ ...form, ubicaciones: [...form.ubicaciones, { id: `u${Date.now()}`, direccion: '', detalle: '', coords: [-0.1807, -78.4678] }] })} style={{ alignSelf: 'flex-start' }}>+ Agregar ubicación</button>
               </div>
-              <div className="vt-form-actions"><button type="button" className="vt-btn-cancel" onClick={() => setShowCreate(false)}>Cancelar</button><button type="submit" className="vt-btn-submit">Registrar</button></div>
+              <div className="vt-form-actions"><button type="button" className="vt-btn-cancel" onClick={() => setShowCreate(false)} disabled={saving}>Cancelar</button><button type="submit" className="vt-btn-submit" disabled={saving}>{saving ? 'Guardando…' : 'Registrar'}</button></div>
             </form>
           </div>
         </div>
@@ -406,16 +446,16 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
               <label>Nombre <span style={reqLabelStyle}>* obligatorio</span><input required value={editForm.nombre} onChange={e => setEditForm({ ...editForm, nombre: e.target.value })} /></label>
               <label>Primer Apellido <span style={reqLabelStyle}>* obligatorio</span><input required value={editForm.primerApellido} onChange={e => setEditForm({ ...editForm, primerApellido: e.target.value })} /></label>
               <label>Segundo Apellido <span style={optLabelStyle}>(opcional)</span><input value={editForm.segundoApellido} onChange={e => setEditForm({ ...editForm, segundoApellido: e.target.value })} /></label>
-              <label>Sexo <span style={optLabelStyle}>(opcional)</span>
-                <select value={editForm.sexo} onChange={e => setEditForm({ ...editForm, sexo: e.target.value })}>
+              <label>Sexo <span style={reqLabelStyle}>* obligatorio</span>
+                <select required value={editForm.sexo} onChange={e => setEditForm({ ...editForm, sexo: e.target.value })}>
                   <option value="">Seleccione sexo</option>
                   <option value="masculino">Masculino</option>
                   <option value="femenino">Femenino</option>
                 </select>
               </label>
-              <label>Matrícula <span style={reqLabelStyle}>* obligatorio</span><input value={editForm.codigo} onChange={e => setEditForm({ ...editForm, codigo: e.target.value })} /></label>
-              <label>Especialidad <span style={optLabelStyle}>(opcional)</span>
-                <select value={editForm.especialidad} onChange={e => setEditForm({ ...editForm, especialidad: e.target.value })}>
+              <label>Matrícula <span style={reqLabelStyle}>* obligatorio</span><input required value={editForm.matricula} onChange={e => setEditForm({ ...editForm, matricula: e.target.value })} /></label>
+              <label>Especialidad <span style={reqLabelStyle}>* obligatorio</span>
+                <select required value={editForm.especialidad} onChange={e => setEditForm({ ...editForm, especialidad: e.target.value })}>
                   <option value="">Seleccione especialidad</option>
                   {(especialidades ?? []).map(es => <option key={es.id} value={String(es.id)}>{es.nombre} ({es.codigo})</option>)}
                 </select>
@@ -439,7 +479,7 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
                 ))}
                 <button type="button" className="vt-btn vt-btn--ver" onClick={() => setEditForm({ ...editForm, ubicaciones: [...editForm.ubicaciones, { id: `u${Date.now()}`, direccion: '', detalle: '', coords: [-0.1807, -78.4678] }] } as MedicoAdmin)} style={{ alignSelf: 'flex-start' }}>+ Agregar ubicación</button>
               </div>
-              <div className="vt-form-actions"><button type="button" className="vt-btn-cancel" onClick={() => { setEditing(null); setEditForm(null) }}>Cancelar</button><button type="submit" className="vt-btn-submit">Guardar Cambios</button></div>
+              <div className="vt-form-actions"><button type="button" className="vt-btn-cancel" onClick={() => { setEditing(null); setEditForm(null) }} disabled={saving}>Cancelar</button><button type="submit" className="vt-btn-submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar Cambios'}</button></div>
             </form>
           </div>
         </div>
@@ -458,6 +498,15 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
           </div>
         </div>
       )}
+
+      {saving && (
+        <div className="medicos-busy" role="status" aria-live="polite">
+          <span className="medicos-busy-spinner" />
+          <span>Guardando en la base de datos…</span>
+        </div>
+      )}
+
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </AdminLayout>
   )
 }

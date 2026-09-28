@@ -6,6 +6,7 @@ import (
 
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/auth/models"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/auth/services"
+	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/middleware"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/pkg/response"
 )
 
@@ -57,4 +58,52 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusCreated, token)
+}
+
+// personaIDExtrae el persona_id del token. Tokens emitidos antes de que el
+// claim `persona_id` existiera no lo traen, y sin él no se puede resolver
+// el perfil, así que se responde 401 en vez de 500.
+func personaIDFrom(w http.ResponseWriter, r *http.Request) (int, bool) {
+	id := middleware.UserPersonaID(r.Context())
+	if id == nil {
+		response.Error(w, http.StatusUnauthorized, "el token no tiene persona asociada, vuelve a iniciar sesión")
+		return 0, false
+	}
+	return *id, true
+}
+
+func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
+	personaID, ok := personaIDFrom(w, r)
+	if !ok {
+		return
+	}
+
+	profile, err := h.svc.GetProfile(r.Context(), personaID)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "perfil no encontrado")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, profile)
+}
+
+func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	personaID, ok := personaIDFrom(w, r)
+	if !ok {
+		return
+	}
+
+	var req models.UpdateProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+
+	profile, err := h.svc.UpdateProfile(r.Context(), personaID, req)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.JSON(w, http.StatusOK, profile)
 }

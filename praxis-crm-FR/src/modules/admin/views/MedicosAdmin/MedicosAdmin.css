@@ -1,2 +1,33 @@
 .medicos-espec { font-size: 11px; font-weight: 600; background: #eef2ff; color: #4338ca; padding: 3px 7px; border-radius: 10px; }
 .medicos-ubi-badge { font-size: 11px; font-weight: 600; background: #e6f7f7; color: #0e7490; padding: 3px 8px; border-radius: 10px; }
+
+/* Bloqueo visual mientras el alta se guarda: evita el doble clic y deja
+   claro que la escritura en la BD está en curso. */
+.medicos-busy {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(27, 42, 78, 0.35);
+  backdrop-filter: blur(2px);
+  color: #1B2A4E;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.medicos-busy-spinner {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.55);
+  border-top-color: #1B2A4E;
+  animation: medicosBusySpin 700ms linear infinite;
+}
+
+@keyframes medicosBusySpin {
+  to { transform: rotate(360deg); }
+}

@@ -31,6 +31,22 @@ func (s *VisitaService) Update(ctx context.Context, id int, req models.UpdateVis
 	return s.repo.Update(ctx, id, req)
 }
 
+func (s *VisitaService) Registrar(ctx context.Context, id int, req models.RegistrarVisitaRequest) (*models.Visita, error) {
+	return s.repo.Registrar(ctx, id, req)
+}
+
 func (s *VisitaService) Delete(ctx context.Context, id int) error {
 	return s.repo.Delete(ctx, id)
+}
+
+func (s *VisitaService) GetLaboratorios(ctx context.Context, visitaID int) ([]models.VisitaLaboratorio, error) {
+	return s.repo.GetLaboratorios(ctx, visitaID)
+}
+
+func (s *VisitaService) AddLaboratorios(ctx context.Context, visitaID int, req models.AddLaboratoriosRequest) ([]models.VisitaLaboratorio, error) {
+	return s.repo.AddLaboratorios(ctx, visitaID, req.Laboratorios)
+}
+
+func (s *VisitaService) RemoveLaboratorio(ctx context.Context, visitaID, laboratorioID int) ([]models.VisitaLaboratorio, error) {
+	return s.repo.RemoveLaboratorio(ctx, visitaID, laboratorioID)
 }
