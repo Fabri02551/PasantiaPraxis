@@ -10,6 +10,8 @@
 .cartera-card:hover { border-color: #cbd5e1; box-shadow: 0 4px 12px rgba(27,42,78,0.08); }
 .cartera-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .cartera-nombre { font-size: 13.5px; font-weight: 700; color: #1b2a4e; }
+.cartera-tipo { font-size: 9.5px; font-weight: 700; letter-spacing: 0.03em; background: #e4edfb; color: #2b5da8; border: 1px solid #c6d9f4; padding: 2px 6px; border-radius: 6px; text-transform: uppercase; white-space: nowrap; }
+.cartera-tipo--institucion { background: #eef2e7; color: #54702a; border-color: #d4e3bd; }
 .cartera-esp { font-size: 12px; color: #6b7a99; }
 .cartera-hosp { font-size: 11.5px; color: #8a9ab5; display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; }
 .cartera-dot { width: 7px; height: 7px; background: #2d9c9c; border-radius: 2px; display: inline-block; }

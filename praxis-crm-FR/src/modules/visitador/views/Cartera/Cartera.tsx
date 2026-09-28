@@ -1,8 +1,10 @@
 import { useState, useMemo, useEffect } from 'react'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
-import type { Medico } from '../Medicos/Medicos'
+import { authService, type CurrentUser } from '../../../auth/services/auth.service'
 import { medicoService } from '../../../core/services/medico.service'
+import { institucionService, type InstitucionBE } from '../../../core/services/institucion.service'
 import { personaService } from '../../../core/services/persona.service'
+import { especialidadService } from '../../../core/services/especialidad.service'
 import { ENV } from '../../../core/config/env'
 import { displayMedico } from '../../../core/utils/medicoPrefix'
 import { hospitalFromDireccion } from '../../../core/utils/medicoDireccion'
@@ -16,59 +18,108 @@ interface Props {
   onLogout: () => void
 }
 
-// Usuario actual – coincide con SidebarMenu / Profile
-const VISITADOR_ACTUAL = 'Carlos Mendoza'
+// La cartera mezcla médicos e instituciones: un solo tipo para ambos.
+type EntradaCartera = {
+  id: string
+  tipo: 'medico' | 'institucion'
+  nombre: string
+  sexo?: string
+  subtitulo: string // especialidad (médico) | tipo de contrato (institución)
+  ubicacion: string // hospital | dirección
+}
+
+// Dirección de una institución: `institucion.direccion` es JSONB y puede venir
+// como objeto, array o incluso string serializado por cargas viejas.
+const extractDireccion = (dir: unknown): string => {
+  if (dir === null || dir === undefined || dir === '') return ''
+  let parsed: unknown = dir
+  if (typeof dir === 'string') {
+    try {
+      parsed = JSON.parse(dir)
+    } catch {
+      return dir
+    }
+  }
+  const primero = (o: Record<string, unknown>) =>
+    (typeof o.direccion === 'string' && o.direccion.trim()) ||
+    (typeof o.nombre === 'string' && o.nombre.trim()) ||
+    (typeof o.detalle === 'string' && o.detalle.trim()) ||
+    ''
+  if (Array.isArray(parsed)) {
+    const o = (parsed[0] ?? {}) as Record<string, unknown>
+    return primero(o)
+  }
+  if (typeof parsed === 'object' && parsed !== null) {
+    return primero(parsed as Record<string, unknown>)
+  }
+  return ''
+}
 
 export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState<Medico | null>(null)
-  const [medicos, setMedicos] = useState<Medico[]>([])
+  const [selected, setSelected] = useState<EntradaCartera | null>(null)
+  const [entradas, setEntradas] = useState<EntradaCartera[]>([])
+  const [usuario, setUsuario] = useState<CurrentUser | null>(null)
+  const [conteos, setConteos] = useState({ medicos: 0, instituciones: 0 })
   const [apiStatus, setApiStatus] = useState(`API: ${ENV.API_URL}`)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    medicoService
-      .list()
-      .then(async (data) => {
+    Promise.all([authService.getMe(), medicoService.list().catch(() => []), institucionService.list().catch(() => []), especialidadService.list().catch(() => [])])
+      .then(async ([me, medicosRaw, institucionesRaw, especialidadesRaw]) => {
         if (cancelled) return
-        if (Array.isArray(data) && data.length > 0) {
-          const mapped: Medico[] = await Promise.all(data.map(async (b) => {
-            let sexo: string | undefined
-            let primerApellido = ''
-            let segundoApellido = ''
-            let nombre = `Médico ${b.matricula || b.persona_id}`
-            try {
-              const p = await personaService.getById(b.persona_id)
-              nombre = p.nombre || nombre
-              primerApellido = p.primer_apellido || ''
-              segundoApellido = p.segundo_apellido || ''
-              sexo = p.sexo || undefined
-              if (primerApellido) nombre = `${nombre} ${primerApellido}${segundoApellido ? ' ' + segundoApellido : ''}`.trim()
-            } catch { /* fallback */ }
-            return {
-              id: String(b.persona_id),
-              nombre,
-              sexo,
-              especialidad: String(b.especialidad_id ?? 'General'),
-              hospital: hospitalFromDireccion(b.direccion) || 'Sin institución',
-              visitadorAsignado: null,
-            }
-          }))
-          if (cancelled) return
-          setMedicos(mapped)
-          setApiStatus(`Conectado a ${ENV.API_URL} — ${data.length} médicos desde /api/medicos`)
-        } else {
-          setMedicos([])
-          setApiStatus(`Conectado a ${ENV.API_URL} — sin datos`)
+        const yo = me.persona_id
+        const medicosME = (Array.isArray(medicosRaw) ? medicosRaw : []).filter((m) => m.visitador_id === yo)
+        const institucionesME = (Array.isArray(institucionesRaw) ? institucionesRaw : []).filter((i) => i.visitador_id === yo)
+        const especialidadDe = new Map<(typeof especialidadesRaw)[number]['id'], string>()
+        if (Array.isArray(especialidadesRaw)) {
+          especialidadesRaw.forEach((es) => especialidadDe.set(es.id, es.nombre))
         }
+
+        const medicos: EntradaCartera[] = await Promise.all(medicosME.map(async (b) => {
+          let nombre = `Médico ${b.matricula || b.persona_id}`
+          let primerApellido = ''
+          let segundoApellido = ''
+          let sexo: string | undefined
+          try {
+            const p = await personaService.getById(b.persona_id)
+            nombre = p.nombre || nombre
+            primerApellido = p.primer_apellido || ''
+            segundoApellido = p.segundo_apellido || ''
+            sexo = p.sexo || undefined
+            if (primerApellido) nombre = `${nombre} ${primerApellido}${segundoApellido ? ' ' + segundoApellido : ''}`.trim()
+          } catch { /* sin persona, queda el fallback */ }
+          return {
+            id: String(b.persona_id),
+            tipo: 'medico' as const,
+            nombre,
+            sexo,
+            subtitulo: especialidadDe.get(b.especialidad_id) ?? String(b.especialidad_id),
+            ubicacion: hospitalFromDireccion(b.direccion) || 'Sin institución',
+          }
+        }))
+
+        const instituciones: EntradaCartera[] = (institucionesME as InstitucionBE[]).map((b) => ({
+          id: String(b.id),
+          tipo: 'institucion' as const,
+          nombre: b.nombre || `Institución ${b.id}`,
+          subtitulo: b.tipo_contrato || 'Institución',
+          ubicacion: extractDireccion(b.direccion) || 'Sin dirección registrada',
+        }))
+
+        if (cancelled) return
+        setUsuario(me)
+        setConteos({ medicos: medicos.length, instituciones: instituciones.length })
+        setEntradas([...medicos, ...instituciones])
+        setApiStatus(`Conectado a ${ENV.API_URL} — cartera de ${[me.nombre, me.primer_apellido, me.segundo_apellido].filter(Boolean).join(' ').trim() || me.email}`)
       })
       .catch((err) => {
         if (cancelled) return
         console.warn('[Cartera] API no disponible', err)
-        setMedicos([])
+        setEntradas([])
         setApiStatus(`Sin conexión a ${ENV.API_URL}`)
       })
       .finally(() => {
@@ -79,12 +130,19 @@ export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout
     }
   }, [])
 
-  const cartera = useMemo(() => medicos.filter(m => m.visitadorAsignado === VISITADOR_ACTUAL), [medicos])
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return cartera
-    return cartera.filter(m => m.nombre.toLowerCase().includes(q) || m.especialidad.toLowerCase().includes(q) || m.hospital.toLowerCase().includes(q))
-  }, [search, cartera])
+    if (!q) return entradas
+    return entradas.filter((e) =>
+      e.nombre.toLowerCase().includes(q) ||
+      e.subtitulo.toLowerCase().includes(q) ||
+      e.ubicacion.toLowerCase().includes(q) ||
+      e.tipo.toLowerCase().includes(q),
+    )
+  }, [search, entradas])
+
+  const resumenNombre = usuario ? [usuario.nombre, usuario.primer_apellido].filter(Boolean).join(' ').trim() : '…'
+  const resumenAsignado = (e: EntradaCartera) => (e.tipo === 'medico' ? displayMedico(e.sexo, e.nombre) : e.nombre)
 
   return (
     <div className="cartera-page">
@@ -107,8 +165,10 @@ export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout
 
       <div className="cartera-content">
         <div className="cartera-intro">
-          <h2>Médicos asignados a ti</h2>
-          <p>Solo ves los médicos de tu cartera personal. Asignación actual: <strong>{VISITADOR_ACTUAL}</strong> — {cartera.length} médicos</p>
+          <h2>Médicos y instituciones asignados a ti</h2>
+          <p>
+            {conteos.medicos} médicos · {conteos.instituciones} instituciones · <strong>{resumenNombre}</strong>
+          </p>
           <p style={{ fontSize: 11, color: loading ? '#2d9c9c' : '#6b7a99', marginTop: 4 }}>{loading ? 'Cargando...' : apiStatus}</p>
         </div>
 
@@ -121,32 +181,40 @@ export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout
         </div>
 
         <ul className="cartera-list">
-          {filtered.map(m => (
-            <li key={m.id} className="cartera-card" onClick={() => setSelected(m)} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && setSelected(m)}>
+          {filtered.map(e => (
+            <li key={`${e.tipo}-${e.id}`} className="cartera-card" onClick={() => setSelected(e)} role="button" tabIndex={0} onKeyDown={ev => ev.key === 'Enter' && setSelected(e)}>
               <div className="cartera-info">
-                <span className="cartera-nombre">{displayMedico(m.sexo, m.nombre)}</span>
-                <span className="cartera-esp">{m.especialidad}</span>
-                <span className="cartera-hosp"><span className="cartera-dot" />{m.hospital}</span>
-                <span className="cartera-badge">Cartera: {m.visitadorAsignado}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="cartera-nombre">{resumenAsignado(e)}</span>
+                  <span className={`cartera-tipo ${e.tipo === 'institucion' ? 'cartera-tipo--institucion' : ''}`}>{e.tipo === 'medico' ? 'Médico' : 'Institución'}</span>
+                </div>
+                <span className="cartera-esp">{e.subtitulo}</span>
+                <span className="cartera-hosp"><span className="cartera-dot" />{e.ubicacion}</span>
               </div>
               <span className="cartera-chevron">›</span>
             </li>
           ))}
         </ul>
 
-        {!loading && filtered.length === 0 && <p className="cartera-empty">{cartera.length === 0 ? 'No tienes médicos asignados' : 'Sin resultados en tu cartera.'}</p>}
+        {!loading && filtered.length === 0 && (
+          <p className="cartera-empty">
+            {entradas.length === 0
+              ? `No tienes médicos ni instituciones asignados${usuario ? ` (${resumenNombre})` : ''}`
+              : 'Sin resultados en tu cartera.'}
+          </p>
+        )}
 
         {selected && (
           <div className="cartera-overlay" onClick={() => setSelected(null)}>
             <div className="cartera-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true">
               <div className="cartera-modal-header">
-                <h3>{displayMedico(selected.sexo, selected.nombre)}</h3>
+                <h3>{resumenAsignado(selected)}</h3>
                 <button className="cartera-modal-close" onClick={() => setSelected(null)} aria-label="Cerrar">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
                 </button>
               </div>
-              <p className="cartera-modal-esp">{selected.especialidad} · {selected.hospital}</p>
-              <div className="cartera-modal-badge">✓ Asignado a ti ({selected.visitadorAsignado})</div>
+              <p className="cartera-modal-esp">{selected.subtitulo} · {selected.ubicacion}</p>
+              <div className="cartera-modal-badge">✓ Asignado a ti ({selected.tipo === 'medico' ? 'médico' : 'institución'})</div>
               <button className="cartera-modal-primary" onClick={() => setSelected(null)}>Cerrar</button>
             </div>
           </div>
