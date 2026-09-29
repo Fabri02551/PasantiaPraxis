@@ -39,7 +39,8 @@ func scanVisita(scan func(dest ...any) error) (*models.Visita, error) {
 
 func (r *VisitaRepository) GetAll(ctx context.Context) ([]models.Visita, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT `+scanCols+` FROM visita ORDER BY fecha_visita DESC`)
+		`SELECT `+scanCols+` FROM visita
+		 ORDER BY COALESCE(fecha_visita, fecha_visita_tentativa) DESC NULLS LAST, id DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -70,11 +71,12 @@ func (r *VisitaRepository) GetByID(ctx context.Context, id int) (*models.Visita,
 
 // Create programada por el visitador (planificador) o el admin: visitador,
 // médico o institución y fecha tentativa. Estado inicial: por_visitar.
+// fecha_visita se deja NULL: solo se llena al registrar la visita real.
 func (r *VisitaRepository) Create(ctx context.Context, req models.CreateVisitaRequest) (*models.Visita, error) {
 	v, err := scanVisita(func(dest ...any) error {
 		return r.pool.QueryRow(ctx,
-			`INSERT INTO visita (id_visitador, id_medico, institucion_id, fecha_visita_tentativa, ingreso, registrada, estado)
-			 VALUES ($1, $2, $3, $4, 0, false, 'por_visitar')
+			`INSERT INTO visita (id_visitador, id_medico, institucion_id, fecha_visita, fecha_visita_tentativa, ingreso, registrada, estado)
+			 VALUES ($1, $2, $3, NULL, $4, 0, false, 'por_visitar')
 			 RETURNING `+scanCols,
 			req.IDVisitador, req.IDMedico, req.InstitucionID, req.FechaVisitaTentativa,
 		).Scan(dest...)

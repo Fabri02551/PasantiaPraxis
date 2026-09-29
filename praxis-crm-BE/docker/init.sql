@@ -166,7 +166,7 @@ CREATE TABLE visita (
     id_visitador INTEGER NOT NULL REFERENCES persona(id) ON DELETE CASCADE,
     id_medico INTEGER REFERENCES medico(persona_id) ON DELETE CASCADE,
     institucion_id INTEGER REFERENCES institucion(id) ON DELETE SET NULL,
-    fecha_visita TIMESTAMPTZ DEFAULT NOW(),
+    fecha_visita TIMESTAMPTZ,
     fecha_visita_tentativa TIMESTAMPTZ,
     latitud NUMERIC(10,7),
     longitud NUMERIC(10,7),
@@ -184,6 +184,7 @@ CREATE INDEX idx_vm_visitador ON visita(id_visitador);
 CREATE INDEX idx_vm_medico ON visita(id_medico);
 CREATE INDEX idx_vm_institucion ON visita(institucion_id);
 CREATE INDEX idx_vm_fecha ON visita(fecha_visita);
+CREATE INDEX idx_vm_fecha_tentativa ON visita(fecha_visita_tentativa);
 
 -- ============================================================
 -- Users (auth JWT) - hereda datos de persona

@@ -10,7 +10,7 @@ type Visita struct {
 	IDVisitador          int             `json:"id_visitador"`
 	IDMedico             *int            `json:"id_medico,omitempty"`
 	InstitucionID        *int            `json:"institucion_id,omitempty"`
-	FechaVisita          time.Time       `json:"fecha_visita"`
+	FechaVisita          *time.Time      `json:"fecha_visita,omitempty"`
 	FechaVisitaTentativa *time.Time      `json:"fecha_visita_tentativa,omitempty"`
 	Latitud              *float64        `json:"latitud,omitempty"`
 	Longitud             *float64        `json:"longitud,omitempty"`
