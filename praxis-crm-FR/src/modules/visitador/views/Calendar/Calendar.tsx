@@ -4,7 +4,7 @@ import { useMisVisitas, visitaToACompletar, type VisitaResuelta } from '../../ho
 import type { VisitaACompletar } from '../CompletarVisita/CompletarVisita'
 import './Calendar.css'
 
-type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
+type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
 
 interface Props {
   onNavigate: (view: View) => void

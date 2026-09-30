@@ -1,6 +1,6 @@
 import './SidebarMenu.css'
 
-type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
+type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
 
 interface SidebarMenuProps {
   open: boolean
@@ -102,6 +102,17 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
               <path d="M12 8v8M8 12h8" />
             </svg>
             Médicos
+          </button>
+
+          <button
+            className={`sidebar-item ${currentView === 'instituciones' ? 'active' : ''}`}
+            onClick={() => handleNav('instituciones')}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M3 21h18M5 21V8l7-5 7 5v13M10 21v-4h4v4" />
+              <path d="M9 10h1M14 10h1M9 14h1M14 14h1" />
+            </svg>
+            Instituciones
           </button>
 
           <button

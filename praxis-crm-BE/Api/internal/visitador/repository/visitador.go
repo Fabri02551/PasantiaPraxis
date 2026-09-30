@@ -46,7 +46,7 @@ func (r *VisitadorRepository) Create(ctx context.Context, userID *int, v *models
 
 func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, p.sexo, p.correo, p.telefono, p.ci,
+		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, COALESCE(p.sexo, ''), COALESCE(p.correo, ''), COALESCE(p.telefono, ''), COALESCE(p.ci, ''),
 		        v.latitud, v.longitud, v.activo,
 		        v.creado_por, v.modificado_por, v.fecha_creacion, v.ultima_modificacion
 		 FROM visitador v
@@ -74,7 +74,7 @@ func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, err
 func (r *VisitadorRepository) GetByID(ctx context.Context, id int) (*models.Visitador, error) {
 	v := &models.Visitador{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, p.sexo, p.correo, p.telefono, p.ci,
+		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, COALESCE(p.sexo, ''), COALESCE(p.correo, ''), COALESCE(p.telefono, ''), COALESCE(p.ci, ''),
 		        v.latitud, v.longitud, v.activo,
 		        v.creado_por, v.modificado_por, v.fecha_creacion, v.ultima_modificacion
 		 FROM visitador v

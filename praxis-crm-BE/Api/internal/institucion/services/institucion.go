@@ -23,7 +23,24 @@ func (s *InstitucionService) GetByID(ctx context.Context, id int) (*models.Insti
 	return s.repo.GetByID(ctx, id)
 }
 
-func (s *InstitucionService) Create(ctx context.Context, userID *int, req models.CreateInstitucionRequest) (*models.Institucion, error) {
+// visitadorPorDefecto devuelve a quién queda asignada la institución nueva.
+//
+// Si la request trae un visitador_id explícito, manda ese. Si no, y el que crea
+// es un visitador, la institución le queda a él (alta en campo del propio
+// visitador). Si la crea un admin sin visitador_id, queda NULL (el admin lo
+// asigna después con el actualizador). Misma regla que en el alta de médicos.
+func visitadorPorDefecto(reqVisitadorID *int, userID *int, role string) *int {
+	if reqVisitadorID != nil {
+		return reqVisitadorID
+	}
+	if role == "visitador" {
+		return userID
+	}
+	return nil
+}
+
+func (s *InstitucionService) Create(ctx context.Context, userID *int, role string, req models.CreateInstitucionRequest) (*models.Institucion, error) {
+	req.VisitadorID = visitadorPorDefecto(req.VisitadorID, userID, role)
 	return s.repo.Create(ctx, userID, req)
 }
 

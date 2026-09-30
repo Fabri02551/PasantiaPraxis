@@ -9,12 +9,13 @@ import { CalendarView } from './modules/visitador/views/Calendar/Calendar'
 import { ProfileView } from './modules/visitador/views/Profile/Profile'
 import { NotificationsView } from './modules/visitador/views/Notifications/Notifications'
 import { MedicosView } from './modules/visitador/views/Medicos/Medicos'
+import { InstitucionesView } from './modules/visitador/views/Instituciones/Instituciones'
 import { AdminDashboard } from './modules/admin/views/Dashboard/Dashboard'
 import { VisitadoresView } from './modules/admin/views/Visitadores/Visitadores'
 import { GraficosView } from './modules/admin/views/Graficos/Graficos'
 import { LaboratoriosView } from './modules/admin/views/Laboratorios/Laboratorios'
 import { CalendarAdminView } from './modules/admin/views/CalendarAdmin/CalendarAdmin'
-import { InstitucionesView } from './modules/admin/views/Instituciones/Instituciones'
+import { InstitucionesView as InstitucionesAdminView } from './modules/admin/views/Instituciones/Instituciones'
 import { MedicosAdminView } from './modules/admin/views/MedicosAdmin/MedicosAdmin'
 import { EspecialidadesView } from './modules/admin/views/Especialidades/Especialidades'
 import { AdminComentariosView } from './modules/admin/views/Comentarios/AdminComentarios'
@@ -35,6 +36,7 @@ type View =
   | 'perfil'
   | 'notificaciones'
   | 'medicos'
+  | 'instituciones'
   | 'comentarios'
   | 'historial'
   | 'cartera'
@@ -112,7 +114,7 @@ function App() {
   } else if (view === 'admin-laboratorios') {
     content = <LaboratoriosView currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
   } else if (view === 'admin-instituciones') {
-    content = <InstitucionesView currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
+    content = <InstitucionesAdminView currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
   } else if (view === 'admin-medicos') {
     content = <MedicosAdminView currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
   } else if (view === 'admin-especialidades') {
@@ -131,6 +133,8 @@ function App() {
     content = <NotificationsView onNavigate={handleNavigate} currentView={view} onLogout={handleLogout} />
   } else if (view === 'medicos') {
     content = <MedicosView onNavigate={handleNavigate} currentView={view} onLogout={handleLogout} />
+  } else if (view === 'instituciones') {
+    content = <InstitucionesView onNavigate={handleNavigate} currentView={view} onLogout={handleLogout} />
   } else if (view === 'comentarios') {
     content = <VisitadorComentariosView onNavigate={handleNavigate} currentView={view} onLogout={handleLogout} />
   } else if (view === 'historial') {

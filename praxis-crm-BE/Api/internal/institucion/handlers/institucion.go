@@ -56,7 +56,7 @@ func (h *InstitucionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item, err := h.svc.Create(r.Context(), middleware.UserPersonaID(r.Context()), req)
+	item, err := h.svc.Create(r.Context(), middleware.UserPersonaID(r.Context()), middleware.UserRole(r.Context()), req)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
 			response.Error(w, http.StatusConflict, "nit ya existe")
