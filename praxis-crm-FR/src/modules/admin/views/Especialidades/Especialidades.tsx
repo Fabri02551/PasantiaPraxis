@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { AdminLayout } from '../../components/AdminLayout/AdminLayout'
 import type { AdminView } from '../../components/AdminSidebar/AdminSidebar'
 import { especialidadService, type Especialidad } from '../../../core/services/especialidad.service'
-import { ENV } from '../../../core/config/env'
+import { ENV, API_LABEL } from '../../../core/config/env'
 import './Especialidades.css'
 import '../Visitadores/Visitadores.css'
 
@@ -15,7 +15,7 @@ export const EspecialidadesView: React.FC<{ currentView: AdminView; onNavigate: 
   const [deleting, setDeleting] = useState<Especialidad | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ nombre: '', codigo: '' })
-  const [apiStatus, setApiStatus] = useState(`API: ${ENV.API_URL}`)
+  const [apiStatus, setApiStatus] = useState(`API: ${API_LABEL}`)
   const [loading, setLoading] = useState(false)
 
   const reqStyle: React.CSSProperties = { color: '#8a9ab5', fontWeight: 400, fontSize: 10, opacity: 0.85, marginLeft: 4, textTransform: 'lowercase' }
@@ -27,15 +27,15 @@ export const EspecialidadesView: React.FC<{ currentView: AdminView; onNavigate: 
       const data = await especialidadService.list()
       if (Array.isArray(data)) {
         setEspecialidades(data)
-        setApiStatus(`Conectado a ${ENV.API_URL} — ${data.length} especialidades`)
+        setApiStatus(`Conectado a ${API_LABEL} — ${data.length} especialidades`)
       } else {
         setEspecialidades([])
-        setApiStatus(`Conectado a ${ENV.API_URL} — sin datos`)
+        setApiStatus(`Conectado a ${API_LABEL} — sin datos`)
       }
     } catch (err) {
       console.warn('[Especialidades] API no disponible', err)
       setEspecialidades([])
-      setApiStatus(`Error: sin conexión a ${ENV.API_URL} — ${err instanceof Error ? err.message : 'error'}`)
+      setApiStatus(`Error: sin conexión a ${API_LABEL} — ${err instanceof Error ? err.message : 'error'}`)
     } finally {
       setLoading(false)
     }

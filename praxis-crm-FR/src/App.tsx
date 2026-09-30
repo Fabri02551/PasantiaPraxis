@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { storage } from './modules/core/lib/storage'
 import { Toast } from './modules/core/components/Toast/Toast'
 import { LoginForm } from './modules/auth/views/Login/Login'
@@ -68,6 +68,33 @@ function App() {
     setPendingVisita(visita)
     setView('completar-visita')
   }
+
+  // La ubicación se pide UNA vez por sesión: al entrar al home (tras el login o
+  // al restaurar la sesión). El permiso del navegador ya está concedido de la
+  // primera vez, así que en los accesos siguientes no vuelve a preguntar: la
+  // lectura se refresca en silencio y se guarda en storage. De ahí la leen el
+  // mapa del inicio (pin "usted está aquí") y el alta de médicos (ubicación
+  // nueva nacida cerca de quien la crea).
+  useEffect(() => {
+    if (view !== 'home') return
+    if (!('geolocation' in navigator)) return
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const esFinita = (n: number) => Number.isFinite(n)
+        if (!esFinita(pos.coords.latitude) || !esFinita(pos.coords.longitude)) return
+        storage.setUbicacion({
+          latitud: pos.coords.latitude,
+          longitud: pos.coords.longitude,
+          precisionM: esFinita(pos.coords.accuracy) ? pos.coords.accuracy : null,
+          tomadaEn: new Date(pos.timestamp).toISOString(),
+        })
+      },
+      () => {
+        /* sin permiso o sin señal: se sigue sin ubicación guardada */
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 20_000 },
+    )
+  }, [view])
 
   let content: React.ReactNode
   if (view === 'login') {

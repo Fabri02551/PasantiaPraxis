@@ -46,6 +46,9 @@ func (h *VisitaHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // Create: programa la visita con el médico o institución y la fecha tentativa.
 // Si quien crea es un visitador, la visita se fuerza para él mismo (su
 // persona_id del token), protegiendo contra crear visitas para otro usuario.
+//
+// Una visita extraordinaria se crea SIN fecha tentativa: se registra en campo
+// de inmediato. Por eso la fecha solo es obligatoria para las programadas.
 func (h *VisitaHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateVisitaRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -71,7 +74,7 @@ func (h *VisitaHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "id_medico o institucion_id son requeridos")
 		return
 	}
-	if req.FechaVisitaTentativa == nil {
+	if !req.Extraordinaria && req.FechaVisitaTentativa == nil {
 		response.Error(w, http.StatusBadRequest, "fecha_visita_tentativa es requerida")
 		return
 	}
@@ -106,6 +109,12 @@ func (h *VisitaHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 // Registrar: el visitador llena la visita real (todo menos la tentativa).
+//
+// El GPS del visitador es opcional a propósito: si deniega el permiso, la
+// visita se registra igual y el service la marca con sin_evidencia_ubicacion.
+// Bloquear el registro dejaría al visitador sin poder trabajar en terreno sin
+// cobertura. Lo que sí es inválido es media coordenada: sin par no hay nada
+// que auditar.
 func (h *VisitaHandler) Registrar(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
@@ -116,6 +125,14 @@ func (h *VisitaHandler) Registrar(w http.ResponseWriter, r *http.Request) {
 	var req models.RegistrarVisitaRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.Error(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	if (req.Latitud == nil) != (req.Longitud == nil) {
+		response.Error(w, http.StatusBadRequest, "latitud y longitud deben ir juntas")
+		return
+	}
+	if (req.DestinoLatitud == nil) != (req.DestinoLongitud == nil) {
+		response.Error(w, http.StatusBadRequest, "destino_latitud y destino_longitud deben ir juntas")
 		return
 	}
 

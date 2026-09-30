@@ -3,8 +3,11 @@ import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
 import { medicoService } from '../../../core/services/medico.service'
 import { institucionService } from '../../../core/services/institucion.service'
 import { personaService } from '../../../core/services/persona.service'
-import { laboratorioService } from '../../../core/services/laboratorio.service'
+import { laboratorioService, type LaboratorioPrecioBE } from '../../../core/services/laboratorio.service'
 import { visitaService, type VisitaBE } from '../../../core/services/visita.service'
+import { useGeolocation, distanciaMetros, formatearDistancia } from '../../../core/hooks/useGeolocation'
+import { UbicacionMapa } from '../../../core/components/UbicacionMapa/UbicacionMapa'
+import { normalizeUbicaciones } from '../../../core/utils/medicoDireccion'
 import './CompletarVisita.css'
 
 type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
@@ -54,13 +57,19 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
 
   const [visitData, setVisitData] = useState<VisitaBE | null>(null)
   const [destino, setDestino] = useState({ nombre: visita?.company ?? '', tipo: 'Médico', esParticular: false, ciudadId: null as number | null, faltante: '' })
+  const [destinoCoords, setDestinoCoords] = useState<[number, number] | null>(null)
+  const [destinoUbicacionId, setDestinoUbicacionId] = useState<string | null>(null)
+  const [destinoDireccion, setDestinoDireccion] = useState('')
   const [rows, setRows] = useState<LabRow[]>([])
+  const [disponibles, setDisponibles] = useState<LaboratorioPrecioBE[]>([])
   const [busqueda, setBusqueda] = useState('')
   const [cargando, setCargando] = useState(true)
   const [guardandoCotiz, setGuardandoCotiz] = useState(false)
   const [guardandoVisita, setGuardandoVisita] = useState(false)
   const [msg, setMsg] = useState('')
   const [guardado, setGuardado] = useState(false)
+
+  const gps = useGeolocation()
 
   const videoId = visita?.visitaId
 
@@ -94,7 +103,9 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
         if (muerto) return
         setVisitData(v)
 
-        const existentes = await visitaService.getLaboratorios(videoId).catch(() => [])
+        // La API devuelve [] desde el backend, pero un GET antiguo/otro orígen
+        // podría responder null: sin estudios es [] y el catálogo sigue cargando.
+        const existentes = (await visitaService.getLaboratorios(videoId).catch(() => [])) ?? []
 
         let esParticular = false
         let ciudadId: number | null = null
@@ -110,6 +121,20 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
             const full = p ? [p.nombre, p.primer_apellido, p.segundo_apellido].filter(Boolean).join(' ').trim() : ''
             if (full) nombre = full
             subtitulo = `${m?.matricula ? `Mat. ${m.matricula}` : 'Médico'}${esParticular ? ' · Particular' : ''}`
+
+            // El consultorio que se visita. Se intenta el que quedó guardado en
+            // la planificación (v.ubicacion_destino_id); si no existe o no, el
+            // primer pin que tenga la cartera del médico.
+            const ubicaciones = normalizeUbicaciones(m?.direccion)
+            const elegida =
+              ubicaciones.find((u) => u.id === v.ubicacion_destino_id) ??
+              ubicaciones.find((u) => u.coords) ??
+              null
+            if (elegida) {
+              setDestinoUbicacionId(elegida.id)
+              setDestinoDireccion(elegida.direccion || elegida.detalle || '')
+              if (elegida.coords) setDestinoCoords(elegida.coords)
+            }
           } catch {
             /* sin datos extra */
           }
@@ -121,6 +146,17 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
             ciudadId = i?.ciudad_id ?? null
             nombre = i?.nombre || nombre
             subtitulo = i?.tipo_contrato || 'Institución'
+
+            const ubicaciones = normalizeUbicaciones(i?.direccion)
+            const elegida =
+              ubicaciones.find((u) => u.id === v.ubicacion_destino_id) ??
+              ubicaciones.find((u) => u.coords) ??
+              null
+            if (elegida) {
+              setDestinoUbicacionId(elegida.id)
+              setDestinoDireccion(elegida.direccion || elegida.detalle || '')
+              if (elegida.coords) setDestinoCoords(elegida.coords)
+            }
           } catch {
             /* sin datos extra */
           }
@@ -131,14 +167,19 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
 
         const precios = await laboratorioService.precios(ciudadId ?? undefined).catch(() => [])
         const porId = new Map(existentes.map((l) => [l.laboratorio_id, l.cantidad]))
+        // El catálogo completo queda para el buscador; la tabla solo lista lo
+        // que agregó el visitador, en vez de cien filas con cantidad 0.
+        setDisponibles(Array.isArray(precios) ? precios : [])
         setRows(
-          precios.map((p) => ({
-            laboratorio_id: p.id,
-            nombre: p.nombre,
-            area: p.area,
-            costoUnit: round2(esParticular ? p.costo * (1 + p.comision_extra) : p.costo),
-            cantidad: porId.get(p.id) ?? 0,
-          })),
+          (Array.isArray(precios) ? precios : [])
+            .filter((p) => porId.has(p.id))
+            .map((p) => ({
+              laboratorio_id: p.id,
+              nombre: p.nombre,
+              area: p.area,
+              costoUnit: round2(esParticular ? p.costo * (1 + p.comision_extra) : p.costo),
+              cantidad: porId.get(p.id) ?? 1,
+            })),
         )
       } catch (err) {
         if (!muerto) setMsg('No se pudo cargar la visita: ' + String(err))
@@ -152,6 +193,13 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
     setPapeleta('')
     setSatisfaccion('')
     setHasSignature(false)
+    setDestinoCoords(null)
+    setDestinoUbicacionId(null)
+    setDestinoDireccion('')
+    setRows([])
+    setDisponibles([])
+    setBusqueda('')
+    gps.limpiar()
     return () => {
       muerto = true
     }
@@ -159,9 +207,32 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
 
   const filtereds = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
-    if (!q) return rows
-    return rows.filter((r) => r.nombre.toLowerCase().includes(q) || r.area.toLowerCase().includes(q))
-  }, [rows, busqueda])
+    if (!q) return []
+    // El catálogo filtrado descarta lo que ya está en la cotización: un
+    // estudio agregado no debería poder agregarse dos veces.
+    const enRows = new Set(rows.map((r) => r.laboratorio_id))
+    return disponibles.filter((p) => !enRows.has(p.id) && (p.nombre.toLowerCase().includes(q) || p.area.toLowerCase().includes(q)))
+  }, [disponibles, rows, busqueda])
+
+  const agregarEstudio = (p: LaboratorioPrecioBE) => {
+    setRows((prev) => {
+      const ya = prev.find((r) => r.laboratorio_id === p.id)
+      if (ya) return prev.map((r) => (r.laboratorio_id === p.id ? { ...r, cantidad: r.cantidad + 1 } : r))
+      return [
+        ...prev,
+        {
+          laboratorio_id: p.id,
+          nombre: p.nombre,
+          area: p.area,
+          costoUnit: round2(destino.esParticular ? p.costo * (1 + p.comision_extra) : p.costo),
+          cantidad: 1,
+        },
+      ]
+    })
+    setBusqueda('')
+  }
+
+  const quitarEstudio = (id: number) => setRows((prev) => prev.filter((r) => r.laboratorio_id !== id))
 
   const totalCotiz = useMemo(() => round2(rows.reduce((acc, r) => acc + r.costoUnit * r.cantidad, 0)), [rows])
   const totalItems = rows.reduce((acc, r) => acc + (r.cantidad > 0 ? 1 : 0), 0)
@@ -238,6 +309,19 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
     setHasSignature(false)
   }
 
+  const posicionGps = gps.resultado.estado === 'ok' ? gps.resultado.posicion : null
+
+  // La distancia se calcula aquí solo para mostrar; el servidor la vuelve a
+  // calcular con haversine y es esa la que queda guardada. Lo que se manda es
+  // la posición y la precisión, no la distancia.
+  const distanciaM =
+    posicionGps && destinoCoords
+      ? distanciaMetros(
+          { latitud: posicionGps.latitud, longitud: posicionGps.longitud },
+          { latitud: destinoCoords[0], longitud: destinoCoords[1] },
+        )
+      : null
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!videoId) {
@@ -248,6 +332,17 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
       alert('Complete la firma digital antes de terminar la visita')
       return
     }
+    const sinGps = gps.resultado.estado !== 'ok'
+    if (sinGps) {
+      // Se registra igual: GPS denegado o sin señal en terreno no debería
+      // dejarlo colgado. El backend lo marca con sin_evidencia_ubicacion.
+      const ok = window.confirm(
+        'No se pudo capturar tu ubicación (GPS denegado o sin señal). ' +
+          '¿Registramos igualmente la visita, marcada sin evidencia de ubicación?',
+      )
+      if (!ok) return
+    }
+
     setGuardandoVisita(true)
     setMsg('')
     try {
@@ -255,6 +350,13 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
       const obs = observaciones.trim() || exigencias.trim() ? { observaciones: observaciones.trim(), exigencias: exigencias.trim() } : undefined
       await visitaService.registrar(videoId, {
         fecha_visita: new Date().toISOString(),
+        latitud: posicionGps?.latitud ?? null,
+        longitud: posicionGps?.longitud ?? null,
+        gps_precision_m: posicionGps?.precisionM ?? null,
+        ubicacion_destino_id: destinoUbicacionId ?? null,
+        destino_direccion: destinoDireccion || visita.addr || null,
+        destino_latitud: destinoCoords?.[0] ?? null,
+        destino_longitud: destinoCoords?.[1] ?? null,
         firma,
         observacion: obs,
         papeleta: parseInt(papeleta || '0', 10) || 0,
@@ -322,6 +424,69 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
           </div>
 
           {!cargando && !yaRealizada && (
+            <div className="cotizacion-card" style={{ border: '1px solid #eef1f5', borderRadius: 12, padding: 14, background: '#fbfcfe', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                <h3 className="completar-medico-title" style={{ margin: 0 }}>Ubicación de la visita</h3>
+                {gps.resultado.estado === 'pidiendo' && <span style={{ fontSize: 12, color: '#7e8aa6' }}>Buscando señal GPS…</span>}
+              </div>
+
+              <UbicacionMapa
+                destino={destinoCoords}
+                visitador={posicionGps ? [posicionGps.latitud, posicionGps.longitud] : null}
+                precisionM={posicionGps?.precisionM ?? null}
+                etiquetaDestino={destino.nombre || 'Destino'}
+                distanciaM={distanciaM}
+                altura="220px"
+              />
+
+              {destinoCoords ? (
+                <p style={{ fontSize: 12, color: '#7e8aa6', margin: '8px 0 0' }}>
+                  Destino: <strong>{destinoDireccion || destino.nombre}</strong>
+                  {destinoCoords && (
+                    <span> · {destinoCoords[0].toFixed(4)}, {destinoCoords[1].toFixed(4)}</span>
+                  )}
+                  {distanciaM != null && <span> · <strong>{formatearDistancia(distanciaM)}</strong> del pin</span>}
+                </p>
+              ) : (
+                <p style={{ fontSize: 12, color: '#b91c1c', margin: '8px 0 0' }}>
+                  Este destino no tiene coordenadas geocodificadas. La visita se registra sin pin de comparación.
+                </p>
+              )}
+
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn-submit"
+                  style={{ marginTop: 0, flex: 1 }}
+                  onClick={() => {
+                    gps.limpiar()
+                    gps.pedir()
+                  }}
+                  disabled={gps.resultado.estado === 'pidiendo'}
+                >
+                  {gps.resultado.estado === 'ok'
+                    ? 'Volver a tomar ubicación'
+                    : gps.resultado.estado === 'pidiendo'
+                      ? 'Buscando…'
+                      : 'Tomar mi ubicación (GPS)'}
+                </button>
+              </div>
+
+              {gps.resultado.estado === 'ok' && posicionGps && (
+                <div style={{ fontSize: 12, color: '#0e502e', marginTop: 8, fontWeight: 600 }}>
+                  Ubicación tomada · precisión {posicionGps.precisionM != null ? `${Math.round(posicionGps.precisionM)} m` : 'no informada'}
+                </div>
+              )}
+
+              {gps.resultado.estado === 'error' && (
+                <div style={{ fontSize: 12, color: '#92400e', marginTop: 8, background: '#fef6e7', borderRadius: 8, padding: '8px 10px' }}>
+                  {'mensaje' in gps.resultado ? gps.resultado.mensaje : 'No se pudo obtener la ubicación.'}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!cargando && !yaRealizada && (
             <div className="cotizacion-card" style={{ border: '1px solid #eef1f5', borderRadius: 12, padding: 14, background: '#fbfcfe' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                 <h3 className="completar-medico-title" style={{ margin: 0 }}>Cotización de Laboratorios</h3>
@@ -329,15 +494,69 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
                   Ciudad: {destino.ciudadId != null ? `#${destino.ciudadId}` : 'sin ciudad asignada'}{destino.esParticular ? ' · con comisión particular' : ''}
                 </span>
               </div>
-              <p style={{ fontSize: 11, color: '#7e8aa6', margin: '6px 0 10px' }}>Ajuste la cantidad de cada estudio; el subtotal se aplica al ingreso de la visita.</p>
+              <p style={{ fontSize: 11, color: '#7e8aa6', margin: '6px 0 10px' }}>
+                Busque un estudio por nombre o área; la cantidad se ajusta en la tabla y el subtotal se aplica al ingreso de la visita.
+              </p>
 
-              <input
-                className="form-input"
-                style={{ width: '100%', marginBottom: 10, padding: '8px 10px', borderRadius: 8, border: '1px solid #dbe1ec', fontSize: 13 }}
-                placeholder="Buscar estudio por nombre o área…"
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-              />
+              <div style={{ position: 'relative', marginBottom: 10 }}>
+                <input
+                  className="form-input"
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #dbe1ec', fontSize: 13 }}
+                  placeholder="Buscar estudio para agregar…"
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                />
+                {busqueda.trim() !== '' && (
+                  <div
+                    className="cotiz-combobox"
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      background: '#fff',
+                      border: '1px solid #dbe1ec',
+                      borderRadius: 8,
+                      marginTop: 4,
+                      boxShadow: '0 6px 18px rgba(15,23,42,0.10)',
+                      zIndex: 20,
+                      maxHeight: 260,
+                      overflowY: 'auto',
+                    }}
+                  >
+                    {filtereds.length === 0 ? (
+                      <div style={{ padding: '12px 10px', color: '#7e8aa6', fontSize: 12 }}>Sin resultados para «{busqueda}»</div>
+                    ) : (
+                      filtereds.slice(0, 25).map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className="cotiz-option"
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            gap: 10,
+                            padding: '8px 10px',
+                            border: 'none',
+                            borderBottom: '1px solid #f1f5f9',
+                            background: '#fff',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            fontSize: 12.5,
+                          }}
+                          onClick={() => agregarEstudio(p)}
+                        >
+                          <span style={{ fontWeight: 600, color: '#1b2a4e' }}>{p.nombre}</span>
+                          <span style={{ color: '#6b7a99', whiteSpace: 'nowrap' }}>
+                            {p.area} · ${(destino.esParticular ? p.costo * (1 + p.comision_extra) : p.costo).toFixed(2)}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
 
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -348,10 +567,18 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
                       <th style={{ padding: '6px 4px', textAlign: 'right' }}>Costo unit.</th>
                       <th style={{ padding: '6px 4px', textAlign: 'center' }}>Cantidad</th>
                       <th style={{ padding: '6px 4px', textAlign: 'right' }}>Subtotal</th>
+                      <th style={{ padding: '6px 4px' }} />
                     </tr>
                   </thead>
                   <tbody>
-                    {filtereds.map((r) => (
+                    {rows.length === 0 && (
+                      <tr>
+                        <td colSpan={6} style={{ padding: '14px 4px', color: '#7e8aa6', textAlign: 'center' }}>
+                          Todavía no hay estudios agregados a la cotización.
+                        </td>
+                      </tr>
+                    )}
+                    {rows.map((r) => (
                       <tr key={r.laboratorio_id} style={{ borderTop: '1px solid #eef1f5' }}>
                         <td style={{ padding: '8px 4px', fontWeight: 600, color: '#1b2a4e' }}>{r.nombre}</td>
                         <td style={{ padding: '8px 4px', color: '#6b7a99' }}>{r.area}</td>
@@ -370,19 +597,20 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
                           </div>
                         </td>
                         <td style={{ padding: '8px 4px', textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600, color: '#1b2a4e' }}>${round2(r.costoUnit * r.cantidad).toFixed(2)}</td>
+                        <td style={{ padding: '8px 4px', textAlign: 'right' }}>
+                          <button type="button" onClick={() => quitarEstudio(r.laboratorio_id)} style={{ border: 'none', background: 'none', color: '#b91c1c', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                            Quitar
+                          </button>
+                        </td>
                       </tr>
                     ))}
-                    {filtereds.length === 0 && (
-                      <tr>
-                        <td colSpan={5} style={{ padding: '14px 4px', color: '#7e8aa6', textAlign: 'center' }}>Sin estudios para esta ciudad / filtro</td>
-                      </tr>
-                    )}
                   </tbody>
                   <tfoot>
                     <tr>
                       <td colSpan={3} style={{ padding: '10px 4px' }} />
                       <td style={{ padding: '10px 4px', textAlign: 'right', fontWeight: 700, color: '#1b2a4e' }}>{totalItems} estudios</td>
                       <td style={{ padding: '10px 4px', textAlign: 'right', fontWeight: 700, color: '#0e502e', fontSize: 14 }}>${totalCotiz.toFixed(2)}</td>
+                      <td />
                     </tr>
                   </tfoot>
                 </table>

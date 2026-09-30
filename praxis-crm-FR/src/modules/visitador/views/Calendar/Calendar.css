@@ -121,6 +121,7 @@
 }
 
 .cal-cell {
+  position: relative;
   height: 36px;
   border-radius: 50%;
   border: none;
@@ -131,6 +132,28 @@
   cursor: pointer;
   display: grid;
   place-items: center;
+}
+
+.cal-count {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: #1b2a4e;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 14px;
+  box-sizing: border-box;
+  text-align: center;
+  box-shadow: 0 0 0 1.5px #fff;
+}
+
+.cal-cell.blue .cal-count {
+  background: #4a7cf7;
 }
 
 .cal-cell.muted {

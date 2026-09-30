@@ -47,6 +47,20 @@ export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
   }
 
   if (!res.ok) {
+    // El token expiró (o se volvió inválido): obligar a volver al login para
+    // renovarlo. Solo aplica a llamadas autenticadas; una respuesta 401 del
+    // login (credenciales malas / `auth:false`) no debe redirigir. La app es
+    // SPA sin router: forzamos un reload y App arranca en 'login' porque
+    // storage quedó vacío.
+    if (res.status === 401 && auth) {
+      const habiaSesion = !!storage.getToken()
+      storage.clear()
+      if (habiaSesion) {
+        window.location.replace('/')
+        // Espera el reload; nunca llegamos abajo.
+        throw new ApiError('Sesión expirada. Volvé a iniciar sesión.', 401, data)
+      }
+    }
     const msg =
       (data as { error?: string })?.error ||
       (data as { message?: string })?.message ||

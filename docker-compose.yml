@@ -44,7 +44,11 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-      - "3000:80"
+      - "443:443"
+      - "3000:443"
+    volumes:
+      # Solo lectura: el nginx solo necesita leer el par cert/key.
+      - ./certs:/etc/nginx/certs:ro
     depends_on:
       api:
         condition: service_started

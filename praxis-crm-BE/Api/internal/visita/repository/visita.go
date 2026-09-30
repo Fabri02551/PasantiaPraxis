@@ -22,14 +22,18 @@ func NewVisitaRepository(pool *pgxpool.Pool) *VisitaRepository {
 }
 
 const scanCols = `id, id_visitador, id_medico, institucion_id, fecha_visita, fecha_visita_tentativa,
-	latitud, longitud, firma, observacion, satisfaccion, duracion, ingreso, papeleta, registrada, estado`
+	latitud, longitud, ubicacion_destino_id, destino_direccion, destino_latitud, destino_longitud,
+	gps_precision_m, distancia_destino_m, sin_evidencia_ubicacion,
+	firma, observacion, satisfaccion, duracion, ingreso, papeleta, registrada, estado, extraordinaria`
 
 func scanVisita(scan func(dest ...any) error) (*models.Visita, error) {
 	var v models.Visita
 	err := scan(
 		&v.ID, &v.IDVisitador, &v.IDMedico, &v.InstitucionID, &v.FechaVisita, &v.FechaVisitaTentativa,
-		&v.Latitud, &v.Longitud, &v.Firma, &v.Observacion, &v.Satisfaccion,
-		&v.Duracion, &v.Ingreso, &v.Papeleta, &v.Registrada, &v.Estado,
+		&v.Latitud, &v.Longitud, &v.UbicacionDestinoID, &v.DestinoDireccion, &v.DestinoLatitud, &v.DestinoLongitud,
+		&v.GPSPrecisionM, &v.DistanciaDestinoM, &v.SinEvidenciaUbicacion,
+		&v.Firma, &v.Observacion, &v.Satisfaccion,
+		&v.Duracion, &v.Ingreso, &v.Papeleta, &v.Registrada, &v.Estado, &v.Extraordinaria,
 	)
 	if err != nil {
 		return nil, err
@@ -71,14 +75,20 @@ func (r *VisitaRepository) GetByID(ctx context.Context, id int) (*models.Visita,
 
 // Create programada por el visitador (planificador) o el admin: visitador,
 // médico o institución y fecha tentativa. Estado inicial: por_visitar.
-// fecha_visita se deja NULL: solo se llena al registrar la visita real.
+//
+// fecha_visita se deja NULL explícitamente: solo se llena al registrar la
+// visita real. La extraordinaria se crea SIN fecha tentativa y se registra de
+// inmediato, así que nunca queda "por visitar".
 func (r *VisitaRepository) Create(ctx context.Context, req models.CreateVisitaRequest) (*models.Visita, error) {
 	v, err := scanVisita(func(dest ...any) error {
 		return r.pool.QueryRow(ctx,
-			`INSERT INTO visita (id_visitador, id_medico, institucion_id, fecha_visita, fecha_visita_tentativa, ingreso, registrada, estado)
-			 VALUES ($1, $2, $3, NULL, $4, 0, false, 'por_visitar')
+			`INSERT INTO visita (id_visitador, id_medico, institucion_id, fecha_visita,
+			                    fecha_visita_tentativa, ubicacion_destino_id,
+			                    ingreso, registrada, estado, extraordinaria)
+			 VALUES ($1, $2, $3, NULL, $4, $5, 0, false, 'por_visitar', $6)
 			 RETURNING `+scanCols,
 			req.IDVisitador, req.IDMedico, req.InstitucionID, req.FechaVisitaTentativa,
+			req.UbicacionDestinoID, req.Extraordinaria,
 		).Scan(dest...)
 	})
 	if err != nil {
@@ -96,10 +106,12 @@ func (r *VisitaRepository) Update(ctx context.Context, id int, req models.Update
 			        id_visitador = COALESCE($2, id_visitador),
 			        id_medico = COALESCE($3, id_medico),
 			        institucion_id = COALESCE($4, institucion_id),
-			        fecha_visita_tentativa = COALESCE($5, fecha_visita_tentativa)
+			        fecha_visita_tentativa = COALESCE($5, fecha_visita_tentativa),
+			        ubicacion_destino_id = COALESCE($6, ubicacion_destino_id)
 			 WHERE id = $1
 			 RETURNING `+scanCols,
 			id, req.IDVisitador, req.IDMedico, req.InstitucionID, req.FechaVisitaTentativa,
+			req.UbicacionDestinoID,
 		).Scan(dest...)
 	})
 	if err != nil {
@@ -110,6 +122,11 @@ func (r *VisitaRepository) Update(ctx context.Context, id int, req models.Update
 
 // Registrar llena la visita real; la fecha tentativa ya estaba guardada.
 // Cambia el estado de por_visitar a realizada.
+//
+// Los campos de auditoría geográfica (latitud/longitud del visitador,
+// snapshot del destino, precisión, distancia) se escriben aquí. La distancia
+// la calcula el service con haversine y llega en req.DistanciaDestinoM; nunca
+// se acepta del cliente.
 func (r *VisitaRepository) Registrar(ctx context.Context, id int, req models.RegistrarVisitaRequest) (*models.Visita, error) {
 	if req.FechaVisita == nil {
 		return nil, fmt.Errorf("fecha_visita es requerida")
@@ -117,20 +134,30 @@ func (r *VisitaRepository) Registrar(ctx context.Context, id int, req models.Reg
 
 	v, err := scanVisita(func(dest ...any) error {
 		return r.pool.QueryRow(ctx,
-`UPDATE visita SET
+			`UPDATE visita SET
 		        fecha_visita = $2,
 		        latitud = $3,
 		        longitud = $4,
-		        firma = $5,
-		        observacion = $6,
-		        satisfaccion = $7,
-		        duracion = $8,
-		        papeleta = $9,
+		        gps_precision_m = $5,
+		        distancia_destino_m = $6,
+		        sin_evidencia_ubicacion = $7,
+		        ubicacion_destino_id = COALESCE($8, ubicacion_destino_id),
+		        destino_direccion = $9,
+		        destino_latitud = $10,
+		        destino_longitud = $11,
+		        firma = $12,
+		        observacion = $13,
+		        satisfaccion = $14,
+		        duracion = $15,
+		        papeleta = $16,
 		        registrada = true,
 		        estado = 'realizada'
 		 WHERE id = $1
 			 RETURNING `+scanCols,
-			id, req.FechaVisita, req.Latitud, req.Longitud, req.Firma, observacion(req.Observacion),
+			id, req.FechaVisita, req.Latitud, req.Longitud, req.GPSPrecisionM,
+			req.DistanciaDestinoM, req.SinEvidenciaUbicacion, req.UbicacionDestinoID,
+			req.DestinoDireccion, req.DestinoLatitud, req.DestinoLongitud,
+			req.Firma, observacion(req.Observacion),
 			req.Satisfaccion, req.Duracion, req.Papeleta,
 		).Scan(dest...)
 	})
@@ -163,7 +190,10 @@ func (r *VisitaRepository) GetLaboratorios(ctx context.Context, visitaID int) ([
 	}
 	defer rows.Close()
 
-	var labs []models.VisitaLaboratorio
+	// make(…, 0) en vez de var: si la visita aún no tiene estudios, el slice
+	// quedaría nil y `response.JSON` lo serializaría como null (y el frontend
+	// no puede hacer .map de null). Cero estudios se representa como [].
+	labs := make([]models.VisitaLaboratorio, 0)
 	for rows.Next() {
 		var x models.VisitaLaboratorio
 		if err := rows.Scan(&x.LaboratorioID, &x.Nombre, &x.Area, &x.Costo, &x.Cantidad); err != nil {

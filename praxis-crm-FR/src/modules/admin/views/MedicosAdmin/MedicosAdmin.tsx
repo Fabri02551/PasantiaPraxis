@@ -11,9 +11,10 @@ import { MapPicker } from '../../components/MapPicker/MapPicker'
 import { medicoService, type MedicoBE } from '../../../core/services/medico.service'
 import { personaService } from '../../../core/services/persona.service'
 import { especialidadService, type Especialidad } from '../../../core/services/especialidad.service'
-import { ENV } from '../../../core/config/env'
+import { ENV, API_LABEL } from '../../../core/config/env'
 import { displayMedico } from '../../../core/utils/medicoPrefix'
 import { normalizeUbicaciones, hospitalFromDireccion, type UbicacionMedico } from '../../../core/utils/medicoDireccion'
+import { storage } from '../../../core/lib/storage'
 import { Toast } from '../../../core/components/Toast/Toast'
 import './MedicosAdmin.css'
 import '../Visitadores/Visitadores.css'
@@ -43,6 +44,15 @@ type MedicoAdmin = {
 const reqLabelStyle: React.CSSProperties = { color: '#8a9ab5', fontWeight: 400, fontSize: 10, opacity: 0.85, marginLeft: 4, textTransform: 'lowercase' }
 const optLabelStyle: React.CSSProperties = { color: '#8a9ab5', fontWeight: 400, fontSize: 10, opacity: 0.75, marginLeft: 4, textTransform: 'lowercase' }
 
+// La ubicación nueva de un médico nace "cerca de quien la está creando": la
+// primera coordenada del picker se siembra con la posición guardada al
+// iniciar sesión (storage.getUbicacion). Así el admin no arranca desde Quito
+// a ciegas cuando está creando médicos en otra zona.
+const coordsCercaDeMi = (): [number, number] | null => {
+  const u = storage.getUbicacion()
+  return u && Number.isFinite(u.latitud) && Number.isFinite(u.longitud) ? [u.latitud, u.longitud] : null
+}
+
 export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v: AdminView) => void; onLogout: () => void }> = ({ currentView, onNavigate, onLogout }) => {
   const [medicos, setMedicos] = useState<MedicoAdmin[]>([])
   const [search, setSearch] = useState('')
@@ -51,13 +61,13 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
   const [editForm, setEditForm] = useState<MedicoAdmin | null>(null)
   const [deleting, setDeleting] = useState<MedicoAdmin | null>(null)
   const [showCreate, setShowCreate] = useState(false)
-  const [form, setForm] = useState<Omit<MedicoAdmin, 'id'>>({
+  const [form, setForm] = useState<Omit<MedicoAdmin, 'id'>>(() => ({
     nombre: '', primerApellido: '', segundoApellido: '', sexo: '', matricula: '',
     especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '',
-    ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: [-0.1807, -78.4678] }],
-  })
+    ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: coordsCercaDeMi() }],
+  }))
   const [especialidades, setEspecialidades] = useState<Especialidad[]>([])
-  const [apiStatus, setApiStatus] = useState(`API: ${ENV.API_URL}`)
+  const [apiStatus, setApiStatus] = useState(`API: ${API_LABEL}`)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   // Ref, no solo state: setSaving(true) no actualiza `saving` hasta el
@@ -122,17 +132,17 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
           const mapped = await mapBEList(data)
           if (cancelled) return
           setMedicos(mapped)
-          setApiStatus(`Conectado a ${ENV.API_URL} — ${data.length} médicos desde /api/medicos`)
+          setApiStatus(`Conectado a ${API_LABEL} — ${data.length} médicos desde /api/medicos`)
         } else {
           setMedicos([])
-          setApiStatus(`Conectado a ${ENV.API_URL} — sin datos`)
+          setApiStatus(`Conectado a ${API_LABEL} — sin datos`)
         }
       })
       .catch((err) => {
         console.warn('[MedicosAdmin] API no disponible', err)
         if (cancelled) return
         setMedicos([])
-        setApiStatus(`Error: sin conexión a ${ENV.API_URL} — ${err instanceof Error ? err.message : 'no se pudo cargar médicos'}`)
+        setApiStatus(`Error: sin conexión a ${API_LABEL} — ${err instanceof Error ? err.message : 'no se pudo cargar médicos'}`)
       })
       .finally(() => !cancelled && setLoading(false))
     return () => {
@@ -212,7 +222,7 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
       setMedicos(prev => [...prev, row])
       setApiStatus(`Creado en API: ${form.nombre} ${form.primerApellido} (${matricula})`)
       showToast(`Médico registrado ✓ ${row.nombre} ${row.primerApellido} · ${matricula}`, 'success')
-      setForm({ nombre: '', primerApellido: '', segundoApellido: '', sexo: '', matricula: '', especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '', ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: [-0.1807, -78.4678] }] })
+      setForm({ nombre: '', primerApellido: '', segundoApellido: '', sexo: '', matricula: '', especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '', ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: coordsCercaDeMi() }] })
       setShowCreate(false)
     } catch (err) {
       console.warn('[MedicosAdmin] create error', err)
@@ -372,13 +382,21 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
                     <div key={u.id} style={{ border: '1px solid #e8ecf1', borderRadius: 10, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2A4E' }}>{idx + 1}. {u.direccion || u.hospital || 'Sin dirección'}</span>
                       {u.detalle && <span style={{ fontSize: 11, color: '#6b7a99' }}>{u.detalle}</span>}
-                      <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #e8ecf1' }}>
-                        <MapContainer center={u.coords} zoom={14} scrollWheelZoom={false} zoomControl={false} style={{ height: 140, width: '100%' }}>
-                          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="© OSM" />
-                          <Marker position={u.coords} />
-                        </MapContainer>
-                      </div>
-                      <a href={`https://www.openstreetmap.org/?mlat=${u.coords[0]}&mlon=${u.coords[1]}#map=14/${u.coords[0]}/${u.coords[1]}`} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: '#2d9c9c', fontWeight: 600, textDecoration: 'none' }}>Abrir en OpenStreetMap ↗</a>
+                      {u.coords ? (
+                        <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #e8ecf1' }}>
+                          <MapContainer center={u.coords} zoom={14} scrollWheelZoom={false} zoomControl={false} style={{ height: 140, width: '100%' }}>
+                            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="© OSM" />
+                            <Marker position={u.coords} />
+                          </MapContainer>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 11, color: '#7e8aa6', background: '#f8f9fb', borderRadius: 8, padding: 10, border: '1px dashed #dbe2ea' }}>
+                          Sin coordenadas geocodificadas: esta ubicación no se dibuja en el mapa.
+                        </div>
+                      )}
+                      {u.coords && (
+                        <span style={{ fontSize: 11, color: '#2d9c9c', fontWeight: 600, textDecoration: 'none' }}>{u.coords[0].toFixed(4)}, {u.coords[1].toFixed(4)}</span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -430,7 +448,7 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
                     <MapPicker coords={u.coords} onChange={c => setForm({ ...form, ubicaciones: form.ubicaciones.map((x, i) => i === idx ? { ...x, coords: c } : x) })} height={140} />
                   </div>
                 ))}
-                <button type="button" className="vt-btn vt-btn--ver" onClick={() => setForm({ ...form, ubicaciones: [...form.ubicaciones, { id: `u${Date.now()}`, direccion: '', detalle: '', coords: [-0.1807, -78.4678] }] })} style={{ alignSelf: 'flex-start' }}>+ Agregar ubicación</button>
+                <button type="button" className="vt-btn vt-btn--ver" onClick={() => setForm({ ...form, ubicaciones: [...form.ubicaciones, { id: `u${Date.now()}`, direccion: '', detalle: '', coords: coordsCercaDeMi() }] })} style={{ alignSelf: 'flex-start' }}>+ Agregar ubicación</button>
               </div>
               <div className="vt-form-actions"><button type="button" className="vt-btn-cancel" onClick={() => setShowCreate(false)} disabled={saving}>Cancelar</button><button type="submit" className="vt-btn-submit" disabled={saving}>{saving ? 'Guardando…' : 'Registrar'}</button></div>
             </form>
@@ -477,7 +495,7 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
                     <MapPicker coords={u.coords} onChange={c => setEditForm({ ...editForm, ubicaciones: editForm.ubicaciones.map((x, i) => i === idx ? { ...x, coords: c } : x) } as MedicoAdmin)} height={140} />
                   </div>
                 ))}
-                <button type="button" className="vt-btn vt-btn--ver" onClick={() => setEditForm({ ...editForm, ubicaciones: [...editForm.ubicaciones, { id: `u${Date.now()}`, direccion: '', detalle: '', coords: [-0.1807, -78.4678] }] } as MedicoAdmin)} style={{ alignSelf: 'flex-start' }}>+ Agregar ubicación</button>
+                <button type="button" className="vt-btn vt-btn--ver" onClick={() => setEditForm({ ...editForm, ubicaciones: [...editForm.ubicaciones, { id: `u${Date.now()}`, direccion: '', detalle: '', coords: coordsCercaDeMi() }] } as MedicoAdmin)} style={{ alignSelf: 'flex-start' }}>+ Agregar ubicación</button>
               </div>
               <div className="vt-form-actions"><button type="button" className="vt-btn-cancel" onClick={() => { setEditing(null); setEditForm(null) }} disabled={saving}>Cancelar</button><button type="submit" className="vt-btn-submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar Cambios'}</button></div>
             </form>

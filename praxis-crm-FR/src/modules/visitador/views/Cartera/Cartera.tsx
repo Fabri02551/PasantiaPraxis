@@ -5,7 +5,7 @@ import { medicoService } from '../../../core/services/medico.service'
 import { institucionService, type InstitucionBE } from '../../../core/services/institucion.service'
 import { personaService } from '../../../core/services/persona.service'
 import { especialidadService } from '../../../core/services/especialidad.service'
-import { ENV } from '../../../core/config/env'
+import { API_LABEL } from '../../../core/config/env'
 import { displayMedico } from '../../../core/utils/medicoPrefix'
 import { hospitalFromDireccion, firstDireccionTexto } from '../../../core/utils/medicoDireccion'
 import './Cartera.css'
@@ -35,7 +35,7 @@ export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout
   const [entradas, setEntradas] = useState<EntradaCartera[]>([])
   const [usuario, setUsuario] = useState<CurrentUser | null>(null)
   const [conteos, setConteos] = useState({ medicos: 0, instituciones: 0 })
-  const [apiStatus, setApiStatus] = useState(`API: ${ENV.API_URL}`)
+  const [apiStatus, setApiStatus] = useState(`API: ${API_LABEL}`)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -87,13 +87,13 @@ subtitulo: b.tipo_contrato || 'Institución',
         setUsuario(me)
         setConteos({ medicos: medicos.length, instituciones: instituciones.length })
         setEntradas([...medicos, ...instituciones])
-        setApiStatus(`Conectado a ${ENV.API_URL} — cartera de ${[me.nombre, me.primer_apellido, me.segundo_apellido].filter(Boolean).join(' ').trim() || me.email}`)
+        setApiStatus(`Conectado a ${API_LABEL} — cartera de ${[me.nombre, me.primer_apellido, me.segundo_apellido].filter(Boolean).join(' ').trim() || me.email}`)
       })
       .catch((err) => {
         if (cancelled) return
         console.warn('[Cartera] API no disponible', err)
         setEntradas([])
-        setApiStatus(`Sin conexión a ${ENV.API_URL}`)
+        setApiStatus(`Sin conexión a ${API_LABEL}`)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)

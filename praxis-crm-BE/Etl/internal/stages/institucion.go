@@ -136,6 +136,8 @@ func actualizarInstitucion(
 ) error {
 	// clasificacion NO se toca a propósito: el usuario la revisa y la sube
 	// a mano desde revisar_clasificacion.csv.
+	//
+	// direccion va fusionada, no pisada: ver direccionFusionada en medico.go.
 	_, err := pool.Exec(ctx,
 		`UPDATE institucion
 		 SET direccion = $1,
@@ -145,7 +147,7 @@ func actualizarInstitucion(
 		     es_particular = true,
 		     status = true
 		 WHERE id = $5`,
-		jsonbTexto(rec.columna("direccion")),
+		direccionFusionada(ctx, pool, "institucion", "id", id, rec.columna("direccion")),
 		rec.columna("telefono"),
 		visitadorID, ciudadID, id)
 	return err

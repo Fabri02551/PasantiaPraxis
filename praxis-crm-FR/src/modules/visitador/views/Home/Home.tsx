@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet'
+import { useMemo, useRef, useState } from 'react'
+import { MapContainer, TileLayer, Marker, Polyline, Popup, CircleMarker } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
-import { useMisVisitas, visitaToACompletar, type VisitaResuelta } from '../../hooks/useMisVisitas'
+import { storage } from '../../../core/lib/storage'
+import { useMisVisitas, visitaToACompletar, type VisitaResuelta, type DestinoInfo } from '../../hooks/useMisVisitas'
 import type { VisitaACompletar } from '../CompletarVisita/CompletarVisita'
 import './Home.css'
 
@@ -47,14 +48,54 @@ interface HomeProps {
 }
 
 export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, onLogout, onCompletar }) => {
-  const center: [number, number] = [-0.1807, -78.4678]
   const { porVisitar, loading } = useMisVisitas()
   const [menuOpen, setMenuOpen] = useState(false)
   const [detail, setDetail] = useState<VisitaResuelta | null>(null)
+  // Índice de la visita enfocada al recorrer la ruta con el control del mapa.
+  // -1 = ninguna enfocada; cada clic en "siguiente" avanza y envuelve.
+  const [foco, setFoco] = useState(-1)
+  const mapRef = useRef<L.Map | null>(null)
 
   const hoy = hoyKey()
   const pendientesHoy = useMemo(() => porVisitar.filter((v) => v.fecha === hoy), [porVisitar, hoy])
   const pendientesHoySur = pendientesHoy.length > 0 ? pendientesHoy : porVisitar.slice(0, 4)
+
+  // Solo las visitas con pin se pueden dibujar. Una sin coordenadas no debería
+  // "aparecer" sobre Quito ni deformar la polyline de la ruta.
+  const conPin = useMemo(
+    () =>
+      pendientesHoySur.filter(
+        (v): v is VisitaResuelta & { destino: DestinoInfo & { coords: [number, number] } } =>
+          Array.isArray(v.destino.coords) && v.destino.coords.length === 2,
+      ),
+    [pendientesHoySur],
+  )
+  // Posición propia guardada al iniciar sesión (pin azul "usted está aquí").
+  const miUbi = storage.getUbicacion()
+  const miPos: [number, number] | null =
+    miUbi && Number.isFinite(miUbi.latitud) && Number.isFinite(miUbi.longitud)
+      ? [miUbi.latitud, miUbi.longitud]
+      : null
+  const center = conPin[0]?.destino.coords ?? miPos
+
+  // Visitas con pin ordenadas de la más próxima a la más lejana en el tiempo:
+  // es el orden que recorre el botón "siguiente visita".
+  const conPinOrdenado = useMemo(
+    () => [...conPin].sort((a, b) => a.hora.localeCompare(b.hora)),
+    [conPin],
+  )
+
+  const centrarEnMiUbicacion = () => {
+    if (!miPos) return
+    mapRef.current?.setView(miPos, 16)
+  }
+
+  const siguienteVisita = () => {
+    if (conPinOrdenado.length === 0) return
+    const n = foco >= conPinOrdenado.length - 1 ? 0 : foco + 1
+    setFoco(n)
+    mapRef.current?.setView(conPinOrdenado[n].destino.coords, 15)
+  }
 
   return (
     <div className="visitador-page">
@@ -82,33 +123,99 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
             {loading ? 'Cargando…' : `${porVisitar.length} Visitas Pendientes`}
           </div>
           <div className="map-wrapper">
-            <MapContainer
+            {!center ? (
+              <div className="home-mapa-vacio">
+                <span>Sin coordenadas en la ruta</span>
+                <small>Ninguna visita pendiente tiene ubicación geocodificada. Se muestran igual en la lista.</small>
+              </div>
+            ) : (
+              <>
+              <MapContainer
+              ref={mapRef}
               center={center}
               zoom={13}
               scrollWheelZoom={false}
               className="osm-map"
               zoomControl={false}
             >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-              {pendientesHoySur.length > 1 && (
-                <Polyline
-                  positions={pendientesHoySur.map((v) => v.destino.coords)}
-                  pathOptions={{ color: '#F9B233', weight: 4, opacity: 0.9 }}
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-              )}
-              {pendientesHoySur.slice(0, 4).map((v, idx) => (
-                <Marker key={v.id} position={v.destino.coords} icon={createColorIcon(markerColors[idx % markerColors.length])}>
-                  <Popup>
-                    <strong>{v.destino.nombre}</strong>
-                    <br />
-                    {v.destino.subtitulo || 'Médico/Institución'}
-                  </Popup>
-                </Marker>
-              ))}
-            </MapContainer>
+                {conPin.length > 1 && (
+                  <Polyline
+                    positions={conPin.map((v) => v.destino.coords)}
+                    pathOptions={{ color: '#F9B233', weight: 4, opacity: 0.9 }}
+                  />
+                )}
+                {conPin.slice(0, 4).map((v, idx) => (
+                  <Marker key={v.id} position={v.destino.coords} icon={createColorIcon(markerColors[idx % markerColors.length])}>
+                    <Popup>
+                      <strong>{v.destino.nombre}</strong>
+                      <br />
+                      {v.destino.subtitulo || 'Médico/Institución'}
+                    </Popup>
+                  </Marker>
+                ))}
+                {miPos && (
+                  <CircleMarker
+                    center={miPos}
+                    radius={9}
+                    pathOptions={{ color: '#2563EB', weight: 2, fillColor: '#2563EB', fillOpacity: 0.55 }}
+                  >
+                    <Popup>Tu ubicación actual</Popup>
+                  </CircleMarker>
+                )}
+                {foco >= 0 && conPinOrdenado[foco] && (
+                  <CircleMarker
+                    center={conPinOrdenado[foco].destino.coords}
+                    radius={17}
+                    pathOptions={{ color: '#1B2A4E', weight: 2, fillColor: '#F9B233', fillOpacity: 0.25 }}
+                  >
+                    <Popup>
+                      <strong>{conPinOrdenado[foco].destino.nombre}</strong>
+                      <br />
+                      {conPinOrdenado[foco].destino.subtitulo || 'Médico/Institución'}
+                    </Popup>
+                  </CircleMarker>
+                )}
+              </MapContainer>
+              <div className="map-controls">
+                <button
+                  type="button"
+                  className="map-control-btn"
+                  onClick={centrarEnMiUbicacion}
+                  aria-label="Centrar en tu ubicación"
+                  title="Centrar en tu ubicación"
+                  disabled={!miPos}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+                    <circle cx="12" cy="12" r="7" />
+                    <circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none" />
+                    <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="map-control-btn"
+                  onClick={siguienteVisita}
+                  aria-label="Siguiente visita de la ruta"
+                  title="Siguiente visita de la ruta"
+                  disabled={conPinOrdenado.length === 0}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11z" />
+                    <circle cx="12" cy="10" r="2.5" />
+                  </svg>
+                  {conPinOrdenado.length > 0 && (
+                    <span className="map-control-count">
+                      {foco < 0 ? 1 : foco + 1}/{conPinOrdenado.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+              </>
+            )}
           </div>
         </section>
 

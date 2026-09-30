@@ -3,7 +3,7 @@ import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
 import { medicoService } from '../../../core/services/medico.service'
 import { personaService } from '../../../core/services/persona.service'
 import { especialidadService, type Especialidad } from '../../../core/services/especialidad.service'
-import { ENV } from '../../../core/config/env'
+import { API_LABEL } from '../../../core/config/env'
 import { MapPicker } from '../../../admin/components/MapPicker/MapPicker'
 import { displayMedico } from '../../../core/utils/medicoPrefix'
 import { normalizeUbicaciones, hospitalFromDireccion, type UbicacionMedico } from '../../../core/utils/medicoDireccion'
@@ -44,7 +44,7 @@ export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Medico | null>(null)
   const [medicos, setMedicos] = useState<Medico[]>([])
-  const [apiStatus, setApiStatus] = useState(`API: ${ENV.API_URL}`)
+  const [apiStatus, setApiStatus] = useState(`API: ${API_LABEL}`)
   const [loading, setLoading] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [especialidades, setEspecialidades] = useState<Especialidad[]>([])
@@ -98,17 +98,17 @@ export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout
           }))
           if (cancelled) return
           setMedicos(mapped)
-          setApiStatus(`Conectado a ${ENV.API_URL} — ${data.length} médicos desde /api/medicos`)
+          setApiStatus(`Conectado a ${API_LABEL} — ${data.length} médicos desde /api/medicos`)
         } else {
           setMedicos([])
-          setApiStatus(`Conectado a ${ENV.API_URL} — sin datos`)
+          setApiStatus(`Conectado a ${API_LABEL} — sin datos`)
         }
       })
       .catch((err) => {
         if (cancelled) return
         console.warn('[Medicos] API no disponible', err)
         setMedicos([])
-        setApiStatus(`Sin conexión a ${ENV.API_URL}`)
+        setApiStatus(`Sin conexión a ${API_LABEL}`)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)

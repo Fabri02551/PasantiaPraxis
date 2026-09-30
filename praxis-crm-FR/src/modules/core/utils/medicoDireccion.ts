@@ -1,33 +1,52 @@
 /**
- * Helpers sobre `medico.direccion` (columna JSONB).
+ * Helpers sobre `medico.direccion` y `institucion.direccion` (columnas JSONB).
  *
  * La tabla `medico` no tiene columna `institucion`: el frontend guarda la
  * lista de ubicaciones (direccion, detalle, coords, hospital) dentro de ese
  * JSONB. Además, datos cargados antes de un fix pueden tenerlo guardado como
  * un string JSON en vez de un array, por eso `normalizeUbicaciones` acepta
  * ambas formas.
+ *
+ * `coords` es nullable a propósito, y ya no hay ninguna constante de respaldo.
+ * Antes, una ubicación sin pin heredaba DEFAULT_COORDS (Quito), así que un
+ * médico sin geocodificar aparecía en el mapa sobre una calle de la capital.
+ * Era peor que no mostrar nada: se veía un pin y se leía como "acá está". Ahora
+ * la ausencia de pin se representa como null y cada vista decide qué mostrar.
  */
 
 export type UbicacionMedico = {
   id: string
   direccion: string
   detalle: string
-  coords: [number, number]
+  /** null cuando la ubicación todavía no fue geocodificada. */
+  coords: [number, number] | null
   hospital?: string
 }
 
-export const DEFAULT_COORDS: [number, number] = [-0.1807, -78.4678]
+/**
+ * Extrae un [lat, lon] válido, o null.
+ *
+ * Rechaza lo que no sirve: arrays de otra longitud, valores no numéricos, y
+ * (0, 0), que es el punto que el DEFAULT_COORDS usaba y que cae en medio del
+ * océano. Un (0,0) guardado es un bug heredado, no una ubicación.
+ */
+const leerCoords = (raw: unknown): [number, number] | null => {
+  if (!Array.isArray(raw) || raw.length !== 2) return null
+  const lat = Number(raw[0])
+  const lon = Number(raw[1])
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null
+  if (lat === 0 && lon === 0) return null
+  return [lat, lon]
+}
 
 const toUbicacion = (raw: unknown, index: number): UbicacionMedico => {
   const o = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
-  const coords = Array.isArray(o.coords) && o.coords.length === 2
-    ? ([Number(o.coords[0]), Number(o.coords[1])] as [number, number])
-    : DEFAULT_COORDS
   return {
     id: typeof o.id === 'string' ? o.id : `u${index}`,
     direccion: typeof o.direccion === 'string' ? o.direccion : (typeof o.hospital === 'string' ? o.hospital : ''),
     detalle: typeof o.detalle === 'string' ? o.detalle : '',
-    coords: [Number.isFinite(coords[0]) ? coords[0] : DEFAULT_COORDS[0], Number.isFinite(coords[1]) ? coords[1] : DEFAULT_COORDS[1]],
+    coords: leerCoords(o.coords),
     hospital: typeof o.hospital === 'string' ? o.hospital : undefined,
   }
 }
@@ -51,6 +70,23 @@ export const normalizeUbicaciones = (raw: unknown): UbicacionMedico[] => {
   }
   return []
 }
+
+/**
+ * Coordenadas de la ubicación elegida, o null si no hay pin.
+ *
+ * Es el accessor que debería usar casi todo: las vistas piden "dame el punto"
+ * y con esto eligen entre mostrar el mapa o mostrar que no hay.
+ */
+export const coordsDe = (u: UbicacionMedico | null | undefined): [number, number] | null =>
+  u?.coords ?? null
+
+/** Si la ubicación tiene pin utilizable en el mapa. */
+export const tieneCoords = (u: UbicacionMedico | null | undefined): boolean =>
+  Array.isArray(u?.coords) && u.coords.length === 2
+
+/** Primera ubicación que tenga pin, o null si ninguna tiene. */
+export const primeraConCoords = (us: UbicacionMedico[]): UbicacionMedico | null =>
+  us.find((u) => tieneCoords(u)) ?? null
 
 /** Nombre de la institución: el `hospital` de la 1ª ubicación, o su dirección. */
 export const hospitalFromDireccion = (raw: unknown): string => {

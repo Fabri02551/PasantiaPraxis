@@ -168,8 +168,21 @@ CREATE TABLE visita (
     institucion_id INTEGER REFERENCES institucion(id) ON DELETE SET NULL,
     fecha_visita TIMESTAMPTZ,
     fecha_visita_tentativa TIMESTAMPTZ,
+    -- GPS del VISITADOR al completar la visita (auditoría). NULL si no se capturó.
+    -- La ubicación del destino va aparte, en destino_* (snapshot inmutable).
     latitud NUMERIC(10,7),
     longitud NUMERIC(10,7),
+    -- Qué ubicación del destino se visitó (id dentro de direccion[]) y su snapshot.
+    ubicacion_destino_id VARCHAR(50),
+    destino_direccion TEXT,
+    destino_latitud NUMERIC(10,7),
+    destino_longitud NUMERIC(10,7),
+    gps_precision_m NUMERIC(8,1),
+    -- Metros entre el GPS del visitador y el pin del destino (calculado en el servidor).
+    distancia_destino_m NUMERIC(10,1),
+    sin_evidencia_ubicacion BOOLEAN NOT NULL DEFAULT false,
+    -- Visita extraordinaria: se registra en campo, sin fecha tentativa.
+    extraordinaria BOOLEAN NOT NULL DEFAULT false,
     firma TEXT DEFAULT '',
     observacion JSONB DEFAULT '{}',
     satisfaccion SMALLINT DEFAULT 0 CHECK (satisfaccion BETWEEN 0 AND 5),

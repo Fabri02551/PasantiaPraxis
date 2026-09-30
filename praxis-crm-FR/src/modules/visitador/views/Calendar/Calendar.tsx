@@ -13,7 +13,14 @@ interface Props {
   onCompletar?: (visita: VisitaACompletar) => void
 }
 
-const WEEKDAYS = ['D', 'L', 'M', 'M', 'J', 'V', 'S']
+// La cabecera tiene que arrancar en lunes, no en domingo.
+//
+// monthGrid calcula startWeekday como (getDay() + 6) % 7, o sea lunes = 0. Con
+// esta cabecera en domingo, cada día caía en la columna anterior: el lunes
+// aparecía bajo el domingo y todo el mes se veía corrido un día. "X" es la
+// abreviación de miércoles; además evita la clave de React duplicada que había
+// con dos "M".
+const WEEKDAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -79,11 +86,10 @@ export const CalendarView: React.FC<Props> = ({ onNavigate, currentView, onLogou
         key={`${muted ? 'm' : ''}${day}`}
         className={`cal-cell ${muted ? 'muted' : ''} ${isSelected ? 'selected' : ''} ${hasPendiente ? 'orange' : ''} ${hasRealizada ? 'blue' : ''}`}
         onClick={() => !muted && setSelected(day)}
-        style={{ display: 'flex', flexDirection: 'column', gap: 1 }}
       >
         <span>{muted ? '' : day}</span>
         {!muted && dia.length > 0 && (
-          <span style={{ fontSize: 8, lineHeight: 1, opacity: 0.85, fontWeight: 700 }}>{dia.length}</span>
+          <span className="cal-count" aria-label={`${dia.length} visitas`}>{dia.length}</span>
         )}
       </button>
     )

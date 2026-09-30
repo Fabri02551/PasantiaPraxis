@@ -5,7 +5,12 @@ import { institucionService } from '../../core/services/institucion.service'
 import { personaService } from '../../core/services/persona.service'
 import { especialidadService } from '../../core/services/especialidad.service'
 import { visitaService } from '../../core/services/visita.service'
-import { hospitalFromDireccion, firstDireccionTexto, DEFAULT_COORDS } from '../../core/utils/medicoDireccion'
+import {
+  hospitalFromDireccion,
+  firstDireccionTexto,
+  normalizeUbicaciones,
+  primeraConCoords,
+} from '../../core/utils/medicoDireccion'
 import type { VisitaACompletar } from '../views/CompletarVisita/CompletarVisita'
 
 // Información de un destino (médico o institución) necesaria para mostrar y
@@ -18,16 +23,21 @@ export type DestinoInfo = {
   direccion: string
   particular: boolean
   ciudadId: number | null
-  coords: [number, number]
+  /** null cuando el destino todavía no fue geocodificado. */
+  coords: [number, number] | null
+  /** Ids de las ubicaciones del destino, para poder elegir consultorio. */
+  ubicacionIds: string[]
+  ubicacionElegida: string | null
 }
 
 export type VisitaResuelta = {
   id: number
-  fecha: string | null // 'yyyy-mm-dd' local (fecha_visita_tentativa)
+  fecha: string | null // 'yyyy-mm-dd' local
   hora: string // 'HH:MM'
   fecha_visita: string | null // fecha real al registrarla
   estado: string // 'por_visitar' | 'realizada'
   registrada: boolean
+  extraordinaria: boolean
   tipo: 'medico' | 'institucion'
   destino: DestinoInfo
 }
@@ -78,50 +88,85 @@ export function useMisVisitas() {
         visitaService.list().catch(() => []),
       ])
 
+      const mías = (Array.isArray(visitasRaw) ? visitasRaw : []).filter((v) => v.id_visitador === miPersona)
+
+      // Solo se resuelven los destinos que las visitas realmente referencian.
+      //
+      // Antes se traía la cartera completa y se pedía la persona de cada uno:
+      // 1888 médicos son 1888 requests, y en la mayoría de los casos ninguno
+      // tenía visita. Además, una visita extraordinaria puede apuntar a un
+      // médico que no está en la cartera del visitador, y con el filtro
+      // anterior ese destino aparecía como "Sin destino".
+      const medicoIds = new Set<number>()
+      const instIds = new Set<number>()
+      for (const v of mías) {
+        if (v.id_medico) medicoIds.add(v.id_medico)
+        if (v.institucion_id) instIds.add(v.institucion_id)
+      }
+
       const espDe = new Map<number, string>()
       if (Array.isArray(espesRaw)) espesRaw.forEach((es) => espDe.set(es.id, es.nombre))
 
       const destinoPorMedico = new Map<number, DestinoInfo>()
-      const medicosMios = Array.isArray(medicosRaw) ? medicosRaw.filter((m) => m.visitador_id === miPersona) : []
-      await Promise.all(medicosMios.map(async (m) => {
-        const p = await personaService.getById(m.persona_id).catch(() => null)
-        const nombre = p
-          ? [p.nombre, p.primer_apellido, p.segundo_apellido].filter(Boolean).join(' ').trim()
-          : `Médico ${m.matricula || m.persona_id}`
-        destinoPorMedico.set(m.persona_id, {
-          id: m.persona_id,
-          tipo: 'medico',
-          nombre,
-          subtitulo: espDe.get(m.especialidad_id) ?? '',
-          direccion: hospitalFromDireccion(m.direccion) || 'Sin institución',
-          particular: !!m.es_particular,
-          ciudadId: p?.ciudad_id ?? null,
-          coords: DEFAULT_COORDS,
-        })
-      }))
+      const medicos = (Array.isArray(medicosRaw) ? medicosRaw : []).filter((m) => medicoIds.has(m.persona_id))
+      await Promise.all(
+        medicos.map(async (m) => {
+          const p = await personaService.getById(m.persona_id).catch(() => null)
+          const nombre = p
+            ? [p.nombre, p.primer_apellido, p.segundo_apellido].filter(Boolean).join(' ').trim()
+            : `Médico ${m.matricula || m.persona_id}`
+          const ubicaciones = normalizeUbicaciones(m.direccion)
+          const conPin = primeraConCoords(ubicaciones)
+          destinoPorMedico.set(m.persona_id, {
+            id: m.persona_id,
+            tipo: 'medico',
+            nombre,
+            subtitulo: espDe.get(m.especialidad_id) ?? '',
+            direccion: hospitalFromDireccion(m.direccion) || 'Sin institución',
+            particular: !!m.es_particular,
+            ciudadId: p?.ciudad_id ?? null,
+            coords: conPin?.coords ?? null,
+            ubicacionIds: ubicaciones.map((u) => u.id),
+            ubicacionElegida: conPin?.id ?? null,
+          })
+        }),
+      )
 
       const destinoPorInst = new Map<number, DestinoInfo>()
-      ;(Array.isArray(institucionesRaw) ? institucionesRaw : []).forEach((i) => {
-        destinoPorInst.set(i.id, {
-          id: i.id,
-          tipo: 'institucion',
-          nombre: i.nombre || `Institución ${i.id}`,
-          subtitulo: i.tipo_contrato || 'Institución',
-          direccion: firstDireccionTexto(i.direccion) || 'Sin dirección registrada',
-          particular: !!i.es_particular,
-          ciudadId: i.ciudad_id ?? null,
-          coords: DEFAULT_COORDS,
+      ;(Array.isArray(institucionesRaw) ? institucionesRaw : [])
+        .filter((i) => instIds.has(i.id))
+        .forEach((i) => {
+          const ubicaciones = normalizeUbicaciones(i.direccion)
+          const conPin = primeraConCoords(ubicaciones)
+          destinoPorInst.set(i.id, {
+            id: i.id,
+            tipo: 'institucion',
+            nombre: i.nombre || `Institución ${i.id}`,
+            subtitulo: i.tipo_contrato || 'Institución',
+            direccion: firstDireccionTexto(i.direccion) || 'Sin dirección registrada',
+            particular: !!i.es_particular,
+            ciudadId: i.ciudad_id ?? null,
+            coords: conPin?.coords ?? null,
+            ubicacionIds: ubicaciones.map((u) => u.id),
+            ubicacionElegida: conPin?.id ?? null,
+          })
         })
-      })
 
-      const mías = (Array.isArray(visitasRaw) ? visitasRaw : []).filter((v) => v.id_visitador === miPersona)
       const resueltas: VisitaResuelta[] = mías.map((v) => {
         const destino = v.id_medico
           ? destinoPorMedico.get(v.id_medico)
           : v.institucion_id
             ? destinoPorInst.get(v.institucion_id)
             : null
-        const { fecha, hora } = v.fecha_visita_tentativa ? fmtFechaBien(v.fecha_visita_tentativa) : { fecha: null, hora: '' }
+
+        // La fecha que ordena y muestra el calendario es la real si ya se
+        // registró, y la tentativa si todavía no. Antes solo se leía la
+        // tentativa, así que toda visita ya realizada —y toda extraordinaria,
+        // que se crea sin tentativa— aparecía sin fecha y se perdía del
+        // calendario.
+        const referencia = v.fecha_visita ?? v.fecha_visita_tentativa ?? null
+        const { fecha, hora } = referencia ? fmtFechaBien(referencia) : { fecha: null, hora: '' }
+
         return {
           id: v.id,
           fecha,
@@ -129,6 +174,7 @@ export function useMisVisitas() {
           fecha_visita: v.fecha_visita ?? null,
           estado: v.estado || (v.registrada ? 'realizada' : 'por_visitar'),
           registrada: !!v.registrada,
+          extraordinaria: !!v.extraordinaria,
           tipo: destino?.tipo ?? 'medico',
           destino: destino ?? {
             id: 0,
@@ -138,11 +184,15 @@ export function useMisVisitas() {
             direccion: '—',
             particular: false,
             ciudadId: null,
-            coords: DEFAULT_COORDS,
+            coords: null,
+            ubicacionIds: [],
+            ubicacionElegida: null,
           },
         }
       })
-      resueltas.sort((a, b) => (a.fecha ?? '').localeCompare(b.fecha ?? '') || a.hora.localeCompare(b.hora))
+      resueltas.sort(
+        (a, b) => (a.fecha ?? '').localeCompare(b.fecha ?? '') || a.hora.localeCompare(b.hora),
+      )
       setVisitas(resueltas)
     } catch (err) {
       console.warn('[useMisVisitas] API no disponible', err)

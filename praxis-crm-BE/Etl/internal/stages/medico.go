@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"gitlab.com/labpraxis/praxis-crm-be/etl/internal/catalog"
+	"gitlab.com/labpraxis/praxis-crm-be/etl/internal/geo"
 	"gitlab.com/labpraxis/praxis-crm-be/etl/internal/visitador"
 )
 
@@ -306,11 +307,36 @@ func actualizarMedico(
 		     notas = $4,
 		     status = true
 		 WHERE persona_id = $5`,
-		espID, visitadorID, jsonbTexto(rec.columna("institucion")),
+		espID, visitadorID, direccionFusionada(ctx, pool, "medico", "persona_id", personaID, rec.columna("institucion")),
 		jsonbNotas(rec.columna("programacion"), rec.columna("medico id"), clave), personaID); err != nil {
 		return fmt.Errorf("actualizando médico %d: %w", personaID, err)
 	}
 	return nil
+}
+
+// direccionFusionada devuelve el JSONB a guardar en `direccion`, combinando lo
+// que hay en la base con lo que trae el CSV de cartera.
+//
+// Existe por una razón concreta: `direccion = $3` a secas borraba los `coords`
+// que escribe cmd/geocodificar, y la corrida diaria del ETL deshacía el
+// geocodificado. Fusionar conserva el pin y actualiza solo el texto.
+func direccionFusionada(ctx context.Context, pool *pgxpool.Pool, tabla, clave string, id int, textoCartera string) string {
+	var actual string
+	q := fmt.Sprintf(`SELECT COALESCE(direccion::text, '{}') FROM %s WHERE %s = $1`, tabla, clave)
+	if err := pool.QueryRow(ctx, q, id).Scan(&actual); err != nil {
+		// Si no se puede leer lo actual, se usa el texto de la cartera: es lo
+		// que hacía el ETL antes de este cambio. Perder un pin es malo, pero
+		// devolver la fila sin actualizar es peor.
+		log.Printf("[%s] no se pudo leer la dirección actual de %d: %v", tabla, id, err)
+		return jsonbTexto(textoCartera)
+	}
+
+	fusionado, err := geo.Fusionar(actual, textoCartera)
+	if err != nil {
+		log.Printf("[%s] no se pudo fusionar la dirección de %d: %v", tabla, id, err)
+		return jsonbTexto(textoCartera)
+	}
+	return fusionado
 }
 
 // jsonbTexto envuelve un texto plano en un objeto JSONB válido. La columna

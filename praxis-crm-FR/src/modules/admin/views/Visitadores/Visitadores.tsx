@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { AdminLayout } from '../../components/AdminLayout/AdminLayout'
 import type { AdminView } from '../../components/AdminSidebar/AdminSidebar'
 import { visitadorService, type VisitadorBE } from '../../../core/services/visitador.service'
-import { ENV } from '../../../core/config/env'
+import { ENV, API_LABEL } from '../../../core/config/env'
 import './Visitadores.css'
 
 type Estado = 'Activo' | 'Inactivo'
@@ -42,7 +42,7 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
   const [search, setSearch] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'Todos' | Estado>('Activo')
   const [loading, setLoading] = useState(false)
-  const [apiStatus, setApiStatus] = useState<string>(`API: ${ENV.API_URL}`)
+  const [apiStatus, setApiStatus] = useState<string>(`API: ${API_LABEL}`)
 
   // popups
   const [showCreate, setShowCreate] = useState(false)
@@ -63,17 +63,17 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
         if (cancelled) return
         if (Array.isArray(data) && data.length > 0) {
           setVisitadores(data.map(mapBEtoFE))
-          setApiStatus(`Conectado a ${ENV.API_URL} — ${data.length} visitadores desde /api/visitadores`)
+          setApiStatus(`Conectado a ${API_LABEL} — ${data.length} visitadores desde /api/visitadores`)
         } else {
           setVisitadores([])
-          setApiStatus(`Conectado a ${ENV.API_URL} — sin datos`)
+          setApiStatus(`Conectado a ${API_LABEL} — sin datos`)
         }
       })
       .catch((err) => {
         console.warn('[Visitadores] API no disponible', err)
         if (cancelled) return
         setVisitadores([])
-        setApiStatus(`Error: sin conexión a ${ENV.API_URL} — ${err instanceof Error ? err.message : 'no se pudo cargar visitadores'}`)
+        setApiStatus(`Error: sin conexión a ${API_LABEL} — ${err instanceof Error ? err.message : 'no se pudo cargar visitadores'}`)
       })
       .finally(() => !cancelled && setLoading(false))
     return () => {
@@ -108,7 +108,7 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
       // preserva visitas del form
       mapped.visitas = Number(form.visitas) || 0
       setVisitadores((prev) => [...prev, mapped])
-      setApiStatus(`Creado en ${ENV.API_URL} → ${mapped.nombre}`)
+      setApiStatus(`Creado en ${API_LABEL} → ${mapped.nombre}`)
       setForm({ nombre: '', email: '', telefono: '', latitud: null, longitud: null, visitas: 0 })
       setShowCreate(false)
     } catch (err) {

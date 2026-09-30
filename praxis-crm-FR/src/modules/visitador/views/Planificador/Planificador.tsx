@@ -6,7 +6,8 @@ import { institucionService } from '../../../core/services/institucion.service'
 import { personaService } from '../../../core/services/persona.service'
 import { especialidadService } from '../../../core/services/especialidad.service'
 import { visitaService } from '../../../core/services/visita.service'
-import { normalizeUbicaciones, hospitalFromDireccion, firstDireccionTexto, DEFAULT_COORDS } from '../../../core/utils/medicoDireccion'
+import { normalizeUbicaciones, hospitalFromDireccion, firstDireccionTexto, type UbicacionMedico } from '../../../core/utils/medicoDireccion'
+import { UbicacionMapa } from '../../../core/components/UbicacionMapa/UbicacionMapa'
 import './Planificador.css'
 
 type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
@@ -17,7 +18,7 @@ interface Props {
   onLogout: () => void
 }
 
-type Ubicacion = { id: string; direccion: string; detalle: string; coords: [number, number] }
+type Ubicacion = UbicacionMedico
 
 // Destino = un médico o una institución de la cartera del visitador.
 type DestinoPlan = {
@@ -89,7 +90,9 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
           const ubi = normalizeUbicaciones(b.direccion)
           const ubicaciones: Ubicacion[] = ubi.length > 0
             ? ubi
-            : [{ id: 'u1', direccion: hospitalFromDireccion(b.direccion) || 'Sin dirección', detalle: '', coords: DEFAULT_COORDS }]
+            // Sin coords de respaldo: un médico sin geocodificar no debería
+            // "aparecer" sobre Quito. Se ofrece la dirección a texto plano.
+            : [{ id: 'u1', direccion: hospitalFromDireccion(b.direccion) || 'Sin dirección', detalle: '', coords: null }]
           return {
             tipo: 'medico' as const,
             key: `medico-${b.persona_id}`,
@@ -106,7 +109,7 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
           id: b.id,
           nombre: b.nombre || `Institución ${b.id}`,
           subtitulo: b.tipo_contrato || 'Institución',
-          ubicaciones: [{ id: 'u1', direccion: firstDireccionTexto(b.direccion) || 'Sin dirección registrada', detalle: '', coords: DEFAULT_COORDS }],
+          ubicaciones: [{ id: 'u1', direccion: firstDireccionTexto(b.direccion) || 'Sin dirección registrada', detalle: '', coords: null }],
         }))
 
         if (cancelled) return
@@ -130,6 +133,7 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
 
   const destino = useMemo(() => destinos.find((d) => d.key === selectedDestino) || null, [destinos, selectedDestino])
   const ubicaciones = destino?.ubicaciones || []
+  const ubicacionElegida = ubicaciones.find((u) => u.id === selectedUbicacion) || null
 
   // Buscador por nombre, especialidad/tipo o institución de la cartera.
   const destinosFiltrados = useMemo(() => {
@@ -213,6 +217,10 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
     setSaving(true)
     const creadas: unknown[] = []
     const errores: string[] = []
+    // La ubicación elegida identifica el consultorio/sede dentro del destino:
+    // ese id es lo que después se confirma en CompletarVisita y lo que al
+    // registrar la visita queda en visita.ubicacion_destino_id.
+    const ubicacionDestino = selectedUbicacion || destino.ubicaciones[0]?.id || null
     for (const v of visitas) {
       const ft = resuelveFecha(v)
       if (!ft) continue
@@ -222,6 +230,7 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
           id_medico: destino.tipo === 'medico' ? destino.id : null,
           institucion_id: destino.tipo === 'institucion' ? destino.id : null,
           fecha_visita_tentativa: ft.toISOString(),
+          ubicacion_destino_id: ubicacionDestino,
         })
         creadas.push(creada)
       } catch (err) {
@@ -436,7 +445,17 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
                     </option>
                   ))}
                 </select>
-                <span className="plan-hint">{ubicaciones.find((u) => u.id === selectedUbicacion)?.detalle}</span>
+                <span className="plan-hint">{ubicacionElegida?.detalle}</span>
+                {(ubicacionElegida?.coords ?? null) && (
+                  <div style={{ marginTop: 10 }}>
+                    <UbicacionMapa
+                      destino={ubicacionElegida?.coords ?? null}
+                      etiquetaDestino={destino?.nombre}
+                      altura="160px"
+                      distanciaM={null}
+                    />
+                  </div>
+                )}
               </>
             )}
           </div>

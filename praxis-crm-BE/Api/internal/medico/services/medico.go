@@ -23,12 +23,30 @@ func (s *MedicoService) GetByID(ctx context.Context, personaID int) (*models.Med
 	return s.repo.GetByID(ctx, personaID)
 }
 
-func (s *MedicoService) Create(ctx context.Context, userID *int, req models.CreateMedicoRequest) (*models.Medico, error) {
+// visitadorPorDefecto devuelve a quién queda asignado el médico nuevo.
+//
+// Si la request trae un visitador_id explícito, manda ese. Si no, y el que crea
+// es un visitador, el médico le queda a él: el alta en campo es del propio
+// visitador. Si lo crea un admin sin visitador_id, queda NULL (el admin lo
+// asigna después con el actualizador).
+func visitadorPorDefecto(reqVisitadorID *int, userID *int, role string) *int {
+	if reqVisitadorID != nil {
+		return reqVisitadorID
+	}
+	if role == "visitador" {
+		return userID
+	}
+	return nil
+}
+
+func (s *MedicoService) Create(ctx context.Context, userID *int, role string, req models.CreateMedicoRequest) (*models.Medico, error) {
+	req.VisitadorID = visitadorPorDefecto(req.VisitadorID, userID, role)
 	return s.repo.Create(ctx, userID, req)
 }
 
 // CreateCompleto crea persona + médico de forma atómica.
-func (s *MedicoService) CreateCompleto(ctx context.Context, userID *int, p models.PersonaInput, req models.CreateMedicoRequest) (*models.Medico, error) {
+func (s *MedicoService) CreateCompleto(ctx context.Context, userID *int, role string, p models.PersonaInput, req models.CreateMedicoRequest) (*models.Medico, error) {
+	req.VisitadorID = visitadorPorDefecto(req.VisitadorID, userID, role)
 	return s.repo.CreateCompleto(ctx, userID, p, req)
 }
 
