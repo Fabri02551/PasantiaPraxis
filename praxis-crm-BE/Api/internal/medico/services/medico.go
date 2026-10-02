@@ -23,6 +23,10 @@ func (s *MedicoService) GetByID(ctx context.Context, personaID int) (*models.Med
 	return s.repo.GetByID(ctx, personaID)
 }
 
+func (s *MedicoService) GetPage(ctx context.Context, page, limit int, q string) (int, []models.Medico, error) {
+	return s.repo.GetPage(ctx, page, limit, q)
+}
+
 // visitadorPorDefecto devuelve a quién queda asignado el médico nuevo.
 //
 // Si la request trae un visitador_id explícito, manda ese. Si no, y el que crea

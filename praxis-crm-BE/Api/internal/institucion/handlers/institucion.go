@@ -21,6 +21,28 @@ func NewInstitucionHandler(svc *services.InstitucionService) *InstitucionHandler
 }
 
 func (h *InstitucionHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+	// Paginación opcional: ?page=&limit=&q=. Sin page/limit se devuelve la
+	// lista completa, como siempre, para no romper a los consumidores actuales.
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if page >= 1 || limit >= 1 {
+		if page < 1 {
+			page = 1
+		}
+		if limit < 1 || limit > 200 {
+			limit = 20
+		}
+		total, items, err := h.svc.GetPage(r.Context(), page, limit, r.URL.Query().Get("q"))
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		response.JSON(w, http.StatusOK, map[string]any{
+			"total": total, "page": page, "limit": limit, "items": items,
+		})
+		return
+	}
+
 	items, err := h.svc.GetAll(r.Context())
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
@@ -55,6 +77,10 @@ func (h *InstitucionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "nombre es requerido")
 		return
 	}
+	if strings.TrimSpace(req.NIT) == "" {
+		response.Error(w, http.StatusBadRequest, "nit es requerido")
+		return
+	}
 
 	item, err := h.svc.Create(r.Context(), middleware.UserPersonaID(r.Context()), middleware.UserRole(r.Context()), req)
 	if err != nil {
@@ -78,6 +104,10 @@ func (h *InstitucionHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req models.UpdateInstitucionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.Error(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	if req.NIT != nil && strings.TrimSpace(*req.NIT) == "" {
+		response.Error(w, http.StatusBadRequest, "nit es requerido")
 		return
 	}
 

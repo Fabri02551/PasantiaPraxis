@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -63,6 +64,46 @@ func (r *MedicoRepository) GetByID(ctx context.Context, personaID int) (*models.
 		return nil, fmt.Errorf("médico no encontrado")
 	}
 	return m, nil
+}
+
+// GetPage devuelve una página de médicos con el total real de filas (para no
+// cargar todos los registros en el frontend). El filtro q busca por nombre,
+// apellidos, matrícula, código y nombre de especialidad. Los resultados salen
+// del más reciente al más antiguo.
+func (r *MedicoRepository) GetPage(ctx context.Context, page, limit int, q string) (int, []models.Medico, error) {
+	offset := (page - 1) * limit
+	var pattern string
+	if strings.TrimSpace(q) != "" {
+		escaped := strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(strings.TrimSpace(q))
+		pattern = "%" + escaped + "%"
+	}
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+selectCols+`, COUNT(*) OVER() AS total
+		 FROM medico
+		 WHERE ($1 = '' OR codigo ILIKE $1 OR matricula ILIKE $1
+		        OR persona_id IN (SELECT p.id FROM persona p
+		          WHERE p.nombre ILIKE $1 OR p.primer_apellido ILIKE $1 OR p.segundo_apellido ILIKE $1)
+		        OR especialidad_id IN (SELECT e.id FROM especialidad e WHERE e.nombre ILIKE $1))
+		 ORDER BY persona_id DESC
+		 LIMIT $2 OFFSET $3`, pattern, limit, offset)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer rows.Close()
+
+	var total int
+	items := make([]models.Medico, 0, limit)
+	for rows.Next() {
+		m, err := scanMedico(func(dest ...any) error {
+			return rows.Scan(append(dest, &total)...)
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		items = append(items, *m)
+	}
+	return total, items, rows.Err()
 }
 
 func (r *MedicoRepository) Create(ctx context.Context, userID *int, req models.CreateMedicoRequest) (*models.Medico, error) {

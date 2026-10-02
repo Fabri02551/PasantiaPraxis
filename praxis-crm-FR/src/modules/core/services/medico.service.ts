@@ -65,10 +65,17 @@ export type UpdateMedicoPayload = {
   status?: boolean
 }
 
+export type MedicoPage = { total: number; page: number; limit: number; items: MedicoBE[] }
+
 // Mapeo FE <-> BE: el FE usa Medico {id, nombre, especialidad, hospital, ...}
 // El BE usa persona_id + matricula + especialidad_id + direccion JSONB
 export const medicoService = {
   list: () => apiClient.get<MedicoBE[]>('/api/medicos', { auth: false }),
+  page: (query: { page: number; limit: number; q?: string }) => {
+    const p = new URLSearchParams({ page: String(query.page), limit: String(query.limit) })
+    if (query.q) p.set('q', query.q)
+    return apiClient.get<MedicoPage>(`/api/medicos?${p.toString()}`, { auth: false })
+  },
   getById: (personaId: number) => apiClient.get<MedicoBE>(`/api/medicos/${personaId}`, { auth: false }),
   create: (data: CreateMedicoPayload) => apiClient.post<MedicoBE>('/api/medicos', data),
   update: (personaId: number, data: UpdateMedicoPayload) => apiClient.put<MedicoBE>(`/api/medicos/${personaId}`, data),

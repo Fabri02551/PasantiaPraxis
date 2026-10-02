@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -62,11 +63,49 @@ func (r *InstitucionRepository) GetByID(ctx context.Context, id int) (*models.In
 	return i, nil
 }
 
+// GetPage devuelve una página de instituciones con el total real de filas (para
+// no cargar todos los registros en el frontend). El filtro q busca por nombre,
+// razón social, NIT y nombre del visitador asignado. Los resultados salen del
+// registro más reciente al más antiguo.
+func (r *InstitucionRepository) GetPage(ctx context.Context, page, limit int, q string) (int, []models.Institucion, error) {
+	offset := (page - 1) * limit
+	var pattern string
+	if strings.TrimSpace(q) != "" {
+		escaped := strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(strings.TrimSpace(q))
+		pattern = "%" + escaped + "%"
+	}
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+selectCols+`, COUNT(*) OVER() AS total
+		 FROM institucion
+		 WHERE ($1 = '' OR nombre ILIKE $1 OR razon_social ILIKE $1 OR nit ILIKE $1
+		        OR visitador_id IN (SELECT p.id FROM persona p WHERE p.nombre ILIKE $1 OR p.primer_apellido ILIKE $1))
+		 ORDER BY id DESC
+		 LIMIT $2 OFFSET $3`, pattern, limit, offset)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer rows.Close()
+
+	var total int
+	items := make([]models.Institucion, 0, limit)
+	for rows.Next() {
+		i, err := scanInstitucion(func(dest ...any) error {
+			return rows.Scan(append(dest, &total)...)
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		items = append(items, *i)
+	}
+	return total, items, rows.Err()
+}
+
 func (r *InstitucionRepository) Create(ctx context.Context, userID *int, req models.CreateInstitucionRequest) (*models.Institucion, error) {
 	i, err := scanInstitucion(func(dest ...any) error {
 		return r.pool.QueryRow(ctx,
 			`INSERT INTO institucion (nombre, razon_social, direccion, telefono, correo, tipo_contrato, nit, visitador_id, ciudad_id, es_particular, clasificacion, creado_por)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			 VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, $9, $10, $11, $12)
 			 RETURNING `+selectCols,
 			req.Nombre, req.RazonSocial, defaultJSON(req.Direccion), req.Telefono, req.Correo,
 			req.TipoContrato, req.NIT, req.VisitadorID, req.CiudadID, req.EsParticular, req.Clasificacion, userID,
@@ -88,7 +127,7 @@ func (r *InstitucionRepository) Update(ctx context.Context, userID *int, id int,
 			        telefono = COALESCE($5, telefono),
 			        correo = COALESCE($6, correo),
 			        tipo_contrato = COALESCE($7, tipo_contrato),
-			        nit = COALESCE($8, nit),
+			        nit = COALESCE(NULLIF($8, ''), nit),
 			        visitador_id = COALESCE($9, visitador_id),
 			        ciudad_id = COALESCE($10, ciudad_id),
 			        es_particular = COALESCE($11, es_particular),

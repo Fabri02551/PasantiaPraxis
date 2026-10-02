@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { MapContainer, TileLayer, Marker } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -6,8 +6,11 @@ import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
+import { Paginador } from '../../../core/components/Paginador/Paginador'
 import { institucionService, type InstitucionBE } from '../../../core/services/institucion.service'
 import { personaService } from '../../../core/services/persona.service'
+import { ciudadService, type Ciudad } from '../../../core/services/ciudad.service'
+import { ClasificacionPicker, MiniClasificacion } from '../../../core/components/ClasificacionPicker/ClasificacionPicker'
 import { authService } from '../../../auth/services/auth.service'
 import { API_LABEL } from '../../../core/config/env'
 import { MapPicker } from '../../../admin/components/MapPicker/MapPicker'
@@ -42,6 +45,7 @@ type Institucion = {
   visitadorId: number | null
   esParticular: boolean
   clasificacion: number
+  ciudad: string
   ubicaciones: Ubicacion[]
 }
 
@@ -66,21 +70,29 @@ const mapBE = (b: InstitucionBE): Institucion => ({
   visitadorId: b.visitador_id ?? null,
   esParticular: b.es_particular || false,
   clasificacion: b.clasificacion ?? 0,
+  ciudad: b.ciudad_id ? String(b.ciudad_id) : '',
   ubicaciones: normalizeUbicaciones(b.direccion),
 })
 
 export const InstitucionesView: React.FC<Props> = ({ onNavigate, currentView, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [committedQ, setCommittedQ] = useState('')
   const [selected, setSelected] = useState<Institucion | null>(null)
   const [instituciones, setInstituciones] = useState<Institucion[]>([])
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
   const [apiStatus, setApiStatus] = useState(`API: ${API_LABEL}`)
   const [loading, setLoading] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  const [ciudades, setCiudades] = useState<Ciudad[]>([])
   const [miPersonaId, setMiPersonaId] = useState<number | null>(null)
   // Nombre del visitador dueño de la institución en detalle (GET /api/personas/{id}).
   const [visitadorNombre, setVisitadorNombre] = useState<string>('')
   const savingRef = useRef(false)
+  const reqRef = useRef(0)
+  const PAGE_SIZE = 20
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
   const showToast = useCallback((msg: string, type: 'success' | 'error' | 'info') => {
@@ -89,9 +101,20 @@ export const InstitucionesView: React.FC<Props> = ({ onNavigate, currentView, on
   }, [])
   const [form, setForm] = useState({
     nombre: '', razonSocial: '', nit: '', tipoContrato: '', telefono: '', correo: '',
-    esParticular: true, clasificacion: 1,
+    esParticular: true, clasificacion: 1, ciudad: '',
     ubicaciones: [{ id: 'u0' as string, direccion: '', detalle: '', coords: coordsCercaDeMi() as [number, number] | null }],
   })
+
+  useEffect(() => {
+    let cancelled = false
+    ciudadService.list().then((data) => {
+      if (cancelled) return
+      setCiudades(Array.isArray(data) ? data.filter(c => c.status !== false) : [])
+    }).catch(() => setCiudades([]))
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -103,30 +126,45 @@ export const InstitucionesView: React.FC<Props> = ({ onNavigate, currentView, on
     }
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
+  const load = useCallback(async (pageNum: number, q: string) => {
+    const reqId = ++reqRef.current
     setLoading(true)
-    institucionService
-      .list()
-      .then((data) => {
-        if (cancelled) return
-        const list = Array.isArray(data) ? data : []
-        setInstituciones(list.map(mapBE))
-        setApiStatus(`Conectado a ${API_LABEL} — ${list.length} instituciones desde /api/instituciones`)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        console.warn('[Instituciones] API no disponible', err)
-        setInstituciones([])
-        setApiStatus(`Sin conexión a ${API_LABEL} — ${err instanceof Error ? err.message : 'no se pudieron cargar instituciones'}`)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
+    try {
+      const data = await institucionService.page({ page: pageNum, limit: PAGE_SIZE, q: q || undefined })
+      if (reqRef.current !== reqId) return
+      const tp = Math.max(1, Math.ceil(data.total / PAGE_SIZE))
+      setInstituciones(data.items.map(mapBE))
+      setTotal(data.total)
+      setTotalPages(tp)
+      setPage(data.page)
+      setApiStatus(`Conectado a ${API_LABEL} — ${data.total} instituciones (página ${data.page} de ${tp})`)
+    } catch (err) {
+      if (reqRef.current !== reqId) return
+      console.warn('[Instituciones] API no disponible', err)
+      setInstituciones([])
+      setTotal(0)
+      setTotalPages(1)
+      setApiStatus(`Sin conexión a ${API_LABEL} — ${err instanceof Error ? err.message : 'no se pudieron cargar instituciones'}`)
+    } finally {
+      if (reqRef.current === reqId) setLoading(false)
     }
   }, [])
+
+  // Carga inicial + cada vez que cambia la búsqueda confirmada (vuelve a página 1).
+  useEffect(() => {
+    load(1, committedQ)
+  }, [committedQ, load])
+
+  // Debounce de la caja de búsqueda: espera a dejar de escribir (350 ms).
+  useEffect(() => {
+    const v = search.trim()
+    const t = setTimeout(() => setCommittedQ(prev => (prev === v ? prev : v)), 350)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const goPage = (p: number) => {
+    if (p >= 1 && p <= totalPages) load(p, committedQ)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -141,18 +179,6 @@ export const InstitucionesView: React.FC<Props> = ({ onNavigate, currentView, on
     }
   }, [selected])
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return instituciones
-    return instituciones.filter(
-      (i) =>
-        i.nombre.toLowerCase().includes(q) ||
-        i.razonSocial.toLowerCase().includes(q) ||
-        i.nit.toLowerCase().includes(q) ||
-        (i.ubicaciones[0]?.direccion ?? '').toLowerCase().includes(q),
-    )
-  }, [instituciones, search])
-
   const esMia = (i: Institucion): boolean => (miPersonaId != null && i.visitadorId === miPersonaId)
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -160,6 +186,10 @@ export const InstitucionesView: React.FC<Props> = ({ onNavigate, currentView, on
     if (savingRef.current) return
     if (!form.nombre.trim()) {
       showToast('El nombre es obligatorio', 'error')
+      return
+    }
+    if (!form.nit.trim()) {
+      showToast('El NIT es obligatorio', 'error')
       return
     }
     const ubicaciones = form.ubicaciones.filter(u => u.direccion.trim() || u.detalle.trim())
@@ -177,13 +207,16 @@ export const InstitucionesView: React.FC<Props> = ({ onNavigate, currentView, on
         correo: form.correo.trim(),
         es_particular: form.esParticular,
         clasificacion: form.clasificacion,
+        ciudad_id: form.ciudad ? Number(form.ciudad) : null,
         direccion: ubicaciones,
       })
       const row = mapBE(created)
-      setInstituciones(prev => [...prev, row])
+      setSearch('')
+      setCommittedQ('')
+      load(1, '')
       setApiStatus(`Creado en API: ${form.nombre}`)
       showToast(`Institución registrada ✓ ${row.nombre}`, 'success')
-      setForm({ nombre: '', razonSocial: '', nit: '', tipoContrato: '', telefono: '', correo: '', esParticular: true, clasificacion: 1, ubicaciones: [{ id: `u${Date.now()}`, direccion: '', detalle: '', coords: coordsCercaDeMi() }] })
+      setForm({ nombre: '', razonSocial: '', nit: '', tipoContrato: '', telefono: '', correo: '', esParticular: true, clasificacion: 1, ciudad: '', ubicaciones: [{ id: `u${Date.now()}`, direccion: '', detalle: '', coords: coordsCercaDeMi() }] })
       setShowCreate(false)
     } catch (err) {
       console.warn('[Instituciones] create error', err)
@@ -234,13 +267,13 @@ export const InstitucionesView: React.FC<Props> = ({ onNavigate, currentView, on
         <div className="medicos-subheader">
           <span className="medicos-subtitle">Todas las instituciones registradas</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span className="medicos-count">{filtered.length} resultados</span>
+            <span className="medicos-count">{total} resultados</span>
             <button className="vt-btn vt-btn--ver" style={{ height: 28, borderRadius: 8, fontSize: 11, fontWeight: 700 }} onClick={() => setShowCreate(true)}>+ Nueva Institución</button>
           </div>
         </div>
 
         <ul className="medicos-list">
-          {filtered.map((i) => (
+          {instituciones.map((i) => (
             <li key={i.id} className="medico-card" onClick={() => setSelected(i)} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && setSelected(i)} style={{ cursor: 'pointer' }}>
               <div className="medico-info">
                 <span className="medico-nombre">{i.nombre}</span>
@@ -258,8 +291,10 @@ export const InstitucionesView: React.FC<Props> = ({ onNavigate, currentView, on
           ))}
         </ul>
 
-        {!loading && filtered.length === 0 && (
-          <p className="medicos-empty">{instituciones.length === 0 ? 'No hay instituciones registradas en la base de datos' : 'No se encontraron instituciones'}</p>
+        <Paginador page={page} totalPages={totalPages} onPage={goPage} loading={loading} />
+
+        {!loading && instituciones.length === 0 && (
+          <p className="medicos-empty">{total === 0 ? 'No hay instituciones registradas en la base de datos' : 'No se encontraron instituciones'}</p>
         )}
       </div>
 
@@ -276,8 +311,10 @@ export const InstitucionesView: React.FC<Props> = ({ onNavigate, currentView, on
             </span>
             <div className="vt-view-grid" style={{ margin: '12px 0' }}>
               <span>NIT</span><strong>{selected.nit || '—'}</strong>
+              <span>Ciudad</span><strong>{(ciudades ?? []).find(c => String(c.id) === selected.ciudad)?.nombre || '—'}</strong>
               <span>Contrato</span><strong>{selected.tipoContrato || '—'}</strong>
               <span>Tipo</span><strong>{selected.esParticular ? 'Particular' : 'No particular'}</strong>
+              <span>Clasificación</span><strong><MiniClasificacion valor={selected.clasificacion} /></strong>
               <span>Teléfono</span><strong>{selected.telefono || '—'}</strong>
               <span>Email</span><strong>{selected.correo || '—'}</strong>
             </div>
@@ -313,17 +350,22 @@ export const InstitucionesView: React.FC<Props> = ({ onNavigate, currentView, on
             <form onSubmit={handleCreate} className="vt-form">
               <label>Nombre <span style={reqStyle}>* obligatorio</span><input required value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej. Clínica Central" /></label>
               <label>Razón Social <span style={optStyle}>(opcional)</span><input value={form.razonSocial} onChange={e => setForm({ ...form, razonSocial: e.target.value })} placeholder="Ej. Clínica Central S.A." /></label>
-              <label>NIT <span style={optStyle}>(opcional)</span><input value={form.nit} onChange={e => setForm({ ...form, nit: e.target.value })} placeholder="Ej. 1791234567001" /></label>
+              <label>NIT <span style={reqStyle}>* obligatorio</span><input required value={form.nit} onChange={e => setForm({ ...form, nit: e.target.value })} placeholder="Ej. 1791234567001" /></label>
               <label>Tipo de Contrato <span style={optStyle}>(opcional)</span><input value={form.tipoContrato} onChange={e => setForm({ ...form, tipoContrato: e.target.value })} placeholder="Ej. convenio, particular…" /></label>
+              <label>Ciudad <span style={optStyle}>(opcional)</span>
+                <select value={form.ciudad} onChange={e => setForm({ ...form, ciudad: e.target.value })}>
+                  <option value="">Seleccione ciudad</option>
+                  {(ciudades ?? []).map(c => <option key={c.id} value={String(c.id)}>{c.nombre}</option>)}
+                </select>
+              </label>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#1B2A4E' }}>
                   <input type="checkbox" checked={form.esParticular} onChange={e => setForm({ ...form, esParticular: e.target.checked })} />
                   Particular
                 </label>
-                <label style={{ flex: 1 }}>
-                  Clasificación <span style={optStyle}>(opcional)</span>
-                  <input type="number" min={0} max={9} value={form.clasificacion} onChange={e => setForm({ ...form, clasificacion: Number(e.target.value) || 0 })} />
-                </label>
+                <div style={{ flex: 1.6 }}>
+                  <ClasificacionPicker value={form.clasificacion} onChange={v => setForm({ ...form, clasificacion: v })} />
+                </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2A4E' }}>Ubicaciones</span>

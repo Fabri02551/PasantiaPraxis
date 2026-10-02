@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { AdminLayout } from '../../components/AdminLayout/AdminLayout'
+import { Paginador } from '../../../core/components/Paginador/Paginador'
 import type { AdminView } from '../../components/AdminSidebar/AdminSidebar'
 import { MapContainer, TileLayer, Marker } from 'react-leaflet'
 import L from 'leaflet'
@@ -11,6 +12,8 @@ import { MapPicker } from '../../components/MapPicker/MapPicker'
 import { medicoService, type MedicoBE } from '../../../core/services/medico.service'
 import { personaService } from '../../../core/services/persona.service'
 import { especialidadService, type Especialidad } from '../../../core/services/especialidad.service'
+import { ciudadService, type Ciudad } from '../../../core/services/ciudad.service'
+import { ClasificacionPicker, MiniClasificacion } from '../../../core/components/ClasificacionPicker/ClasificacionPicker'
 import { ENV, API_LABEL } from '../../../core/config/env'
 import { displayMedico } from '../../../core/utils/medicoPrefix'
 import { normalizeUbicaciones, hospitalFromDireccion, type UbicacionMedico } from '../../../core/utils/medicoDireccion'
@@ -38,11 +41,61 @@ type MedicoAdmin = {
   email: string
   ci: string
   descripcion: string
+  ciudad: string
+  esParticular: boolean
+  clasificacion: number
   ubicaciones: Ubicacion[]
 }
 
 const reqLabelStyle: React.CSSProperties = { color: '#8a9ab5', fontWeight: 400, fontSize: 10, opacity: 0.85, marginLeft: 4, textTransform: 'lowercase' }
 const optLabelStyle: React.CSSProperties = { color: '#8a9ab5', fontWeight: 400, fontSize: 10, opacity: 0.75, marginLeft: 4, textTransform: 'lowercase' }
+
+const mapBEList = async (list: MedicoBE[]): Promise<MedicoAdmin[]> => {
+  const enriched = await Promise.all(
+    list.map(async (b) => {
+      let nombre = `Médico ${b.matricula || b.persona_id}`
+      let primerApellido = ''
+      let segundoApellido = ''
+      let sexo = ''
+      let email = ''
+      let telefono = ''
+      let ci = ''
+      let ciudad = ''
+      try {
+        const p = await personaService.getById(b.persona_id)
+        nombre = p.nombre || nombre
+        primerApellido = p.primer_apellido || ''
+        segundoApellido = p.segundo_apellido || ''
+        sexo = p.sexo || ''
+        email = p.correo || ''
+        telefono = p.telefono || ''
+        ci = p.ci || ''
+        ciudad = p.ciudad_id ? String(p.ciudad_id) : ''
+      } catch { /* sin persona, usa fallback */ }
+      return {
+        id: String(b.persona_id),
+        nombre,
+        primerApellido,
+        segundoApellido,
+        sexo,
+        matricula: b.matricula || '',
+        especialidad: String(b.especialidad_id ?? ''),
+        hospital: hospitalFromDireccion(b.direccion),
+        telefono,
+        email,
+        ci,
+        descripcion: b.notas && typeof b.notas === 'object' && !Array.isArray(b.notas)
+          ? Object.entries(b.notas as Record<string, unknown>).map(([k, v]) => `${k}: ${String(v)}`).join('\n')
+          : (typeof b.notas === 'string' ? b.notas : ''),
+        ciudad,
+        esParticular: b.es_particular || false,
+        clasificacion: b.clasificacion ?? 0,
+        ubicaciones: normalizeUbicaciones(b.direccion),
+      } as MedicoAdmin
+    }),
+  )
+  return enriched
+}
 
 // La ubicación nueva de un médico nace "cerca de quien la está creando": la
 // primera coordenada del picker se siembra con la posición guardada al
@@ -56,6 +109,10 @@ const coordsCercaDeMi = (): [number, number] | null => {
 export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v: AdminView) => void; onLogout: () => void }> = ({ currentView, onNavigate, onLogout }) => {
   const [medicos, setMedicos] = useState<MedicoAdmin[]>([])
   const [search, setSearch] = useState('')
+  const [committedQ, setCommittedQ] = useState('')
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
   const [viewing, setViewing] = useState<MedicoAdmin | null>(null)
   const [editing, setEditing] = useState<MedicoAdmin | null>(null)
   const [editForm, setEditForm] = useState<MedicoAdmin | null>(null)
@@ -64,101 +121,73 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
   const [form, setForm] = useState<Omit<MedicoAdmin, 'id'>>(() => ({
     nombre: '', primerApellido: '', segundoApellido: '', sexo: '', matricula: '',
     especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '',
+    ciudad: '', esParticular: true, clasificacion: 1,
     ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: coordsCercaDeMi() }],
   }))
   const [especialidades, setEspecialidades] = useState<Especialidad[]>([])
+  const [ciudades, setCiudades] = useState<Ciudad[]>([])
   const [apiStatus, setApiStatus] = useState(`API: ${API_LABEL}`)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   // Ref, no solo state: setSaving(true) no actualiza `saving` hasta el
   // siguiente render, así que dos clics rápidos aún pasarían la validación.
   const savingRef = useRef(false)
+  const reqRef = useRef(0)
+  const PAGE_SIZE = 20
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
   const showToast = useCallback((msg: string, type: 'success' | 'error' | 'info') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 4000)
   }, [])
 
-  const mapBEList = async (list: MedicoBE[]): Promise<MedicoAdmin[]> => {
-    const enriched = await Promise.all(
-      list.map(async (b) => {
-        let nombre = `Médico ${b.matricula || b.persona_id}`
-        let primerApellido = ''
-        let segundoApellido = ''
-        let sexo = ''
-        let email = ''
-        let telefono = ''
-        let ci = ''
-        try {
-          const p = await personaService.getById(b.persona_id)
-          nombre = p.nombre || nombre
-          primerApellido = p.primer_apellido || ''
-          segundoApellido = p.segundo_apellido || ''
-          sexo = p.sexo || ''
-          email = p.correo || ''
-          telefono = p.telefono || ''
-          ci = p.ci || ''
-        } catch { /* sin persona, usa fallback */ }
-        return {
-          id: String(b.persona_id),
-          nombre,
-          primerApellido,
-          segundoApellido,
-          sexo,
-          matricula: b.matricula || '',
-          especialidad: String(b.especialidad_id ?? ''),
-          hospital: hospitalFromDireccion(b.direccion),
-          telefono,
-          email,
-          ci,
-          descripcion: b.notas && typeof b.notas === 'object' && !Array.isArray(b.notas)
-            ? Object.entries(b.notas as Record<string, unknown>).map(([k, v]) => `${k}: ${String(v)}`).join('\n')
-            : (typeof b.notas === 'string' ? b.notas : ''),
-          ubicaciones: normalizeUbicaciones(b.direccion),
-        } as MedicoAdmin
-      }),
-    )
-    return enriched
-  }
-
-  useEffect(() => {
-    let cancelled = false
+  const load = useCallback(async (pageNum: number, q: string) => {
+    const reqId = ++reqRef.current
     setLoading(true)
-    medicoService
-      .list()
-      .then(async (data) => {
-        if (cancelled) return
-        if (Array.isArray(data) && data.length > 0) {
-          const mapped = await mapBEList(data)
-          if (cancelled) return
-          setMedicos(mapped)
-          setApiStatus(`Conectado a ${API_LABEL} — ${data.length} médicos desde /api/medicos`)
-        } else {
-          setMedicos([])
-          setApiStatus(`Conectado a ${API_LABEL} — sin datos`)
-        }
-      })
-      .catch((err) => {
-        console.warn('[MedicosAdmin] API no disponible', err)
-        if (cancelled) return
-        setMedicos([])
-        setApiStatus(`Error: sin conexión a ${API_LABEL} — ${err instanceof Error ? err.message : 'no se pudo cargar médicos'}`)
-      })
-      .finally(() => !cancelled && setLoading(false))
-    return () => {
-      cancelled = true
+    try {
+      const data = await medicoService.page({ page: pageNum, limit: PAGE_SIZE, q: q || undefined })
+      const mapped = Array.isArray(data.items) ? await mapBEList(data.items) : []
+      if (reqRef.current !== reqId) return
+      const tp = Math.max(1, Math.ceil(data.total / PAGE_SIZE))
+      setMedicos(mapped)
+      setTotal(data.total)
+      setTotalPages(tp)
+      setPage(data.page)
+      setApiStatus(`Conectado a ${API_LABEL} — ${data.total} médicos (página ${data.page} de ${tp})`)
+    } catch (err) {
+      if (reqRef.current !== reqId) return
+      console.warn('[MedicosAdmin] API no disponible', err)
+      setMedicos([])
+      setTotal(0)
+      setTotalPages(1)
+      setApiStatus(`Error: sin conexión a ${API_LABEL} — ${err instanceof Error ? err.message : 'no se pudo cargar médicos'}`)
+    } finally {
+      if (reqRef.current === reqId) setLoading(false)
     }
   }, [])
+
+  // Carga inicial + cada vez que cambia la búsqueda confirmada (vuelve a página 1).
+  useEffect(() => {
+    load(1, committedQ)
+  }, [committedQ, load])
+
+  // Debounce de la caja de búsqueda: espera a dejar de escribir (350 ms).
+  useEffect(() => {
+    const v = search.trim()
+    const t = setTimeout(() => setCommittedQ(prev => (prev === v ? prev : v)), 350)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const goPage = (p: number) => {
+    if (p >= 1 && p <= totalPages) load(p, committedQ)
+  }
 
   useEffect(() => {
     especialidadService.list().then(data => setEspecialidades(Array.isArray(data) ? data : [])).catch(() => setEspecialidades([]))
   }, [])
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return medicos
-    return medicos.filter(m => displayMedico(m.sexo, `${m.nombre} ${m.primerApellido}`).toLowerCase().includes(q) || m.especialidad.toLowerCase().includes(q) || m.hospital.toLowerCase().includes(q))
-  }, [medicos, search])
+  useEffect(() => {
+    ciudadService.list().then(data => setCiudades(Array.isArray(data) ? data.filter(c => c.status !== false) : [])).catch(() => setCiudades([]))
+  }, [])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -199,7 +228,10 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
           correo: form.email.trim(),
           telefono: form.telefono.trim(),
           ci: form.ci.trim(),
+          ciudad_id: form.ciudad ? Number(form.ciudad) : null,
         },
+        es_particular: form.esParticular,
+        clasificacion: form.clasificacion,
         direccion: ubicaciones,
         notas: form.descripcion.trim() ? { descripcion: form.descripcion.trim() } : undefined,
       })
@@ -217,12 +249,17 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
         email: form.email.trim(),
         ci: form.ci.trim(),
         descripcion: form.descripcion.trim(),
+        ciudad: form.ciudad,
+        esParticular: form.esParticular,
+        clasificacion: form.clasificacion,
         ubicaciones: ubicaciones.length > 0 ? ubicaciones : form.ubicaciones,
       }
-      setMedicos(prev => [...prev, row])
+      setSearch('')
+      setCommittedQ('')
+      load(1, '')
       setApiStatus(`Creado en API: ${form.nombre} ${form.primerApellido} (${matricula})`)
       showToast(`Médico registrado ✓ ${row.nombre} ${row.primerApellido} · ${matricula}`, 'success')
-      setForm({ nombre: '', primerApellido: '', segundoApellido: '', sexo: '', matricula: '', especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '', ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: coordsCercaDeMi() }] })
+      setForm({ nombre: '', primerApellido: '', segundoApellido: '', sexo: '', matricula: '', especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '', ciudad: '', esParticular: true, clasificacion: 1, ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: coordsCercaDeMi() }] })
       setShowCreate(false)
     } catch (err) {
       console.warn('[MedicosAdmin] create error', err)
@@ -261,11 +298,14 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
         correo: editForm.email.trim(),
         telefono: editForm.telefono.trim(),
         ci: editForm.ci.trim(),
+        ciudad_id: editForm.ciudad ? Number(editForm.ciudad) : null,
       })
       // direccion y notas son JSONB: se manda el objeto, no JSON.stringify.
       await medicoService.update(pid, {
         matricula: editForm.matricula.trim() || undefined,
         especialidad_id: especialidadId,
+        es_particular: editForm.esParticular,
+        clasificacion: editForm.clasificacion,
         direccion: ubicaciones,
         notas: editForm.descripcion.trim() ? { descripcion: editForm.descripcion.trim() } : undefined,
       })
@@ -275,7 +315,7 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
         hospital: hospitalFromDireccion(ubicaciones),
         ubicaciones: ubicaciones.length > 0 ? ubicaciones : editForm.ubicaciones,
       }
-      setMedicos(prev => prev.map(m => (m.id === editForm.id ? row : m)))
+      load(page, committedQ)
       setApiStatus(`Actualizado en API: ${displayMedico(editForm.sexo, `${editForm.nombre} ${editForm.primerApellido}`)}`)
       showToast(`Médico actualizado ✓ ${row.nombre} ${row.primerApellido}`, 'success')
       setEditing(null)
@@ -297,7 +337,8 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
       const pid = Number(deleting.id)
       if (!Number.isFinite(pid)) throw new Error('ID inválido')
       await medicoService.remove(pid)
-      setMedicos(prev => prev.filter(m => m.id !== deleting.id))
+      if (medicos.length === 1 && page > 1) load(page - 1, committedQ)
+      else load(page, committedQ)
       setApiStatus(`Eliminado en API: ${displayMedico(deleting.sexo, deleting.nombre)}`)
       showToast(`Médico eliminado ✓ ${deleting.nombre}`, 'success')
       setDeleting(null)
@@ -335,7 +376,7 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
               </tr>
             </thead>
             <tbody>
-              {filtered.map(m => (
+              {medicos.map(m => (
                 <tr key={m.id}>
                   <td>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -355,9 +396,13 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: '#7e8aa6' }}>{medicos.length === 0 ? 'No hay médicos registrados' : 'Sin resultados.'}</td></tr>}
+              {medicos.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: '#7e8aa6' }}>{total === 0 ? 'No hay médicos registrados' : 'Sin resultados.'}</td></tr>}
             </tbody>
           </table>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px' }}>
+          <span style={{ fontSize: 11, color: '#6b7a99', fontWeight: 600 }}>{total} {total === 1 ? 'médico' : 'médicos'}</span>
+          <Paginador page={page} totalPages={totalPages} onPage={goPage} loading={loading} />
         </div>
       </div>
 
@@ -372,8 +417,11 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
                 <span>Matrícula</span><strong>{viewing.matricula || '—'}</strong>
                 <span>Sexo</span><strong>{viewing.sexo ? (viewing.sexo.toLowerCase().startsWith('f') ? 'Femenino' : viewing.sexo.toLowerCase().startsWith('m') ? 'Masculino' : viewing.sexo) : '—'}</strong>
                 <span>CI</span><strong>{viewing.ci || '—'}</strong>
+                <span>Ciudad</span><strong>{(ciudades ?? []).find(c => String(c.id) === viewing.ciudad)?.nombre || '—'}</strong>
                 <span>Teléfono</span><strong>{viewing.telefono || '—'}</strong>
                 <span>Email</span><strong>{viewing.email || '—'}</strong>
+                <span>Tipo</span><strong>{viewing.esParticular ? 'Particular' : 'No particular'}</strong>
+                <span>Clasificación</span><strong><MiniClasificacion valor={viewing.clasificacion} /></strong>
               </div>
               <div>
                 <h4 style={{ fontSize: 12, fontWeight: 700, color: '#1B2A4E', margin: '6px 0 8px' }}>Ubicaciones ({viewing.ubicaciones.length})</h4>
@@ -434,6 +482,21 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
               <label>Teléfono <span style={optLabelStyle}>(opcional)</span><input value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="Ej. 0999999999" /></label>
               <label>Correo / Email <span style={optLabelStyle}>(opcional)</span><input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="ejemplo@correo.com" /></label>
               <label>CI <span style={optLabelStyle}>(opcional)</span><input value={form.ci} onChange={e => setForm({ ...form, ci: e.target.value })} placeholder="Ej. 1712345678" /></label>
+              <label>Ciudad <span style={optLabelStyle}>(opcional)</span>
+                <select value={form.ciudad} onChange={e => setForm({ ...form, ciudad: e.target.value })}>
+                  <option value="">Seleccione ciudad</option>
+                  {(ciudades ?? []).map(c => <option key={c.id} value={String(c.id)}>{c.nombre}</option>)}
+                </select>
+              </label>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#1B2A4E' }}>
+                  <input type="checkbox" checked={form.esParticular} onChange={e => setForm({ ...form, esParticular: e.target.checked })} />
+                  Particular
+                </label>
+                <div style={{ flex: 1.6 }}>
+                  <ClasificacionPicker value={form.clasificacion} onChange={v => setForm({ ...form, clasificacion: v })} />
+                </div>
+              </div>
               <label>Descripción / Notas <span style={optLabelStyle}>(opcional)</span><textarea value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} placeholder="Notas adicionales" /></label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2A4E' }}>Ubicaciones</span>
@@ -481,6 +544,21 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
               <label>Teléfono <span style={optLabelStyle}>(opcional)</span><input value={editForm.telefono} onChange={e => setEditForm({ ...editForm, telefono: e.target.value })} /></label>
               <label>Email <span style={optLabelStyle}>(opcional)</span><input type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} /></label>
               <label>CI <span style={optLabelStyle}>(opcional)</span><input value={editForm.ci} onChange={e => setEditForm({ ...editForm, ci: e.target.value })} /></label>
+              <label>Ciudad <span style={optLabelStyle}>(opcional)</span>
+                <select value={editForm.ciudad} onChange={e => setEditForm({ ...editForm, ciudad: e.target.value } as MedicoAdmin)}>
+                  <option value="">Seleccione ciudad</option>
+                  {(ciudades ?? []).map(c => <option key={c.id} value={String(c.id)}>{c.nombre}</option>)}
+                </select>
+              </label>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#1B2A4E' }}>
+                  <input type="checkbox" checked={editForm.esParticular} onChange={e => setEditForm({ ...editForm, esParticular: e.target.checked } as MedicoAdmin)} />
+                  Particular
+                </label>
+                <div style={{ flex: 1.6 }}>
+                  <ClasificacionPicker value={editForm.clasificacion} onChange={v => setEditForm({ ...editForm, clasificacion: v } as MedicoAdmin)} />
+                </div>
+              </div>
               <label>Descripción <span style={optLabelStyle}>(opcional)</span><textarea value={editForm.descripcion} onChange={e => setEditForm({ ...editForm, descripcion: e.target.value })} /></label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2A4E' }}>Ubicaciones</span>

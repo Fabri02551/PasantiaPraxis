@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { AdminLayout } from '../../components/AdminLayout/AdminLayout'
+import { Paginador } from '../../../core/components/Paginador/Paginador'
 import type { AdminView } from '../../components/AdminSidebar/AdminSidebar'
 import { MapContainer, TileLayer, Marker } from 'react-leaflet'
 import L from 'leaflet'
@@ -10,6 +11,8 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 import { MapPicker } from '../../components/MapPicker/MapPicker'
 import { institucionService, type InstitucionBE } from '../../../core/services/institucion.service'
 import { visitadorService, type VisitadorBE } from '../../../core/services/visitador.service'
+import { ciudadService, type Ciudad } from '../../../core/services/ciudad.service'
+import { ClasificacionPicker, MiniClasificacion } from '../../../core/components/ClasificacionPicker/ClasificacionPicker'
 import { ENV, API_LABEL } from '../../../core/config/env'
 import { normalizeUbicaciones, type UbicacionMedico } from '../../../core/utils/medicoDireccion'
 import { storage } from '../../../core/lib/storage'
@@ -35,6 +38,7 @@ type InstitucionView = {
   visitadorId: number | null
   esParticular: boolean
   clasificacion: number
+  ciudad: string
   ubicaciones: Ubicacion[]
 }
 
@@ -49,10 +53,29 @@ const coordsCercaDeMi = (): [number, number] | null => {
   return u && Number.isFinite(u.latitud) && Number.isFinite(u.longitud) ? [u.latitud, u.longitud] : null
 }
 
+const mapBE = (b: InstitucionBE): InstitucionView => ({
+  id: b.id,
+  nombre: b.nombre,
+  razonSocial: b.razon_social || '',
+  nit: b.nit || '',
+  tipoContrato: b.tipo_contrato || '',
+  telefono: b.telefono || '',
+  correo: b.correo || '',
+  visitadorId: b.visitador_id ?? null,
+  esParticular: b.es_particular || false,
+  clasificacion: b.clasificacion ?? 0,
+  ciudad: b.ciudad_id ? String(b.ciudad_id) : '',
+  ubicaciones: normalizeUbicaciones(b.direccion),
+})
+
 export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (v: AdminView) => void; onLogout: () => void }> = ({ currentView, onNavigate, onLogout }) => {
   const [instituciones, setInstituciones] = useState<InstitucionView[]>([])
   const [visitadores, setVisitadores] = useState<VisitadorBE[]>([])
   const [search, setSearch] = useState('')
+  const [committedQ, setCommittedQ] = useState('')
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
   const [viewing, setViewing] = useState<InstitucionView | null>(null)
   const [editing, setEditing] = useState<InstitucionView | null>(null)
   const [editForm, setEditForm] = useState<InstitucionView | null>(null)
@@ -60,61 +83,71 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState<Omit<InstitucionView, 'id'>>(() => ({
     nombre: '', razonSocial: '', nit: '', tipoContrato: '', telefono: '', correo: '',
-    visitadorId: null, esParticular: true, clasificacion: 1,
+    visitadorId: null, esParticular: true, clasificacion: 1, ciudad: '',
     ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: coordsCercaDeMi() }],
   }))
+  const [ciudades, setCiudades] = useState<Ciudad[]>([])
   const [apiStatus, setApiStatus] = useState(`API: ${API_LABEL}`)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
+  const reqRef = useRef(0)
+  const PAGE_SIZE = 20
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
   const showToast = useCallback((msg: string, type: 'success' | 'error' | 'info') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 4000)
   }, [])
 
-  const mapBE = (b: InstitucionBE): InstitucionView => ({
-    id: b.id,
-    nombre: b.nombre,
-    razonSocial: b.razon_social || '',
-    nit: b.nit || '',
-    tipoContrato: b.tipo_contrato || '',
-    telefono: b.telefono || '',
-    correo: b.correo || '',
-    visitadorId: b.visitador_id ?? null,
-    esParticular: b.es_particular || false,
-    clasificacion: b.clasificacion ?? 0,
-    ubicaciones: normalizeUbicaciones(b.direccion),
-  })
-
-  useEffect(() => {
-    let cancelled = false
+  const load = useCallback(async (pageNum: number, q: string) => {
+    const reqId = ++reqRef.current
     setLoading(true)
-    institucionService
-      .list()
-      .then((data) => {
-        if (cancelled) return
-        const list = Array.isArray(data) ? data : []
-        setInstituciones(list.map(mapBE))
-        setApiStatus(`Conectado a ${API_LABEL} — ${list.length} instituciones desde /api/instituciones`)
-      })
-      .catch((err) => {
-        console.warn('[Instituciones] API no disponible', err)
-        if (cancelled) return
-        setInstituciones([])
-        setApiStatus(`Error: sin conexión a ${API_LABEL} — ${err instanceof Error ? err.message : 'no se pudo cargar instituciones'}`)
-      })
-      .finally(() => !cancelled && setLoading(false))
-    return () => {
-      cancelled = true
+    try {
+      const data = await institucionService.page({ page: pageNum, limit: PAGE_SIZE, q: q || undefined })
+      if (reqRef.current !== reqId) return
+      const tp = Math.max(1, Math.ceil(data.total / PAGE_SIZE))
+      setInstituciones(data.items.map(mapBE))
+      setTotal(data.total)
+      setTotalPages(tp)
+      setPage(data.page)
+      setApiStatus(`Conectado a ${API_LABEL} — ${data.total} instituciones (página ${data.page} de ${tp})`)
+    } catch (err) {
+      if (reqRef.current !== reqId) return
+      console.warn('[Instituciones] API no disponible', err)
+      setInstituciones([])
+      setTotal(0)
+      setTotalPages(1)
+      setApiStatus(`Error: sin conexión a ${API_LABEL} — ${err instanceof Error ? err.message : 'no se pudo cargar instituciones'}`)
+    } finally {
+      if (reqRef.current === reqId) setLoading(false)
     }
   }, [])
+
+  // Carga inicial + cada vez que cambia la búsqueda confirmada (vuelve a página 1).
+  useEffect(() => {
+    load(1, committedQ)
+  }, [committedQ, load])
+
+  // Debounce de la caja de búsqueda: espera a dejar de escribir (350 ms).
+  useEffect(() => {
+    const v = search.trim()
+    const t = setTimeout(() => setCommittedQ(prev => (prev === v ? prev : v)), 350)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const goPage = (p: number) => {
+    if (p >= 1 && p <= totalPages) load(p, committedQ)
+  }
 
   useEffect(() => {
     visitadorService
       .list()
       .then((data) => setVisitadores(Array.isArray(data) ? data : []))
       .catch(() => setVisitadores([]))
+  }, [])
+
+  useEffect(() => {
+    ciudadService.list().then(data => setCiudades(Array.isArray(data) ? data.filter(c => c.status !== false) : [])).catch(() => setCiudades([]))
   }, [])
 
   const visitadorDe = (id: number | null): VisitadorBE | undefined =>
@@ -126,23 +159,10 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
     return m
   }, [visitadores])
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return instituciones
-    return instituciones.filter(
-      (i) =>
-        i.nombre.toLowerCase().includes(q) ||
-        i.razonSocial.toLowerCase().includes(q) ||
-        i.nit.toLowerCase().includes(q) ||
-        (i.ubicaciones[0]?.direccion ?? '').toLowerCase().includes(q) ||
-        (visitadorNombres.get(i.visitadorId ?? -1) ?? '—').toLowerCase().includes(q),
-    )
-  }, [instituciones, search, visitadorNombres])
-
   const resetForm = () =>
     setForm({
       nombre: '', razonSocial: '', nit: '', tipoContrato: '', telefono: '', correo: '',
-      visitadorId: null, esParticular: true, clasificacion: 1,
+      visitadorId: null, esParticular: true, clasificacion: 1, ciudad: '',
       ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: coordsCercaDeMi() }],
     })
 
@@ -151,6 +171,10 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
     if (savingRef.current) return
     if (!form.nombre.trim()) {
       showToast('El nombre es obligatorio', 'error')
+      return
+    }
+    if (!form.nit.trim()) {
+      showToast('El NIT es obligatorio', 'error')
       return
     }
     const ubicaciones = form.ubicaciones.filter((u) => u.direccion.trim() || u.detalle.trim())
@@ -168,10 +192,13 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
         visitador_id: form.visitadorId,
         es_particular: form.esParticular,
         clasificacion: form.clasificacion,
+        ciudad_id: form.ciudad ? Number(form.ciudad) : null,
         direccion: ubicaciones,
       })
       const row = mapBE(created)
-      setInstituciones(prev => [...prev, row])
+      setSearch('')
+      setCommittedQ('')
+      load(1, '')
       setApiStatus(`Creado en API: ${form.nombre}`)
       showToast(`Institución registrada ✓ ${row.nombre}`, 'success')
       resetForm()
@@ -195,6 +222,10 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
       showToast('Id de institución inválido', 'error')
       return
     }
+    if (!editForm.nit.trim()) {
+      showToast('El NIT es obligatorio', 'error')
+      return
+    }
     const ubicaciones = editForm.ubicaciones.filter((u) => u.direccion.trim() || u.detalle.trim())
     savingRef.current = true
     setSaving(true)
@@ -209,6 +240,7 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
         visitador_id: editForm.visitadorId,
         es_particular: editForm.esParticular,
         clasificacion: editForm.clasificacion,
+        ciudad_id: editForm.ciudad ? Number(editForm.ciudad) : null,
         direccion: ubicaciones,
       })
       const row: InstitucionView = {
@@ -216,7 +248,7 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
         nombre: editForm.nombre.trim() || editForm.nombre,
         ubicaciones: ubicaciones.length > 0 ? ubicaciones : editForm.ubicaciones,
       }
-      setInstituciones(prev => prev.map((i) => (i.id === editForm.id ? row : i)))
+      load(page, committedQ)
       setApiStatus(`Actualizado en API: ${row.nombre}`)
       showToast(`Institución actualizada ✓ ${row.nombre}`, 'success')
       setEditing(null)
@@ -236,7 +268,8 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
     if (!deleting) return
     try {
       await institucionService.remove(deleting.id)
-      setInstituciones(prev => prev.filter((i) => i.id !== deleting.id))
+      if (instituciones.length === 1 && page > 1) load(page - 1, committedQ)
+      else load(page, committedQ)
       setApiStatus(`Eliminado en API: ${deleting.nombre}`)
       showToast(`Institución eliminada ✓ ${deleting.nombre}`, 'success')
       setDeleting(null)
@@ -272,7 +305,7 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
               </tr>
             </thead>
             <tbody>
-              {filtered.map((i) => {
+              {instituciones.map((i) => {
                 const v = visitadorDe(i.visitadorId)
                 return (
                   <tr key={i.id}>
@@ -305,9 +338,13 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
                   </tr>
                 )
               })}
-              {filtered.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: '#7e8aa6' }}>{instituciones.length === 0 ? 'No hay instituciones registradas' : 'Sin resultados.'}</td></tr>}
+              {instituciones.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: '#7e8aa6' }}>{total === 0 ? 'No hay instituciones registradas' : 'Sin resultados.'}</td></tr>}
             </tbody>
           </table>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px' }}>
+          <span style={{ fontSize: 11, color: '#6b7a99', fontWeight: 600 }}>{total} {total === 1 ? 'institución' : 'instituciones'}</span>
+          <Paginador page={page} totalPages={totalPages} onPage={goPage} loading={loading} />
         </div>
       </div>
 
@@ -322,8 +359,9 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
               <div className="vt-view-grid">
                 <span>Razón social</span><strong>{viewing.razonSocial || '—'}</strong>
                 <span>NIT</span><strong>{viewing.nit || '—'}</strong>
+                <span>Ciudad</span><strong>{(ciudades ?? []).find(c => String(c.id) === viewing.ciudad)?.nombre || '—'}</strong>
                 <span>Tipo</span><strong>{viewing.esParticular ? 'Particular' : 'No particular'}</strong>
-                <span>Clasificación</span><strong>{viewing.clasificacion ?? '—'}</strong>
+                <span>Clasificación</span><strong><MiniClasificacion valor={viewing.clasificacion} /></strong>
                 <span>Teléfono</span><strong>{viewing.telefono || '—'}</strong>
                 <span>Email</span><strong>{viewing.correo || '—'}</strong>
               </div>
@@ -368,8 +406,14 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
             <form onSubmit={handleCreate} className="vt-form">
               <label>Nombre <span style={reqLabelStyle}>* obligatorio</span><input required value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej. Clínica Central" /></label>
               <label>Razón Social <span style={optLabelStyle}>(opcional)</span><input value={form.razonSocial} onChange={e => setForm({ ...form, razonSocial: e.target.value })} placeholder="Ej. Clínica Central S.A." /></label>
-              <label>NIT <span style={optLabelStyle}>(opcional)</span><input value={form.nit} onChange={e => setForm({ ...form, nit: e.target.value })} placeholder="Ej. 1791234567001" /></label>
+              <label>NIT <span style={reqLabelStyle}>* obligatorio</span><input required value={form.nit} onChange={e => setForm({ ...form, nit: e.target.value })} placeholder="Ej. 1791234567001" /></label>
               <label>Tipo de Contrato <span style={optLabelStyle}>(opcional)</span><input value={form.tipoContrato} onChange={e => setForm({ ...form, tipoContrato: e.target.value })} placeholder="Ej. convenio, particular…" /></label>
+              <label>Ciudad <span style={optLabelStyle}>(opcional)</span>
+                <select value={form.ciudad} onChange={e => setForm({ ...form, ciudad: e.target.value })}>
+                  <option value="">Seleccione ciudad</option>
+                  {(ciudades ?? []).map(c => <option key={c.id} value={String(c.id)}>{c.nombre}</option>)}
+                </select>
+              </label>
               <label>Visitador Asignado <span style={optLabelStyle}>(opcional)</span>
                 <select value={form.visitadorId ?? ''} onChange={e => setForm({ ...form, visitadorId: e.target.value ? Number(e.target.value) : null })}>
                   <option value="">Sin asignar</option>
@@ -381,10 +425,9 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
                   <input type="checkbox" checked={form.esParticular} onChange={e => setForm({ ...form, esParticular: e.target.checked })} />
                   Particular
                 </label>
-                <label style={{ flex: 1 }}>
-                  Clasificación <span style={optLabelStyle}>(opcional)</span>
-                  <input type="number" min={0} max={9} value={form.clasificacion} onChange={e => setForm({ ...form, clasificacion: Number(e.target.value) || 0 })} />
-                </label>
+                <div style={{ flex: 1.6 }}>
+                  <ClasificacionPicker value={form.clasificacion} onChange={v => setForm({ ...form, clasificacion: v })} />
+                </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2A4E' }}>Ubicaciones</span>
@@ -416,8 +459,14 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
             <form onSubmit={handleEditSave} className="vt-form">
               <label>Nombre <span style={reqLabelStyle}>* obligatorio</span><input required value={editForm.nombre} onChange={e => setEditForm({ ...editForm, nombre: e.target.value } as InstitucionView)} /></label>
               <label>Razón Social <span style={optLabelStyle}>(opcional)</span><input value={editForm.razonSocial} onChange={e => setEditForm({ ...editForm, razonSocial: e.target.value } as InstitucionView)} /></label>
-              <label>NIT <span style={optLabelStyle}>(opcional)</span><input value={editForm.nit} onChange={e => setEditForm({ ...editForm, nit: e.target.value } as InstitucionView)} /></label>
+              <label>NIT <span style={reqLabelStyle}>* obligatorio</span><input required value={editForm.nit} onChange={e => setEditForm({ ...editForm, nit: e.target.value } as InstitucionView)} /></label>
               <label>Tipo de Contrato <span style={optLabelStyle}>(opcional)</span><input value={editForm.tipoContrato} onChange={e => setEditForm({ ...editForm, tipoContrato: e.target.value } as InstitucionView)} /></label>
+              <label>Ciudad <span style={optLabelStyle}>(opcional)</span>
+                <select value={editForm.ciudad} onChange={e => setEditForm({ ...editForm, ciudad: e.target.value } as InstitucionView)}>
+                  <option value="">Seleccione ciudad</option>
+                  {(ciudades ?? []).map(c => <option key={c.id} value={String(c.id)}>{c.nombre}</option>)}
+                </select>
+              </label>
               <label>Visitador Asignado <span style={optLabelStyle}>(opcional)</span>
                 <select value={editForm.visitadorId ?? ''} onChange={e => setEditForm({ ...editForm, visitadorId: e.target.value ? Number(e.target.value) : null } as InstitucionView)}>
                   <option value="">Sin asignar</option>
@@ -429,10 +478,9 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
                   <input type="checkbox" checked={editForm.esParticular} onChange={e => setEditForm({ ...editForm, esParticular: e.target.checked } as InstitucionView)} />
                   Particular
                 </label>
-                <label style={{ flex: 1 }}>
-                  Clasificación <span style={optLabelStyle}>(opcional)</span>
-                  <input type="number" min={0} max={9} value={editForm.clasificacion} onChange={e => setEditForm({ ...editForm, clasificacion: Number(e.target.value) || 0 } as InstitucionView)} />
-                </label>
+                <div style={{ flex: 1.6 }}>
+                  <ClasificacionPicker value={editForm.clasificacion} onChange={v => setEditForm({ ...editForm, clasificacion: v } as InstitucionView)} />
+                </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#1B2A4E' }}>Ubicaciones</span>

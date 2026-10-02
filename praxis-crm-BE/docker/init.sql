@@ -155,6 +155,9 @@ CREATE TABLE institucion (
 
 CREATE INDEX idx_institucion_ciudad ON institucion(ciudad_id);
 CREATE INDEX idx_institucion_visitador ON institucion(visitador_id);
+-- NIT único para instituciones registradas; se ignora el vacío de los registros
+-- legacy (el alta por API exige NIT). NULL/'' se guardan como NULL vía NULLIF.
+CREATE UNIQUE INDEX institucion_nit_uniq ON institucion (nit) WHERE nit IS NOT NULL AND nit <> '';
 
 -- ============================================================
 -- Visita (visita programada por admin y registrada por visitador)

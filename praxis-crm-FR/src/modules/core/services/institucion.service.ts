@@ -51,9 +51,16 @@ export type UpdateInstitucionPayload = {
   status?: boolean
 }
 
+export type InstitucionPage = { total: number; page: number; limit: number; items: InstitucionBE[] }
+
 export const institucionService = {
   // GET visible para admin y visitador (Api/internal/institucion/routes/routes.go)
   list: () => apiClient.get<InstitucionBE[]>('/api/instituciones'),
+  page: (query: { page: number; limit: number; q?: string }) => {
+    const p = new URLSearchParams({ page: String(query.page), limit: String(query.limit) })
+    if (query.q) p.set('q', query.q)
+    return apiClient.get<InstitucionPage>(`/api/instituciones?${p.toString()}`)
+  },
   getById: (id: number) => apiClient.get<InstitucionBE>(`/api/instituciones/${id}`),
   // Escritura exclusiva de admin (Routes: allRoutes).
   create: (payload: CreateInstitucionPayload) =>

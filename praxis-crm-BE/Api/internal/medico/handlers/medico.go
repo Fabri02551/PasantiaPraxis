@@ -33,6 +33,28 @@ func NewMedicoHandler(svc *services.MedicoService) *MedicoHandler {
 }
 
 func (h *MedicoHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+	// Paginación opcional: ?page=&limit=&q=. Sin page/limit se devuelve la
+	// lista completa, como siempre, para no romper a los consumidores actuales.
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if page >= 1 || limit >= 1 {
+		if page < 1 {
+			page = 1
+		}
+		if limit < 1 || limit > 200 {
+			limit = 20
+		}
+		total, items, err := h.svc.GetPage(r.Context(), page, limit, r.URL.Query().Get("q"))
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		response.JSON(w, http.StatusOK, map[string]any{
+			"total": total, "page": page, "limit": limit, "items": items,
+		})
+		return
+	}
+
 	medicos, err := h.svc.GetAll(r.Context())
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())

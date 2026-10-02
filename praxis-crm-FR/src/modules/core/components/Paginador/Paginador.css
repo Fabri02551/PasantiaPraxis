@@ -1,0 +1,66 @@
+.paginador {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 16px 0 4px;
+}
+
+.paginador-btn {
+  padding: 6px 14px;
+  border: 1px solid #d6dee9;
+  border-radius: 8px;
+  background: #fff;
+  color: #1B2A4E;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.paginador-btn:hover:not(:disabled) {
+  border-color: #4f7cc0;
+  background: #f2f6fd;
+}
+
+.paginador-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.paginador-nums {
+  display: flex;
+  gap: 6px;
+}
+
+.paginador-num {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border: 1px solid #d6dee9;
+  border-radius: 8px;
+  background: #fff;
+  color: #1B2A4E;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.paginador-num:hover:not(:disabled):not(.activo) {
+  border-color: #4f7cc0;
+  background: #f2f6fd;
+}
+
+.paginador-num.activo {
+  background: #1B2A4E;
+  border-color: #1B2A4E;
+  color: #fff;
+}
+
+@media (max-width: 520px) {
+  .paginador {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+}

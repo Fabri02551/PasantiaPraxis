@@ -23,6 +23,10 @@ func (s *InstitucionService) GetByID(ctx context.Context, id int) (*models.Insti
 	return s.repo.GetByID(ctx, id)
 }
 
+func (s *InstitucionService) GetPage(ctx context.Context, page, limit int, q string) (int, []models.Institucion, error) {
+	return s.repo.GetPage(ctx, page, limit, q)
+}
+
 // visitadorPorDefecto devuelve a quién queda asignada la institución nueva.
 //
 // Si la request trae un visitador_id explícito, manda ese. Si no, y el que crea
