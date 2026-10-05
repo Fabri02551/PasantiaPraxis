@@ -84,9 +84,11 @@ services:
       api:
         condition: service_started
 
-  networks:
-    dokploy-network:
-      external: true
+
 
 volumes:
   pgdata:
+  
+networks:
+  dokploy-network:
+    external: true
