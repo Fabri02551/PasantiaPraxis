@@ -64,22 +64,19 @@ services:
       etl-init:
         condition: service_completed_successfully
 
-  web:
+ web:
     build:
       context: ./praxis-crm-FR
       dockerfile: Dockerfile
-      # Vite lee estas variables al compilar, no en runtime: llegan como args
-      # de build (ver el ARG en el Dockerfile).
       args:
         VITE_API_URL: ${VITE_API_URL}
         VITE_MAP_TILE_URL: ${VITE_MAP_TILE_URL}
     container_name: praxis-web
     restart: unless-stopped
-    ports:
-      - "3002"
-    volumes:
-      # Solo lectura: el nginx solo necesita leer el par cert/key.
-      - ./certs:/etc/nginx/certs:ro
+    expose:
+      - "80"
+    networks:
+      - dokploy-network
     depends_on:
       api:
         condition: service_started
