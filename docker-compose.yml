@@ -76,15 +76,17 @@ services:
     container_name: praxis-web
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
-      - "3002:443"
+      - "3002"
     volumes:
       # Solo lectura: el nginx solo necesita leer el par cert/key.
       - ./certs:/etc/nginx/certs:ro
     depends_on:
       api:
         condition: service_started
+
+  networks:
+    dokploy-network:
+      external: true
 
 volumes:
   pgdata:
