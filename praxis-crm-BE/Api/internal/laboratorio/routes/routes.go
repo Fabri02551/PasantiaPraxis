@@ -9,11 +9,16 @@ import (
 
 // GET públicos (admin y visitador usan ambos): la lista y el detalle son de
 // solo lectura; precios con ciudad para la cotización del visitador.
+// Escritura (POST/PUT/DELETE) exclusiva de admin.
 func Register(mux *http.ServeMux, h *handlers.LaboratorioHandler, authSecret string) {
 	auth := middleware.Auth(authSecret)
+	adminOnly := middleware.RequireRole("admin")
 	visitadorOrAdmin := middleware.RequireRole("admin", "visitador")
 
 	mux.Handle("GET /api/laboratorios", http.HandlerFunc(h.GetAll))
 	mux.Handle("GET /api/laboratorios/{id}", http.HandlerFunc(h.GetByID))
 	mux.Handle("GET /api/laboratorios/precios", auth(visitadorOrAdmin(http.HandlerFunc(h.Precios))))
+	mux.Handle("POST /api/laboratorios", auth(adminOnly(http.HandlerFunc(h.Create))))
+	mux.Handle("PUT /api/laboratorios/{id}", auth(adminOnly(http.HandlerFunc(h.Update))))
+	mux.Handle("DELETE /api/laboratorios/{id}", auth(adminOnly(http.HandlerFunc(h.Delete))))
 }

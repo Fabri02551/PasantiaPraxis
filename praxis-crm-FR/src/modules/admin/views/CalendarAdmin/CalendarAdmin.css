@@ -68,7 +68,7 @@
 
 .cal-admin-weekdays {
   display: grid;
-  grid-template-columns: repeat(7,1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   text-align: center;
   font-size: 10px;
   font-weight: 700;
@@ -78,8 +78,9 @@
 
 .cal-admin-grid {
   display: grid;
-  grid-template-columns: repeat(7,1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 6px;
+  min-width: 0;
 }
 
 .cal-admin-cell {
@@ -159,6 +160,7 @@
 .cal-detail-desc { font-size: 11px; color: #7e8aa6; margin: 2px 0 6px; }
 .cal-detail-tecnico { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: #1B2A4E; }
 .cal-detail-avatar { width: 20px; height: 20px; border-radius: 50%; }
+.cal-detail-avatar--initials { display: inline-grid; place-items: center; font-size: 8px; font-weight: 800; color: #fff; flex-shrink: 0; }
 
 /* Popup */
 .cal-visit-overlay {
@@ -173,8 +175,7 @@
 }
 
 .cal-visit-modal {
-  width: 100%;
-  max-width: 520px;
+  width: min(760px, calc(100vw - 48px));
   max-height: 90vh;
   overflow-y: auto;
   background: #fff;
@@ -237,5 +238,17 @@
 
 @media (max-width: 980px) {
   .cal-admin-layout { grid-template-columns: 1fr; }
-  .cal-detail-card { position: static; }
+  .cal-detail-card { position: static; min-height: 0; }
+}
+
+@media (max-width: 640px) {
+  .cal-admin-card { padding: 10px; }
+  .cal-admin-cell { min-height: 56px; padding: 4px; }
+  .cal-admin-daynum { font-size: 10px; }
+  .cal-admin-grid { gap: 4px; }
+  .cal-admin-weekdays { font-size: 9px; }
+  .cal-admin-month { min-width: 0; font-size: 11.5px; }
+  .cal-visit-modal { width: 100%; }
+  .cal-visit-overlay { padding: 10px; place-items: end center; }
+  .cal-visit-grid { grid-template-columns: 1fr; }
 }

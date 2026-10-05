@@ -123,6 +123,16 @@
   border: 2px solid rgba(255,255,255,0.15);
 }
 
+.admin-user-avatar--initials {
+  display: inline-grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
 .admin-user-info {
   display: flex;
   flex-direction: column;
@@ -157,6 +167,10 @@
   color: #ff8585;
 }
 
+.admin-nav-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.admin-logout-text { white-space: nowrap; }
+.admin-sidebar-backdrop { display: none; }
+
 @media (max-width: 860px) {
   .admin-sidebar {
     width: 64px;
@@ -164,18 +178,53 @@
   }
   .admin-brand-text,
   .admin-user-info,
+  .admin-nav-text,
+  .admin-logout-text {
+    display: none;
+  }
   .admin-nav-item {
     font-size: 0;
-  }
-  .admin-nav-item {
     justify-content: center;
     padding: 10px;
-  }
-  .admin-brand-title, .admin-brand-subtitle, .admin-user-name, .admin-user-role, .admin-logout {
-    display: none;
   }
   .admin-sidebar-brand {
     justify-content: center;
     padding: 14px 8px;
+  }
+  .admin-user-card { justify-content: center; }
+  .admin-logout { justify-content: center; }
+}
+
+/* Móvil: drawer superpuesto controlado por .admin-sidebar--open */
+@media (max-width: 640px) {
+  .admin-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 200;
+    width: 250px;
+    min-width: 250px;
+    transform: translateX(-105%);
+    transition: transform 0.25s ease;
+    box-shadow: 0 0 40px rgba(0,0,0,0.25);
+  }
+  .admin-sidebar--open { transform: translateX(0); }
+  .admin-brand-text,
+  .admin-user-info,
+  .admin-nav-text,
+  .admin-logout-text { display: flex; }
+  .admin-nav-text { display: inline; font-size: 12.5px; }
+  .admin-user-info { display: flex; }
+  .admin-logout-text { display: inline; }
+  .admin-nav-item { font-size: 12.5px; justify-content: flex-start; padding: 9px 12px; }
+  .admin-sidebar-brand { justify-content: flex-start; padding: 18px 16px 20px; }
+  .admin-user-card { justify-content: flex-start; }
+  .admin-logout { justify-content: flex-start; }
+  .admin-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(27,42,78,0.45);
+    z-index: 150;
   }
 }

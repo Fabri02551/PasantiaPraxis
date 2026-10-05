@@ -19,6 +19,7 @@ import { displayMedico } from '../../../core/utils/medicoPrefix'
 import { normalizeUbicaciones, hospitalFromDireccion, type UbicacionMedico } from '../../../core/utils/medicoDireccion'
 import { storage } from '../../../core/lib/storage'
 import { Toast } from '../../../core/components/Toast/Toast'
+import { SuccessModal } from '../../components/SuccessModal/SuccessModal'
 import './MedicosAdmin.css'
 import '../Visitadores/Visitadores.css'
 
@@ -135,6 +136,8 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
   const reqRef = useRef(0)
   const PAGE_SIZE = 20
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
+  const [createdName, setCreatedName] = useState<string | null>(null)
+  const [createdDetail, setCreatedDetail] = useState<string | undefined>(undefined)
   const showToast = useCallback((msg: string, type: 'success' | 'error' | 'info') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 4000)
@@ -259,6 +262,8 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
       load(1, '')
       setApiStatus(`Creado en API: ${form.nombre} ${form.primerApellido} (${matricula})`)
       showToast(`Médico registrado ✓ ${row.nombre} ${row.primerApellido} · ${matricula}`, 'success')
+      setCreatedName(`${form.nombre.trim()} ${form.primerApellido.trim()}${form.segundoApellido.trim() ? ' ' + form.segundoApellido.trim() : ''}`.trim())
+      setCreatedDetail(`Matrícula ${matricula}`)
       setForm({ nombre: '', primerApellido: '', segundoApellido: '', sexo: '', matricula: '', especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '', ciudad: '', esParticular: true, clasificacion: 1, ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: coordsCercaDeMi() }] })
       setShowCreate(false)
     } catch (err) {
@@ -603,6 +608,14 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
       )}
 
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+
+      <SuccessModal
+        open={createdName !== null}
+        onClose={() => { setCreatedName(null); setCreatedDetail(undefined) }}
+        kind="medico"
+        name={createdName ?? ''}
+        detail={createdDetail}
+      />
     </AdminLayout>
   )
 }

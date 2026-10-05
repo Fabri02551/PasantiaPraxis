@@ -103,9 +103,9 @@
   vertical-align: middle;
 }
 
-.vt-name-cell { display: flex; align-items: center; gap: 10px; }
-.vt-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
-.vt-nombre { font-weight: 600; font-size: 12px; }
+.vt-name-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.vt-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; display: inline-grid; place-items: center; font-weight: 800; font-size: 11px; color: #fff; flex-shrink: 0; }
+.vt-nombre { font-weight: 600; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
 .vt-email, .vt-tel { color: #6b7a99; font-size: 11.5px; }
 .vt-visitas { font-weight: 700; text-align: center; }
 
@@ -141,7 +141,7 @@
 .vt-btn--eliminar { background: #e94e6b; color: #fff; border-color: #e94e6b; }
 .vt-btn--eliminar:hover { background: #d9445f; }
 
-/* Overlay / Modal */
+/* Overlay / Modal — formato web: tarjetas anchas rectangulares centradas */
 .vt-overlay {
   position: fixed;
   inset: 0;
@@ -150,14 +150,13 @@
   display: grid;
   place-items: center;
   z-index: 100;
-  padding: 16px;
+  padding: 24px;
 }
 
 .vt-modal {
-  width: 100%;
-  max-width: 460px;
+  width: min(720px, calc(100vw - 48px));
   background: #fff;
-  border-radius: 14px;
+  border-radius: 16px;
   box-shadow: 0 16px 40px rgba(27,42,78,0.18);
   overflow: hidden;
   max-height: 88vh;
@@ -171,7 +170,7 @@
   max-height: calc(88vh - 56px);
 }
 
-.vt-modal--sm { max-width: 380px; }
+.vt-modal--sm { width: min(520px, calc(100vw - 48px)); }
 
 .vt-modal-head {
   display: flex;
@@ -273,7 +272,7 @@
 .vt-btn-submit:hover { background: #16213a; }
 
 .vt-view-body { padding: 16px; text-align: center; }
-.vt-view-avatar { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; margin-bottom: 8px; }
+.vt-view-avatar { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; margin-bottom: 8px; display: inline-grid; place-items: center; font-size: 22px; font-weight: 800; color: #fff; }
 .vt-view-body h4 { margin: 4px 0 2px; font-size: 14px; color: #1B2A4E; }
 .vt-view-email { font-size: 12px; color: #7e8aa6; margin: 0 0 12px; }
 .vt-view-grid {
@@ -293,3 +292,51 @@
 .vt-delete-icon { font-size: 32px; margin-bottom: 8px; }
 .vt-delete-body p { font-size: 12.5px; color: #1B2A4E; margin: 0 0 6px; }
 .vt-delete-hint { font-size: 11px; color: #7e8aa6 !important; }
+
+/* ---------- Formularios en 2 columnas (aprovechan el modal ancho) ---------- */
+@media (min-width: 641px) {
+  .vt-modal .vt-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 14px;
+    padding: 20px 22px;
+  }
+  /* Textareas, mapas y bloques ocupan todo el ancho */
+  .vt-form > label:has(textarea),
+  .vt-form > label:has(.leaflet-container),
+  .vt-form > div {
+    grid-column: 1 / -1;
+  }
+  .vt-modal-head { padding: 16px 22px; }
+  .vt-modal-head h3 { font-size: 14px; }
+  /* Detalle: dos pares etiqueta/valor por fila */
+  .vt-modal .vt-view-body { padding: 20px 22px; }
+  .vt-view-grid { grid-template-columns: 90px 1fr 90px 1fr; gap: 8px 10px; align-items: center; }
+  .vt-view-grid > * { min-width: 0; }
+  .vt-view-grid strong { overflow-wrap: anywhere; }
+}
+
+/* ---------- Responsive admin ---------- */
+@media (max-width: 900px) {
+  .visitadores-table, .pruebas-table { min-width: 640px; }
+  .vt-actions, .pruebas-actions { flex-wrap: wrap; }
+  .vt-modal { width: min(640px, calc(100vw - 32px)); }
+}
+
+@media (max-width: 640px) {
+  .visitadores-head, .pruebas-head { flex-direction: column; align-items: stretch; }
+  .btn-registrar { width: 100%; padding: 11px 14px; font-size: 13px; }
+  .visitadores-toolbar { flex-wrap: wrap; }
+  .vt-modal, .vt-modal--sm { width: 100%; border-radius: 12px; }
+  .vt-overlay { padding: 10px; place-items: end center; }
+  .vt-modal .vt-form, .vt-modal .vt-view-body { max-height: calc(92vh - 56px); }
+  .vt-form-actions { flex-direction: column-reverse; }
+  .vt-form-actions .vt-btn-cancel, .vt-form-actions .vt-btn-submit { width: 100%; height: 40px; }
+  .vt-view-grid { grid-template-columns: 1fr; gap: 4px; }
+  .vt-view-grid strong { margin-bottom: 6px; }
+}
+
+@media (max-width: 400px) {
+  .vt-actions .vt-btn, .pruebas-actions .vt-btn { flex: 1 1 auto; height: 30px; }
+  .visitadores-table th, .visitadores-table td, .pruebas-table th, .pruebas-table td { padding: 8px 10px; }
+}

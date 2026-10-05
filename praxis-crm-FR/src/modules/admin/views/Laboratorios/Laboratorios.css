@@ -25,3 +25,9 @@
 
 /* reuse vt-* styles from Visitadores.css – ensure imported */
 .vt-delete-icon--minimal { display: grid; place-items: center; margin-bottom: 10px; }
+
+@media (max-width: 640px) {
+  .pruebas-head { flex-direction: column; align-items: stretch; }
+  .pruebas-table { min-width: 600px; }
+  .pruebas-actions { flex-wrap: wrap; }
+}

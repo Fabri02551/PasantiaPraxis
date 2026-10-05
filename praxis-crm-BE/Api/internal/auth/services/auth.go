@@ -66,6 +66,10 @@ func (s *AuthService) Login(ctx context.Context, req models.LoginRequest) (*mode
 		return nil, errors.New("credenciales inválidas")
 	}
 
+	if !user.Persona.Status {
+		return nil, errors.New("cuenta desactivada, contacta a otro administrador")
+	}
+
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
 		return nil, errors.New("credenciales inválidas")
 	}
@@ -75,6 +79,176 @@ func (s *AuthService) Login(ctx context.Context, req models.LoginRequest) (*mode
 
 func (s *AuthService) GetByID(ctx context.Context, id string) (*models.UserWithPersona, error) {
 	return s.repo.GetByID(ctx, id)
+}
+
+// ============================================================
+// CRUD de administradores (solo rol admin)
+// ============================================================
+
+func (s *AuthService) ListAdmins(ctx context.Context) ([]models.AdminItem, error) {
+	admins, err := s.repo.ListAdmins(ctx)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]models.AdminItem, 0, len(admins))
+	for i := range admins {
+		items = append(items, *admins[i].ToAdmin())
+	}
+	return items, nil
+}
+
+func (s *AuthService) GetAdmin(ctx context.Context, personaID int) (*models.AdminItem, error) {
+	up, err := s.repo.GetAdminByPersonaID(ctx, personaID)
+	if err != nil {
+		return nil, err
+	}
+	return up.ToAdmin(), nil
+}
+
+// CreateAdmin crea persona + usuario admin en UNA transacción.
+func (s *AuthService) CreateAdmin(ctx context.Context, req models.CreateAdminRequest) (*models.AdminItem, error) {
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+	req.Nombre = strings.TrimSpace(req.Nombre)
+	req.PrimerApellido = strings.TrimSpace(req.PrimerApellido)
+	req.Sexo = strings.ToLower(strings.TrimSpace(req.Sexo))
+	req.Telefono = strings.TrimSpace(req.Telefono)
+	req.CI = strings.TrimSpace(req.CI)
+
+	if req.Email == "" || req.Password == "" {
+		return nil, errors.New("email y password son requeridos")
+	}
+	if len(req.Password) < 6 {
+		return nil, errors.New("el password debe tener al menos 6 caracteres")
+	}
+	if req.Nombre == "" || req.PrimerApellido == "" {
+		return nil, errors.New("nombre y primer apellido son requeridos")
+	}
+	if req.Sexo == "" {
+		return nil, errors.New("sexo es requerido")
+	}
+
+	if existing, _ := s.repo.GetByEmail(ctx, req.Email); existing != nil {
+		return nil, errors.New("el email ya está registrado")
+	}
+
+	var segundo *string
+	if req.SegundoApellido != nil {
+		if t := strings.TrimSpace(*req.SegundoApellido); t != "" {
+			segundo = &t
+		}
+	}
+
+	var nacimiento *time.Time
+	if req.Nacimiento != nil {
+		if t := strings.TrimSpace(*req.Nacimiento); t != "" {
+			parsed, err := time.Parse("2006-01-02", t)
+			if err != nil {
+				return nil, errors.New("fecha de nacimiento inválida, se espera yyyy-mm-dd")
+			}
+			nacimiento = &parsed
+		}
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	personaID, err := s.repo.CreateAdmin(ctx, req.Email, string(hash), &models.Persona{
+		Nombre:          req.Nombre,
+		PrimerApellido:  req.PrimerApellido,
+		SegundoApellido: segundo,
+		Sexo:            req.Sexo,
+		Correo:          req.Email,
+		Telefono:        req.Telefono,
+		Nacimiento:      nacimiento,
+		CI:              req.CI,
+		CiudadID:        req.CiudadID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return s.GetAdmin(ctx, personaID)
+}
+
+// UpdateAdmin edita persona + credencial en UNA transacción.
+func (s *AuthService) UpdateAdmin(ctx context.Context, personaID int, req models.UpdateAdminRequest) (*models.AdminItem, error) {
+	if _, err := s.repo.GetAdminByPersonaID(ctx, personaID); err != nil {
+		return nil, err
+	}
+
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+	req.Nombre = strings.TrimSpace(req.Nombre)
+	req.PrimerApellido = strings.TrimSpace(req.PrimerApellido)
+	req.Sexo = strings.ToLower(strings.TrimSpace(req.Sexo))
+	req.Telefono = strings.TrimSpace(req.Telefono)
+	req.CI = strings.TrimSpace(req.CI)
+	req.Correo = strings.TrimSpace(req.Correo)
+	if req.Correo == "" {
+		req.Correo = req.Email
+	}
+
+	if req.Nombre == "" || req.PrimerApellido == "" {
+		return nil, errors.New("nombre y primer apellido son requeridos")
+	}
+
+	if req.SegundoApellido != nil {
+		if t := strings.TrimSpace(*req.SegundoApellido); t != "" {
+			req.SegundoApellido = &t
+		} else {
+			req.SegundoApellido = nil
+		}
+	}
+
+	if req.Nacimiento != nil {
+		if t := strings.TrimSpace(*req.Nacimiento); t != "" {
+			if _, err := time.Parse("2006-01-02", t); err != nil {
+				return nil, errors.New("fecha de nacimiento inválida, se espera yyyy-mm-dd")
+			}
+			req.Nacimiento = &t
+		} else {
+			req.Nacimiento = nil
+		}
+	}
+
+	if req.Email != "" {
+		if existing, _ := s.repo.GetByEmail(ctx, req.Email); existing != nil {
+			if existing.User.PersonaID == nil || *existing.User.PersonaID != personaID {
+				return nil, errors.New("el email ya está registrado por otro usuario")
+			}
+		}
+	}
+
+	var hash string
+	if strings.TrimSpace(req.Password) != "" {
+		if len(req.Password) < 6 {
+			return nil, errors.New("el password debe tener al menos 6 caracteres")
+		}
+		h, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, err
+		}
+		hash = string(h)
+	}
+
+	if err := s.repo.UpdateAdmin(ctx, personaID, req, hash); err != nil {
+		return nil, err
+	}
+
+	return s.GetAdmin(ctx, personaID)
+}
+
+// DeleteAdmin es eliminación LÓGICA: persona.status true(1) -> false(0).
+// No permite auto-eliminarse para no quedarse sin acceso.
+func (s *AuthService) DeleteAdmin(ctx context.Context, requesterPersonaID *int, personaID int) error {
+	if requesterPersonaID != nil && *requesterPersonaID == personaID {
+		return errors.New("no puedes eliminar tu propia cuenta de administrador")
+	}
+	if _, err := s.repo.GetAdminByPersonaID(ctx, personaID); err != nil {
+		return err
+	}
+	return s.repo.SetAdminStatus(ctx, personaID, false)
 }
 
 // GetProfile devuelve los datos del usuario autenticado, resueltos por el
