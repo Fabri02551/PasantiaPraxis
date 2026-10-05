@@ -54,9 +54,9 @@ func (l *Loader) Load(ctx context.Context, visitadores []Visitador, ciudades *ca
 		ciudadID, nombreCiudad := resolverCiudad(ciudades, v.DeptoCodigo)
 		v.CiudadID = ciudadID
 		if nombreCiudad == "" {
-			// Sin departamento reconocible la persona queda con ciudad_id
-			// NULL, que es NULL en el esquema y no rompe nada.
-			nombreCiudad = "sin departamento"
+			// Cochabamba tampoco está en el catálogo: se deja el
+			// ciudad_id en NULL y el log lo dice explícito.
+			nombreCiudad = "sin ciudad asignada"
 		}
 		res.Ciudad = nombreCiudad
 
@@ -223,22 +223,29 @@ func orDefault(v, def string) string {
 	return v
 }
 
+// Ciudad de respaldo para un visitador sin departamento reconocible. La
+// operación es de Cochabamba: dejarlo sin ciudad arrastra el mismo hueco a
+// los médicos de su cartera, que heredan la ciudad de su visitador.
+const ciudadPorDefecto = "Cochabamba"
+
 // resolverCiudad traduce el código de departamento del CSV a un id de
 // ciudad. Primero prueba el catálogo, que ya trae los códigos como alias;
-// si no aparece, cae a la tabla local por si el catálogo quedó viejo.
+// si no aparece, cae a la tabla local por si el catálogo quedó viejo. Si
+// tampoco hay código, el visitador queda en Cochabamba.
 func resolverCiudad(ciudades *catalog.Ciudades, codigo string) (*int, string) {
 	codigo = strings.TrimSpace(codigo)
-	if codigo == "" {
-		return nil, ""
-	}
-
-	if id, ok := ciudades.IDByAlias(codigo); ok {
-		return &id, ciudades.NombrePorID(id)
-	}
-	if nombre := deptoNombre(codigo); nombre != "" {
-		if id, ok := ciudades.IDByName(nombre); ok {
+	if codigo != "" {
+		if id, ok := ciudades.IDByAlias(codigo); ok {
 			return &id, ciudades.NombrePorID(id)
 		}
+		if nombre := deptoNombre(codigo); nombre != "" {
+			if id, ok := ciudades.IDByName(nombre); ok {
+				return &id, ciudades.NombrePorID(id)
+			}
+		}
+	}
+	if id, ok := ciudades.IDByName(ciudadPorDefecto); ok {
+		return &id, ciudades.NombrePorID(id)
 	}
 	return nil, ""
 }

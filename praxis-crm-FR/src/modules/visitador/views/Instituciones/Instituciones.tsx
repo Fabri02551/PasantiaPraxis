@@ -12,7 +12,6 @@ import { personaService } from '../../../core/services/persona.service'
 import { ciudadService, type Ciudad } from '../../../core/services/ciudad.service'
 import { ClasificacionPicker, MiniClasificacion } from '../../../core/components/ClasificacionPicker/ClasificacionPicker'
 import { authService } from '../../../auth/services/auth.service'
-import { API_LABEL } from '../../../core/config/env'
 import { MapPicker } from '../../../admin/components/MapPicker/MapPicker'
 import { normalizeUbicaciones, type UbicacionMedico } from '../../../core/utils/medicoDireccion'
 import { storage } from '../../../core/lib/storage'
@@ -83,7 +82,6 @@ export const InstitucionesView: React.FC<Props> = ({ onNavigate, currentView, on
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
-  const [apiStatus, setApiStatus] = useState(`API: ${API_LABEL}`)
   const [loading, setLoading] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [ciudades, setCiudades] = useState<Ciudad[]>([])
@@ -137,14 +135,12 @@ export const InstitucionesView: React.FC<Props> = ({ onNavigate, currentView, on
       setTotal(data.total)
       setTotalPages(tp)
       setPage(data.page)
-      setApiStatus(`Conectado a ${API_LABEL} — ${data.total} instituciones (página ${data.page} de ${tp})`)
     } catch (err) {
       if (reqRef.current !== reqId) return
       console.warn('[Instituciones] API no disponible', err)
       setInstituciones([])
       setTotal(0)
       setTotalPages(1)
-      setApiStatus(`Sin conexión a ${API_LABEL} — ${err instanceof Error ? err.message : 'no se pudieron cargar instituciones'}`)
     } finally {
       if (reqRef.current === reqId) setLoading(false)
     }
@@ -214,14 +210,12 @@ export const InstitucionesView: React.FC<Props> = ({ onNavigate, currentView, on
       setSearch('')
       setCommittedQ('')
       load(1, '')
-      setApiStatus(`Creado en API: ${form.nombre}`)
       showToast(`Institución registrada ✓ ${row.nombre}`, 'success')
       setForm({ nombre: '', razonSocial: '', nit: '', tipoContrato: '', telefono: '', correo: '', esParticular: true, clasificacion: 1, ciudad: '', ubicaciones: [{ id: `u${Date.now()}`, direccion: '', detalle: '', coords: coordsCercaDeMi() }] })
       setShowCreate(false)
     } catch (err) {
       console.warn('[Instituciones] create error', err)
       const msg = err instanceof Error ? err.message : String(err)
-      setApiStatus(`Error al crear institución: ${msg}`)
       showToast(`No se guardó ✗ ${msg}`, 'error')
       setShowCreate(false)
     } finally {
@@ -250,7 +244,7 @@ export const InstitucionesView: React.FC<Props> = ({ onNavigate, currentView, on
       <SidebarMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={onNavigate} currentView={currentView} onLogout={onLogout} />
 
       <div className="medicos-content">
-        <div style={{ fontSize: 11, color: loading ? '#2d9c9c' : '#6b7a99', margin: '0 0 8px', fontWeight: 500 }}>{loading ? 'Cargando...' : apiStatus}</div>
+        {loading && <p style={{ fontSize: 11, color: '#2d9c9c', margin: '0 0 8px', fontWeight: 500 }}>Cargando...</p>}
         <div className="medicos-search-wrap">
           <svg className="medicos-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a9ab5" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
@@ -294,7 +288,7 @@ export const InstitucionesView: React.FC<Props> = ({ onNavigate, currentView, on
         <Paginador page={page} totalPages={totalPages} onPage={goPage} loading={loading} />
 
         {!loading && instituciones.length === 0 && (
-          <p className="medicos-empty">{total === 0 ? 'No hay instituciones registradas en la base de datos' : 'No se encontraron instituciones'}</p>
+          <p className="medicos-empty">{total === 0 ? 'No hay instituciones registradas' : 'No se encontraron instituciones'}</p>
         )}
       </div>
 
@@ -393,7 +387,7 @@ export const InstitucionesView: React.FC<Props> = ({ onNavigate, currentView, on
       {saving && (
         <div className="medicos-busy" role="status" aria-live="polite">
           <span className="medicos-busy-spinner" />
-          <span>Guardando en la base de datos…</span>
+          <span>Guardando…</span>
         </div>
       )}
 

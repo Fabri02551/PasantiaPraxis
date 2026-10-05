@@ -15,7 +15,7 @@
 | **Linter** | `oxlint 1.79.0` | Config `.oxlintrc.json` (react + typescript) |
 | **Docker** | `node:22-alpine` build + `nginx:alpine` prod | `Dockerfile` + `nginx.conf` SPA fallback |
 
-No se requieren variables de entorno en esta etapa. Si se añaden, usar `.env.example` como plantilla (ver § 3).
+Las variables de entorno viven en un único archivo, **`.env` en la raíz del repo** (`../../.env`), compartido por Docker, API y ETL. La plantilla es `../../.env.example` (ver § 3).
 
 ## 2. Requisitos Previos
 
@@ -36,20 +36,23 @@ Puertos usados:
 
 ## 3. Variables de Entorno
 
-Actualmente no hay variables. Para futuro:
+El frontend **no tiene** `.env` propio: usa el de la raíz del repo.
 
 ```bash
-cp .env.example .env  # cuando exista
+cp ../../.env.example ../../.env
 ```
 
-`.env.example` sugerido:
+`vite.config.ts` lo encuentra con `envDir: '..'`. En Docker las variables
+`VITE_*` llegan como *build args* (`docker-compose.yml` las interpola desde el
+`.env` raíz y el `Dockerfile` las declara como `ARG` + `ENV` antes de
+`npm run build`), porque Vite las incrusta en el bundle al compilar.
 
-```
-VITE_API_URL=http://localhost:3000
-VITE_MAP_TILE_URL=https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
-```
+| Variable | Default | Para qué |
+|---|---|---|
+| `VITE_API_URL` | (vacío) | Vacío = rutas relativas (`/api/...`), que es lo correcto detrás del HTTPS del nginx. Solo para `npm run dev` contra otra máquina. |
+| `VITE_MAP_TILE_URL` | tiles de OpenStreetMap | Servidor de teselas del mapa. |
 
- Todas las variables de Vite deben iniciar con `VITE_` para ser expuestas al cliente.
+Todas las variables de Vite deben iniciar con `VITE_` para ser expuestas al cliente.
 
 ## 4. Instalación y Scripts
 

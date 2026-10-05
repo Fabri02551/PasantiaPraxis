@@ -30,7 +30,7 @@ export const GraficosView: React.FC<Props> = ({ currentView, onNavigate, onLogou
   <AdminLayout currentView={currentView} onNavigate={onNavigate} onLogout={onLogout} title="Gráficos y Estadísticas">
     <div className="graficos-intro">
       <h2 className="graficos-title">Analítica Avanzada de Visitas</h2>
-      <p className="graficos-sub">Visualiza el rendimiento de la operación técnica - solo datos de la base de datos.</p>
+      <p className="graficos-sub">Visualiza el rendimiento de la operación.</p>
     </div>
 
     <div className="graficos-grid">
@@ -40,7 +40,7 @@ export const GraficosView: React.FC<Props> = ({ currentView, onNavigate, onLogou
           {loading ? (
             <p style={{ fontSize: 12, color: '#6b7a99' }}>Cargando...</p>
           ) : visitadores.length === 0 ? (
-            <p style={{ fontSize: 12, color: '#6b7a99' }}>Sin visitadores en la base de datos</p>
+            <p style={{ fontSize: 12, color: '#6b7a99' }}>Sin visitadores</p>
           ) : (
             visitadores.map(r => (
               <div key={r.name} className="graficos-bar-row">
@@ -57,14 +57,14 @@ export const GraficosView: React.FC<Props> = ({ currentView, onNavigate, onLogou
 
       <div className="graficos-card">
         <h3 className="graficos-card-title">Productividad Semanal</h3>
-        <div style={{ padding: 24, textAlign: 'center', color: '#6b7a99', fontSize: 12 }}>Sin datos - no hay endpoint de productividad en la base de datos</div>
+        <div style={{ padding: 24, textAlign: 'center', color: '#6b7a99', fontSize: 12 }}>Sin datos de productividad</div>
       </div>
 
       <div className="graficos-card graficos-card--dashed">
         <div className="graficos-empty">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8a9ab5" strokeWidth="1.6"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 16l3-3 3 3 3-5" /><circle cx="9" cy="9" r="1.5" /></svg>
           <p>Sin datos en BD</p>
-          <span>Solo se muestra lo que existe en la base de datos.</span>
+          <span>Solo se muestran datos registrados.</span>
         </div>
       </div>
     </div>

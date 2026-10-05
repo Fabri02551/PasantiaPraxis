@@ -90,6 +90,14 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+// ChangePasswordRequest es el cambio de contraseña del usuario autenticado.
+// La confirmación la hace el frontend; el backend solo necesita la actual
+// (para comprobar que quien llama es el dueño) y la nueva.
+type ChangePasswordRequest struct {
+	PasswordActual string `json:"password_actual"`
+	PasswordNuevo  string `json:"password_nuevo"`
+}
+
 type RegisterRequest struct {
 	Email           string `json:"email"`
 	Password        string `json:"password"`

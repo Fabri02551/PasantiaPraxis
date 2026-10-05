@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { authService } from '../../services/auth.service'
 import { ApiError, apiClient } from '../../../core/lib/api'
-import { API_LABEL } from '../../../core/config/env'
 import { Toast } from '../../../core/components/Toast/Toast'
 import './Login.css'
 
@@ -26,10 +25,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ logoSrc, onLogin, onForgot
     apiClient
       .health()
       .then(() => {
-        if (!cancelled) setApiToast({ msg: `Conectado a API ✓ ${API_LABEL}`, type: 'success' })
+        if (!cancelled) setApiToast({ msg: `Conectado al servidor`, type: 'success' })
       })
       .catch(() => {
-        if (!cancelled) setApiToast({ msg: `Sin conexión a API ✗ ${API_LABEL}`, type: 'error' })
+        if (!cancelled) setApiToast({ msg: `Sin conexión al servidor`, type: 'error' })
       })
     const t = setTimeout(() => !cancelled && setApiToast(null), 4000)
     return () => {

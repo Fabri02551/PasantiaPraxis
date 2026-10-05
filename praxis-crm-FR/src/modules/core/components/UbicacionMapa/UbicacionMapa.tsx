@@ -1,4 +1,5 @@
-import { MapContainer, TileLayer, Marker, Circle, Popup } from 'react-leaflet'
+import { useEffect } from 'react'
+import { MapContainer, TileLayer, Marker, Circle, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { ENV } from '../../config/env'
@@ -19,6 +20,10 @@ L.Icon.Default.mergeOptions({
 })
 
 export type Coord = [number, number]
+
+// Zoom mínimo del mapa: por debajo se vería el país entero en vez de la
+// ciudad, que es lo único que interesa para una visita.
+const ZOOM_MIN = 12
 
 export type UbicacionMapaProps = {
   /** Dónde está el destino. Si falta, el mapa se dibuja centrado en el visitador. */
@@ -74,10 +79,12 @@ export function UbicacionMapa({
         <MapContainer
           center={centro}
           zoom={hayDestino ? 16 : 15}
+          minZoom={ZOOM_MIN}
           scrollWheelZoom={false}
           className="ubicacion-mapa"
           zoomControl={false}
         >
+          <Recentrar destino={destino} visitador={visitador} />
           <TileLayer url={ENV.MAP_TILE_URL} attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' />
 
           {hayDestino && destino && (
@@ -114,4 +121,31 @@ function formatear(metros: number): string {
   if (!Number.isFinite(metros)) return '—'
   if (metros < 1000) return `${Math.round(metros)} m`
   return `${(metros / 1000).toFixed(1)} km`
+}
+
+/**
+ * Mantiene el mapa centrado donde está el destino.
+ *
+ * MapContainer solo usa `center` para el primer render: los datos de la visita
+ * llegan de la API, así que el mapa se monta primero con la posición del
+ * visitador (o sin nada) y se quedaba mirando el lugar equivocado aunque
+ * después llegara el pin del destino. Esto lo vuelve a=center apenas hay
+ * destino, y lo deja seguir al visitador mientras no haya.
+ */
+function Recentrar({ destino, visitador }: { destino?: Coord | null; visitador?: Coord | null }) {
+  const mapa = useMap()
+  const destinoKey = destino ? destino.join(',') : ''
+  const visitadorKey = visitador ? visitador.join(',') : ''
+
+  useEffect(() => {
+    const objetivo = destinoKey
+      ? (destinoKey.split(',').map(Number) as Coord)
+      : visitadorKey
+        ? (visitadorKey.split(',').map(Number) as Coord)
+        : null
+    if (!objetivo) return
+    mapa.setView(objetivo, destinoKey ? 16 : 15, { animate: false })
+  }, [mapa, destinoKey, visitadorKey])
+
+  return null
 }

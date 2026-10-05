@@ -403,3 +403,20 @@
     padding: 24px;
   }
 }
+
+.pass-ver {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: #6b7a99;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pass-ver input {
+  width: 16px;
+  height: 16px;
+  accent-color: #2d9c9c;
+  cursor: pointer;
+}

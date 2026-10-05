@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect } from 'react'
 import { AdminLayout } from '../../components/AdminLayout/AdminLayout'
 import type { AdminView } from '../../components/AdminSidebar/AdminSidebar'
 import { visitadorService, type VisitadorBE } from '../../../core/services/visitador.service'
-import { ENV, API_LABEL } from '../../../core/config/env'
 import './Visitadores.css'
 
 type Estado = 'Activo' | 'Inactivo'
@@ -42,7 +41,6 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
   const [search, setSearch] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'Todos' | Estado>('Activo')
   const [loading, setLoading] = useState(false)
-  const [apiStatus, setApiStatus] = useState<string>(`API: ${API_LABEL}`)
 
   // popups
   const [showCreate, setShowCreate] = useState(false)
@@ -63,17 +61,14 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
         if (cancelled) return
         if (Array.isArray(data) && data.length > 0) {
           setVisitadores(data.map(mapBEtoFE))
-          setApiStatus(`Conectado a ${API_LABEL} — ${data.length} visitadores desde /api/visitadores`)
         } else {
           setVisitadores([])
-          setApiStatus(`Conectado a ${API_LABEL} — sin datos`)
         }
       })
       .catch((err) => {
         console.warn('[Visitadores] API no disponible', err)
         if (cancelled) return
         setVisitadores([])
-        setApiStatus(`Error: sin conexión a ${API_LABEL} — ${err instanceof Error ? err.message : 'no se pudo cargar visitadores'}`)
       })
       .finally(() => !cancelled && setLoading(false))
     return () => {
@@ -108,12 +103,10 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
       // preserva visitas del form
       mapped.visitas = Number(form.visitas) || 0
       setVisitadores((prev) => [...prev, mapped])
-      setApiStatus(`Creado en ${API_LABEL} → ${mapped.nombre}`)
       setForm({ nombre: '', email: '', telefono: '', latitud: null, longitud: null, visitas: 0 })
       setShowCreate(false)
     } catch (err) {
       console.warn('[Visitadores] create error', err)
-      setApiStatus(`Error al crear visitador: ${err instanceof Error ? err.message : String(err)} — no se guardó (solo DB)`)
     }
   }
 
@@ -130,12 +123,10 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
         longitud: editForm.longitud,
       })
       setVisitadores((prev) => prev.map((v) => (v.id === editForm.id ? editForm : v)))
-      setApiStatus(`Actualizado en API: ${editForm.nombre}`)
       setEditing(null)
       setEditForm(null)
     } catch (err) {
       console.warn('[Visitadores] update error', err)
-      setApiStatus(`Error al actualizar: ${err instanceof Error ? err.message : String(err)} — no se guardó (solo DB)`)
     }
   }
 
@@ -144,11 +135,9 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
     try {
       await visitadorService.remove(deleting.id)
       setVisitadores((prev) => prev.filter((v) => v.id !== deleting.id))
-      setApiStatus(`Eliminado en API: ${deleting.nombre}`)
       setDeleting(null)
     } catch (err) {
       console.warn('[Visitadores] delete error', err)
-      setApiStatus(`Error al eliminar: ${err instanceof Error ? err.message : String(err)} — no se eliminó (solo DB)`)
     }
   }
 
@@ -173,9 +162,9 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
         </label>
         <span className="visitadores-count">{filtered.length} resultado(s)</span>
       </div>
-      <div style={{ fontSize: 11, color: loading ? '#2d9c9c' : '#6b7a99', margin: '6px 0 8px', fontWeight: 500 }}>
-        {loading ? 'Cargando desde API...' : apiStatus}
-      </div>
+      {loading && (
+        <div style={{ fontSize: 11, color: '#2d9c9c', margin: '6px 0 8px', fontWeight: 500 }}>Cargando...</div>
+      )}
 
       <div className="visitadores-card">
         <div className="visitadores-table-wrap">
@@ -217,7 +206,7 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, color: '#7e8aa6' }}>{visitadores.length === 0 ? 'No hay visitadores registrados en la base de datos' : 'No se encontraron visitadores.'}</td></tr>
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, color: '#7e8aa6' }}>{visitadores.length === 0 ? 'No hay visitadores registrados' : 'No se encontraron visitadores.'}</td></tr>
               )}
             </tbody>
           </table>
@@ -307,7 +296,7 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
             <div className="vt-delete-body">
               <div className="vt-delete-icon">⚠️</div>
               <p>¿Seguro que deseas eliminar a <strong>{deleting.nombre}</strong>?</p>
-              <p className="vt-delete-hint">Esta acción eliminará el registro en la base de datos ({ENV.API_URL}).</p>
+              <p className="vt-delete-hint">Esta acción eliminará el registro de forma permanente.</p>
               <div className="vt-form-actions">
                 <button className="vt-btn-cancel" onClick={() => setDeleting(null)}>Cancelar</button>
                 <button className="vt-btn vt-btn--eliminar" onClick={handleDelete}>Eliminar</button>

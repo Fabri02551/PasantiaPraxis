@@ -22,9 +22,3 @@ export const ENV = {
 
 export const getApiUrl = () => ENV.API_URL
 
-/**
- * Texto para mostrarle a la persona dónde está la API. Con API_URL vacía no
- * hay URL que mostrar, pero sí conviene aclarar que es el mismo origen.
- */
-export const API_LABEL = ENV.API_URL || `${location.origin} (mismo origen)`
-

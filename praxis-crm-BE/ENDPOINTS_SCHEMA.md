@@ -16,7 +16,7 @@ Generado: 2026-09-16 — 33 endpoints totales
 
 | Variable | Fuente | Default | Frontend (`praxis-crm-FR/src/modules/core/config/env.ts:1`) |
 |---|---|---|---|
-| `API_PORT` | `Api/internal/core/config/config.go:18` | `8080` | `VITE_API_URL=http://localhost:8080` (`.env.example:1`) |
+| `API_PORT` | `Api/internal/core/config/config.go:18` | `8080` | `VITE_API_URL=http://localhost:8080` (`.env` raíz) |
 | `DATABASE_URL` | `config.go:19` | `postgres://localhost:5432/praxis_crm` | — |
 | `JWT_SECRET` | `config.go:21` | `change-me-in-production` | `localStorage praxis_token` (`core/lib/storage.ts:1`) |
 | `JWT_EXPIRATION_HOURS` | `config.go:22` | `24` → `86400s` | `expires_in` en login |
@@ -352,7 +352,7 @@ await visitadorService.list() // ya lleva Authorization
 
 - **Backend entry:** `Api/cmd/api/main.go:46` `config.Load()` + `database.NewPool` + registro módulos + `middleware.CORS(mux)` → `http.Server Addr=":"+cfg.Port`
 - **DB init:** `docker/init.sql:1` (ciudad, persona, especialidad, laboratorio, medico, accion, visitador, users)
-- **Frontend env:** `praxis-crm-FR/.env.example:1` `VITE_API_URL`, `vite.config.ts:7` proxy, `nginx.conf:7` `proxy_pass praxis-api:8080`
+- **Frontend env:** `.env` raíz `VITE_API_URL`, `vite.config.ts:7` proxy, `nginx.conf:7` `proxy_pass praxis-api:8080`
 - **Frontend auth:** `src/modules/auth/services/auth.service.ts:1`, `src/modules/core/lib/storage.ts:1`, `src/modules/auth/views/Login/Login.tsx:21`
 - **Frontend services CRUD:** `src/modules/core/services/{ciudad,especialidad,persona,medico,accion,visitador,institucion,visita}.service.ts`
 

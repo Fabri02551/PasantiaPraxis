@@ -33,6 +33,13 @@ export type CurrentUser = {
   created_at: string
 }
 
+// Cambio de contraseña del usuario autenticado. La confirmación se valida en
+// el formulario: al backend solo le llegan la actual y la nueva.
+export type ChangePasswordPayload = {
+  password_actual: string
+  password_nuevo: string
+}
+
 export type UpdateProfilePayload = {
   nombre: string
   primer_apellido: string
@@ -56,6 +63,8 @@ export const authService = {
   },
   getMe: () => apiClient.get<CurrentUser>('/api/auth/me'),
   updateMe: (payload: UpdateProfilePayload) => apiClient.put<CurrentUser>('/api/auth/me', payload),
+  changePassword: (payload: ChangePasswordPayload) =>
+    apiClient.put<{ message: string }>('/api/auth/password', payload),
   logout: () => storage.clear(),
   isAuthenticated: () => !!storage.getToken(),
   getRole: () => storage.getRole(),

@@ -136,6 +136,41 @@ func (s *AuthService) UpdateProfile(ctx context.Context, personaID int, req mode
 	return user.ToProfile(), nil
 }
 
+// LongitudMinoPassword es el mínimo que se acepta para una contraseña nueva.
+// Sale del ETL: los visitadores se dan de alta con la que manda el archivo.
+const LongitudMinoPassword = 8
+
+// ChangePassword cambia la contraseña del usuario autenticado. Exige la
+// actual: con el token robado no alcanza para dejar al dueño sin acceso.
+func (s *AuthService) ChangePassword(ctx context.Context, personaID int, req models.ChangePasswordRequest) error {
+	actual := strings.TrimSpace(req.PasswordActual)
+	nueva := strings.TrimSpace(req.PasswordNuevo)
+
+	if actual == "" || nueva == "" {
+		return errors.New("la contraseña actual y la nueva son requeridas")
+	}
+	if len(nueva) < LongitudMinoPassword {
+		return errors.New("la contraseña nueva debe tener al menos 8 caracteres")
+	}
+	if nueva == actual {
+		return errors.New("la contraseña nueva debe ser distinta de la actual")
+	}
+
+	user, err := s.repo.GetByPersonaID(ctx, personaID)
+	if err != nil {
+		return errors.New("no se encontró el usuario de esta sesión")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(actual)); err != nil {
+		return errors.New("la contraseña actual no es correcta")
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(nueva), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	return s.repo.UpdatePasswordHash(ctx, personaID, string(hash))
+}
+
 type Claims struct {
 	Role      string `json:"role"`
 	PersonaID *int   `json:"persona_id"`

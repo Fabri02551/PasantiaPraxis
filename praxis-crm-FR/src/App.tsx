@@ -61,7 +61,7 @@ function App() {
     setView('login')
   }
   const handleLogin = (role: 'admin' | 'visitador') => {
-    setSessionToast({ msg: `Sesión iniciada desde base de datos ✓ — ${role}`, type: 'success' })
+    setSessionToast({ msg: `Sesión iniciada`, type: 'success' })
     setTimeout(() => setSessionToast(null), 3500)
     if (role === 'admin') setView('admin-dashboard')
     else setView('home')

@@ -1,10 +1,12 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Polyline, Popup, CircleMarker } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
 import { storage } from '../../../core/lib/storage'
+import { centroCiudad, centroide } from '../../../core/utils/ciudadCentro'
 import { useMisVisitas, visitaToACompletar, type VisitaResuelta, type DestinoInfo } from '../../hooks/useMisVisitas'
+import { cuentaVencidas } from '../../hooks/useNotificaciones'
 import type { VisitaACompletar } from '../CompletarVisita/CompletarVisita'
 import './Home.css'
 
@@ -38,6 +40,10 @@ function createColorIcon(color: string) {
 
 const markerColors = ['#F9B233', '#2D9C9C', '#E94E6B', '#4A7CF7', '#7B5CFF']
 
+// Zoom mínimo del mapa de la ruta. Más abajo se ve el país entero, que no
+// sirve de nada para una visita dentro de la ciudad.
+const ZOOM_MIN_RUTA = 12
+
 type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
 
 interface HomeProps {
@@ -48,7 +54,10 @@ interface HomeProps {
 }
 
 export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, onLogout, onCompletar }) => {
-  const { porVisitar, loading } = useMisVisitas()
+  const { porVisitar, loading, miCiudad } = useMisVisitas()
+  // El punto rojo del encabezado solo se enciende si hay algo vencido de
+  // verdad: antes estaba siempre encendido, incluso con la ruta al día.
+  const vencidas = useMemo(() => cuentaVencidas(porVisitar), [porVisitar])
   const [menuOpen, setMenuOpen] = useState(false)
   const [detail, setDetail] = useState<VisitaResuelta | null>(null)
   // Índice de la visita enfocada al recorrer la ruta con el control del mapa.
@@ -58,7 +67,10 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
 
   const hoy = hoyKey()
   const pendientesHoy = useMemo(() => porVisitar.filter((v) => v.fecha === hoy), [porVisitar, hoy])
-  const pendientesHoySur = pendientesHoy.length > 0 ? pendientesHoy : porVisitar.slice(0, 4)
+  const pendientesHoySur = useMemo(
+    () => (pendientesHoy.length > 0 ? pendientesHoy : porVisitar.slice(0, 4)),
+    [pendientesHoy, porVisitar],
+  )
 
   // Solo las visitas con pin se pueden dibujar. Una sin coordenadas no debería
   // "aparecer" sobre Quito ni deformar la polyline de la ruta.
@@ -71,12 +83,23 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
     [pendientesHoySur],
   )
   // Posición propia guardada al iniciar sesión (pin azul "usted está aquí").
-  const miUbi = storage.getUbicacion()
-  const miPos: [number, number] | null =
-    miUbi && Number.isFinite(miUbi.latitud) && Number.isFinite(miUbi.longitud)
-      ? [miUbi.latitud, miUbi.longitud]
-      : null
-  const center = conPin[0]?.destino.coords ?? miPos
+  // Va en useMemo para que el array no cambie de referencia en cada render:
+  // el efecto que centra el mapa depende de él.
+  const miPos = useMemo<[number, number] | null>(() => {
+    const u = storage.getUbicacion()
+    return u && Number.isFinite(u.latitud) && Number.isFinite(u.longitud) ? [u.latitud, u.longitud] : null
+  }, [])
+  // El mapa arranca en el centro de la ciudad del visitador, no en un pin
+  // suelto. Es lo único estable: el primer destino cambia según las visitas
+  // del día, y encuadrar la ruta entera aleja el mapa hasta mostrar el país.
+  const ciudadCentro = useMemo(
+    () => centroCiudad(miCiudad?.nombre) ?? centroide(conPin.map((v) => v.destino.coords)) ?? miPos,
+    [miCiudad?.nombre, conPin, miPos],
+  )
+  const center = ciudadCentro ?? conPin[0]?.destino.coords ?? miPos
+  // Zoom de ciudad: 13 entra el área urbana, 14 solo se usa si no se conoce la
+  // ciudad y hay que acercarse al menos a los destinos.
+  const ZOOM_CIUDAD = 13
 
   // Visitas con pin ordenadas de la más próxima a la más lejana en el tiempo:
   // es el orden que recorre el botón "siguiente visita".
@@ -88,6 +111,26 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
   const centrarEnMiUbicacion = () => {
     if (!miPos) return
     mapRef.current?.setView(miPos, 16)
+  }
+
+  // El mapa se centra en el centro de la ciudad cuando la carga termina.
+  // MapContainer solo lee `center` en el primer render, así que sin esto el
+  // mapa queda donde se montó (con los datos todavía vacíos) y nunca se
+  // corrige aunque después lleguen la ciudad y los destinos.
+  const centerKey = center ? center.join(',') : ''
+  useEffect(() => {
+    const mapa = mapRef.current
+    if (!mapa || !centerKey) return
+    mapa.setView(centerKey.split(',').map(Number) as [number, number], ZOOM_CIUDAD, { animate: false })
+  }, [centerKey])
+
+  // Al abrir el detalle de una visita el mapa va a ese destino.
+  const abrirDetalle = (v: VisitaResuelta) => {
+    setDetail(v)
+    const coords = v.destino.coords
+    if (Array.isArray(coords) && coords.length === 2) {
+      mapRef.current?.setView(coords, 16)
+    }
   }
 
   const siguienteVisita = () => {
@@ -111,7 +154,7 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
             <path d="M6 8a6 6 0 0 1 12 0c0 7-6 11-6 11s-6-4-6-11" />
             <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
           </svg>
-          <span className="notification-dot" />
+          {vencidas > 0 && <span className="notification-dot" />}
         </button>
       </header>
       <SidebarMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={onNavigate} currentView={currentView} onLogout={onLogout} />
@@ -133,7 +176,8 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
               <MapContainer
               ref={mapRef}
               center={center}
-              zoom={13}
+              zoom={ZOOM_CIUDAD}
+              minZoom={ZOOM_MIN_RUTA}
               scrollWheelZoom={false}
               className="osm-map"
               zoomControl={false}
@@ -248,7 +292,7 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
           ) : (
             <ul className="visits-list">
               {pendientesHoy.map((v) => (
-                <li key={v.id} className="visit-item" onClick={() => setDetail(v)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setDetail(v)} style={{ cursor: 'pointer' }}>
+                <li key={v.id} className="visit-item" onClick={() => abrirDetalle(v)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && abrirDetalle(v)} style={{ cursor: 'pointer' }}>
                   <div className="visit-date">
                     <span className="visit-date-label">{v.fecha === hoy ? 'Hoy' : v.fecha ?? '—'}</span>
                     <span className="visit-time">{v.hora}</span>

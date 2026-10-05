@@ -1,3 +1,9 @@
 
 # Certificados de desarrollo (mkcert). Son por máquina: el CN lleva la IP local.
 certs/
+
+# Entornos: el archivo vive en la raíz del repo y no se commitea.
+# La plantilla .env.example sí se commitea.
+.env
+.env.*
+!.env.example

@@ -14,7 +14,6 @@ import { personaService } from '../../../core/services/persona.service'
 import { especialidadService, type Especialidad } from '../../../core/services/especialidad.service'
 import { ciudadService, type Ciudad } from '../../../core/services/ciudad.service'
 import { ClasificacionPicker, MiniClasificacion } from '../../../core/components/ClasificacionPicker/ClasificacionPicker'
-import { ENV, API_LABEL } from '../../../core/config/env'
 import { displayMedico } from '../../../core/utils/medicoPrefix'
 import { normalizeUbicaciones, hospitalFromDireccion, type UbicacionMedico } from '../../../core/utils/medicoDireccion'
 import { storage } from '../../../core/lib/storage'
@@ -126,7 +125,6 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
   }))
   const [especialidades, setEspecialidades] = useState<Especialidad[]>([])
   const [ciudades, setCiudades] = useState<Ciudad[]>([])
-  const [apiStatus, setApiStatus] = useState(`API: ${API_LABEL}`)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   // Ref, no solo state: setSaving(true) no actualiza `saving` hasta el
@@ -152,14 +150,12 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
       setTotal(data.total)
       setTotalPages(tp)
       setPage(data.page)
-      setApiStatus(`Conectado a ${API_LABEL} — ${data.total} médicos (página ${data.page} de ${tp})`)
     } catch (err) {
       if (reqRef.current !== reqId) return
       console.warn('[MedicosAdmin] API no disponible', err)
       setMedicos([])
       setTotal(0)
       setTotalPages(1)
-      setApiStatus(`Error: sin conexión a ${API_LABEL} — ${err instanceof Error ? err.message : 'no se pudo cargar médicos'}`)
     } finally {
       if (reqRef.current === reqId) setLoading(false)
     }
@@ -257,14 +253,12 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
       setSearch('')
       setCommittedQ('')
       load(1, '')
-      setApiStatus(`Creado en API: ${form.nombre} ${form.primerApellido} (${matricula})`)
       showToast(`Médico registrado ✓ ${row.nombre} ${row.primerApellido} · ${matricula}`, 'success')
       setForm({ nombre: '', primerApellido: '', segundoApellido: '', sexo: '', matricula: '', especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '', ciudad: '', esParticular: true, clasificacion: 1, ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: coordsCercaDeMi() }] })
       setShowCreate(false)
     } catch (err) {
       console.warn('[MedicosAdmin] create error', err)
       const msg = err instanceof Error ? err.message : String(err)
-      setApiStatus(`Error al crear médico: ${msg}`)
       showToast(`No se guardó ✗ ${msg}`, 'error')
       setShowCreate(false)
     } finally {
@@ -316,14 +310,12 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
         ubicaciones: ubicaciones.length > 0 ? ubicaciones : editForm.ubicaciones,
       }
       load(page, committedQ)
-      setApiStatus(`Actualizado en API: ${displayMedico(editForm.sexo, `${editForm.nombre} ${editForm.primerApellido}`)}`)
       showToast(`Médico actualizado ✓ ${row.nombre} ${row.primerApellido}`, 'success')
       setEditing(null)
       setEditForm(null)
     } catch (err) {
       console.warn('[MedicosAdmin] update error', err)
       const msg = err instanceof Error ? err.message : String(err)
-      setApiStatus(`Error al actualizar: ${msg}`)
       showToast(`No se actualizó ✗ ${msg}`, 'error')
     } finally {
       savingRef.current = false
@@ -339,13 +331,11 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
       await medicoService.remove(pid)
       if (medicos.length === 1 && page > 1) load(page - 1, committedQ)
       else load(page, committedQ)
-      setApiStatus(`Eliminado en API: ${displayMedico(deleting.sexo, deleting.nombre)}`)
       showToast(`Médico eliminado ✓ ${deleting.nombre}`, 'success')
       setDeleting(null)
     } catch (err) {
       console.warn('[MedicosAdmin] delete error', err)
       const msg = err instanceof Error ? err.message : String(err)
-      setApiStatus(`Error al eliminar: ${msg}`)
       showToast(`No se eliminó ✗ ${msg}`, 'error')
     }
   }
@@ -358,7 +348,7 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
         <div>
           <h2 className="pruebas-title">Médicos Registrados</h2>
           <p className="pruebas-sub">Gestiona profesionales médicos y sus ubicaciones asociadas.</p>
-          <p style={{ fontSize: 11, color: loading ? '#2d9c9c' : '#6b7a99', marginTop: 4 }}>{loading ? 'Cargando...' : apiStatus}</p>
+          {loading && <p style={{ fontSize: 11, color: '#2d9c9c', marginTop: 4 }}>Cargando...</p>}
         </div>
         <button className="btn-registrar" onClick={() => setShowCreate(true)}>+ Nuevo Médico</button>
       </div>
@@ -588,7 +578,7 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
             <div className="vt-delete-body">
               <div className="vt-delete-icon--minimal"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#8a9ab5" strokeWidth="1.6"><circle cx="12" cy="12" r="9" /><path d="M12 8v6" /><circle cx="12" cy="16" r="0.8" fill="#8a9ab5" stroke="none" /></svg></div>
               <p>¿Eliminar <strong>{displayMedico(deleting.sexo, nombreCompleto(deleting))}</strong>?</p>
-              <p className="vt-delete-hint">Esta acción eliminará el registro en la base de datos ({ENV.API_URL}).</p>
+              <p className="vt-delete-hint">Esta acción eliminará el registro de forma permanente.</p>
               <div className="vt-form-actions"><button className="vt-btn-cancel" onClick={() => setDeleting(null)}>Cancelar</button><button className="vt-btn vt-btn--eliminar" onClick={handleDelete}>Eliminar</button></div>
             </div>
           </div>
@@ -598,7 +588,7 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
       {saving && (
         <div className="medicos-busy" role="status" aria-live="polite">
           <span className="medicos-busy-spinner" />
-          <span>Guardando en la base de datos…</span>
+          <span>Guardando…</span>
         </div>
       )}
 

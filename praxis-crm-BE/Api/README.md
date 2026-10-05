@@ -19,7 +19,7 @@ Api/
 ├── migrations/         # Scripts SQL de migraciones del esquema de base de datos.
 ├── pkg/                # Código reutilizable que podría compartirse con otros proyectos.
 │   └── response/       # Helpers para responder JSON y errores HTTP.
-├── .env.example        # Plantilla de variables de entorno (copiar a .env).
+│                       # (el .env vive en la raíz del repo, no acá)
 ├── Dockerfile          # Imagen Docker multi-stage para ejecutar el API.
 ├── go.mod / go.sum     # Dependencias del módulo Go.
 └── README.md           # Este archivo.
@@ -34,7 +34,7 @@ Cliente → routes → middleware → handlers → services → repository → B
 ## Ejecución local
 
 ```bash
-cp .env.example .env
+cp ../../.env.example ../../.env
 go run ./cmd/api
 ```
 
@@ -44,7 +44,7 @@ El health check queda disponible en `GET http://localhost:8080/health`.
 
 ```bash
 docker build -t praxis-api .
-docker run --rm -p 8080:8080 --env-file .env praxis-api
+docker run --rm -p 8080:8080 --env-file ../../.env praxis-api
 ```
 
 ## Convenciones

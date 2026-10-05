@@ -128,3 +128,20 @@ func (r *AuthRepository) UpdatePersona(ctx context.Context, personaID int, req m
 	}
 	return r.GetByPersonaID(ctx, personaID)
 }
+
+// UpdatePasswordHash reemplaza el hash de la contraseña del usuario del
+// persona_id dado. Se busca por persona_id y no por el UUID del usuario
+// porque el JWT solo lleva el persona_id.
+func (r *AuthRepository) UpdatePasswordHash(ctx context.Context, personaID int, passwordHash string) error {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE users SET password_hash = $1, updated_at = now() WHERE persona_id = $2`,
+		passwordHash, personaID,
+	)
+	if err != nil {
+		return fmt.Errorf("error updating password: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("user not found")
+	}
+	return nil
+}

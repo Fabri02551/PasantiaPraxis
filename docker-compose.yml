@@ -1,22 +1,46 @@
+# Todos los valores vienen del `.env` de la raíz del repo: docker compose lo
+# carga solo para interpolar las claves ${...} de abajo. Acá no hay ni un valor
+# escrito a mano, así que la configuración vive en un único lugar.
+#
+# Si falta el `.env`, compose avisa por cada variable y los contenedores
+# arrancan con valores vacíos. Crealo con:  cp .env.example .env
 services:
   db:
     image: postgres:16-alpine
     container_name: praxis-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: praxis_crm
-      POSTGRES_USER: praxis
-      POSTGRES_PASSWORD: praxis_secret
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT}:5433"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./praxis-crm-BE/docker/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U praxis -d praxis_crm"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # Carga inicial: corre el ETL una sola vez por base de datos. El servicio
+  # existe siempre, pero cmd/etlinit mira la tabla etl_corrida y sale sin hacer
+  # nada en los arranques siguientes. Por eso `restart: no`: no tiene que
+  # volver a levantarse, solo dejar constancia de que terminó bien.
+  etl-init:
+    build:
+      context: ./praxis-crm-BE/Etl
+      dockerfile: Dockerfile
+    container_name: praxis-etl-init
+    restart: "no"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      ETL_SRC_DIR: ${ETL_SRC_DIR}
+      ETL_EVERY: ${ETL_EVERY}
+    depends_on:
+      db:
+        condition: service_healthy
 
   api:
     build:
@@ -25,21 +49,30 @@ services:
     container_name: praxis-api
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${API_PORT}:${API_PORT}"
     environment:
-      API_PORT: "8080"
-      APP_ENV: development
-      DATABASE_URL: postgres://praxis:praxis_secret@db:5432/praxis_crm?sslmode=disable
-      JWT_SECRET: change-me-in-production
-      JWT_EXPIRATION_HOURS: "24"
+      API_PORT: ${API_PORT}
+      APP_ENV: ${APP_ENV}
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS}
     depends_on:
       db:
         condition: service_healthy
+      # La API espera a que el ETL termine bien: con el esquema vacío la app no
+      # tiene nada que mostrar.
+      etl-init:
+        condition: service_completed_successfully
 
   web:
     build:
       context: ./praxis-crm-FR
       dockerfile: Dockerfile
+      # Vite lee estas variables al compilar, no en runtime: llegan como args
+      # de build (ver el ARG en el Dockerfile).
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_MAP_TILE_URL: ${VITE_MAP_TILE_URL}
     container_name: praxis-web
     restart: unless-stopped
     ports:

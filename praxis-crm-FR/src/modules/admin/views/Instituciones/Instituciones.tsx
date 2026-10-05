@@ -13,7 +13,6 @@ import { institucionService, type InstitucionBE } from '../../../core/services/i
 import { visitadorService, type VisitadorBE } from '../../../core/services/visitador.service'
 import { ciudadService, type Ciudad } from '../../../core/services/ciudad.service'
 import { ClasificacionPicker, MiniClasificacion } from '../../../core/components/ClasificacionPicker/ClasificacionPicker'
-import { ENV, API_LABEL } from '../../../core/config/env'
 import { normalizeUbicaciones, type UbicacionMedico } from '../../../core/utils/medicoDireccion'
 import { storage } from '../../../core/lib/storage'
 import { Toast } from '../../../core/components/Toast/Toast'
@@ -87,7 +86,6 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
     ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: coordsCercaDeMi() }],
   }))
   const [ciudades, setCiudades] = useState<Ciudad[]>([])
-  const [apiStatus, setApiStatus] = useState(`API: ${API_LABEL}`)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
@@ -110,14 +108,12 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
       setTotal(data.total)
       setTotalPages(tp)
       setPage(data.page)
-      setApiStatus(`Conectado a ${API_LABEL} — ${data.total} instituciones (página ${data.page} de ${tp})`)
     } catch (err) {
       if (reqRef.current !== reqId) return
       console.warn('[Instituciones] API no disponible', err)
       setInstituciones([])
       setTotal(0)
       setTotalPages(1)
-      setApiStatus(`Error: sin conexión a ${API_LABEL} — ${err instanceof Error ? err.message : 'no se pudo cargar instituciones'}`)
     } finally {
       if (reqRef.current === reqId) setLoading(false)
     }
@@ -199,14 +195,12 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
       setSearch('')
       setCommittedQ('')
       load(1, '')
-      setApiStatus(`Creado en API: ${form.nombre}`)
       showToast(`Institución registrada ✓ ${row.nombre}`, 'success')
       resetForm()
       setShowCreate(false)
     } catch (err) {
       console.warn('[Instituciones] create error', err)
       const msg = err instanceof Error ? err.message : String(err)
-      setApiStatus(`Error al crear institución: ${msg}`)
       showToast(`No se guardó ✗ ${msg}`, 'error')
       setShowCreate(false)
     } finally {
@@ -249,14 +243,12 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
         ubicaciones: ubicaciones.length > 0 ? ubicaciones : editForm.ubicaciones,
       }
       load(page, committedQ)
-      setApiStatus(`Actualizado en API: ${row.nombre}`)
       showToast(`Institución actualizada ✓ ${row.nombre}`, 'success')
       setEditing(null)
       setEditForm(null)
     } catch (err) {
       console.warn('[Instituciones] update error', err)
       const msg = err instanceof Error ? err.message : String(err)
-      setApiStatus(`Error al actualizar: ${msg}`)
       showToast(`No se actualizó ✗ ${msg}`, 'error')
     } finally {
       savingRef.current = false
@@ -270,13 +262,11 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
       await institucionService.remove(deleting.id)
       if (instituciones.length === 1 && page > 1) load(page - 1, committedQ)
       else load(page, committedQ)
-      setApiStatus(`Eliminado en API: ${deleting.nombre}`)
       showToast(`Institución eliminada ✓ ${deleting.nombre}`, 'success')
       setDeleting(null)
     } catch (err) {
       console.warn('[Instituciones] delete error', err)
       const msg = err instanceof Error ? err.message : String(err)
-      setApiStatus(`Error al eliminar: ${msg}`)
       showToast(`No se eliminó ✗ ${msg}`, 'error')
     }
   }
@@ -287,7 +277,7 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
         <div>
           <h2 className="pruebas-title">Instituciones Registradas</h2>
           <p className="pruebas-sub">Gestiona clínicas, hospitales y sedes asignadas a visitadores.</p>
-          <p style={{ fontSize: 11, color: loading ? '#2d9c9c' : '#6b7a99', marginTop: 4 }}>{loading ? 'Cargando...' : apiStatus}</p>
+          {loading && <p style={{ fontSize: 11, color: '#2d9c9c', marginTop: 4 }}>Cargando...</p>}
         </div>
         <button className="btn-registrar" onClick={() => setShowCreate(true)}>+ Nueva Institución</button>
       </div>
@@ -512,7 +502,7 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
             <div className="vt-delete-body">
               <div className="vt-delete-icon--minimal"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#8a9ab5" strokeWidth="1.6"><circle cx="12" cy="12" r="9" /><path d="M12 8v6" /><circle cx="12" cy="16" r="0.8" fill="#8a9ab5" stroke="none" /></svg></div>
               <p>¿Eliminar <strong>{deleting.nombre}</strong>?</p>
-              <p className="vt-delete-hint">Esta acción eliminará el registro en la base de datos ({ENV.API_URL}).</p>
+              <p className="vt-delete-hint">Esta acción eliminará el registro de forma permanente.</p>
               <div className="vt-form-actions"><button className="vt-btn-cancel" onClick={() => setDeleting(null)}>Cancelar</button><button className="vt-btn vt-btn--eliminar" onClick={handleDelete}>Eliminar</button></div>
             </div>
           </div>
@@ -522,7 +512,7 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
       {saving && (
         <div className="medicos-busy" role="status" aria-live="polite">
           <span className="medicos-busy-spinner" />
-          <span>Guardando en la base de datos…</span>
+          <span>Guardando…</span>
         </div>
       )}
 
