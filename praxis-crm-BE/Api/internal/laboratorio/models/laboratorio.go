@@ -29,3 +29,18 @@ type LaboratorioPrecio struct {
 	Costo         float64 `json:"costo"`
 	ComisionExtra float64 `json:"comision_extra"`
 }
+
+type CreateLaboratorioRequest struct {
+	Nombre        string  `json:"nombre"`
+	Area          string  `json:"area"`
+	Precio        float64 `json:"precio"`
+	ComisionExtra float64 `json:"comision_extra,omitempty"`
+}
+
+type UpdateLaboratorioRequest struct {
+	Nombre        *string  `json:"nombre,omitempty"`
+	Area          *string  `json:"area,omitempty"`
+	Precio        *float64 `json:"precio,omitempty"`
+	ComisionExtra *float64 `json:"comision_extra,omitempty"`
+	Status        *bool    `json:"status,omitempty"`
+}

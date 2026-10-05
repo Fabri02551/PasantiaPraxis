@@ -26,3 +26,15 @@ func (s *LaboratorioService) GetByID(ctx context.Context, id int) (*models.Labor
 func (s *LaboratorioService) GetPreciosPorCiudad(ctx context.Context, ciudadID *int) ([]models.LaboratorioPrecio, error) {
 	return s.repo.GetPreciosPorCiudad(ctx, ciudadID)
 }
+
+func (s *LaboratorioService) Create(ctx context.Context, userID *int, req models.CreateLaboratorioRequest) (*models.Laboratorio, error) {
+	return s.repo.Create(ctx, userID, req)
+}
+
+func (s *LaboratorioService) Update(ctx context.Context, userID *int, id int, req models.UpdateLaboratorioRequest) (*models.Laboratorio, error) {
+	return s.repo.Update(ctx, userID, id, req)
+}
+
+func (s *LaboratorioService) Delete(ctx context.Context, userID *int, id int) error {
+	return s.repo.Delete(ctx, userID, id)
+}

@@ -12,6 +12,7 @@ import { MedicosView } from './modules/visitador/views/Medicos/Medicos'
 import { InstitucionesView } from './modules/visitador/views/Instituciones/Instituciones'
 import { AdminDashboard } from './modules/admin/views/Dashboard/Dashboard'
 import { VisitadoresView } from './modules/admin/views/Visitadores/Visitadores'
+import { AdministradoresView } from './modules/admin/views/Administradores/Administradores'
 import { GraficosView } from './modules/admin/views/Graficos/Graficos'
 import { LaboratoriosView } from './modules/admin/views/Laboratorios/Laboratorios'
 import { CalendarAdminView } from './modules/admin/views/CalendarAdmin/CalendarAdmin'
@@ -107,6 +108,8 @@ function App() {
     content = <AdminDashboard currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
   } else if (view === 'admin-visitadores') {
     content = <VisitadoresView currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
+  } else if (view === 'admin-administradores') {
+    content = <AdministradoresView currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
   } else if (view === 'admin-graficos') {
     content = <GraficosView currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
   } else if (view === 'admin-calendario') {

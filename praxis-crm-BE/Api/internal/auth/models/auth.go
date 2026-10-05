@@ -23,6 +23,7 @@ type Persona struct {
 	Nacimiento      *time.Time `json:"nacimiento,omitempty"`
 	CI              string     `json:"ci"`
 	CiudadID        *int       `json:"ciudad_id,omitempty"`
+	Status          bool       `json:"status"`
 	CreatedAt       time.Time  `json:"created_at"`
 }
 
@@ -115,4 +116,78 @@ type TokenResponse struct {
 	TokenType string `json:"token_type"`
 	ExpiresIn int64  `json:"expires_in"`
 	Role      string `json:"role"`
+}
+
+// AdminItem es un administrador para el CRUD de administradores:
+// perfil aplanado + status (true=1 activo, false=0 eliminado lógico)
+// + ciudad para el formulario del frontend.
+type AdminItem struct {
+	ID              string     `json:"id"`
+	PersonaID       *int       `json:"persona_id"`
+	Email           string     `json:"email"`
+	Role            string     `json:"role"`
+	Nombre          string     `json:"nombre"`
+	PrimerApellido  string     `json:"primer_apellido"`
+	SegundoApellido *string    `json:"segundo_apellido"`
+	Sexo            string     `json:"sexo"`
+	Correo          string     `json:"correo"`
+	Telefono        string     `json:"telefono"`
+	Nacimiento      *time.Time `json:"nacimiento"`
+	CI              string     `json:"ci"`
+	CiudadID        *int       `json:"ciudad_id,omitempty"`
+	Status          bool       `json:"status"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+func (u *UserWithPersona) ToAdmin() *AdminItem {
+	return &AdminItem{
+		ID:              u.User.ID,
+		PersonaID:       u.User.PersonaID,
+		Email:           u.User.Email,
+		Role:            u.User.Role,
+		Nombre:          u.Persona.Nombre,
+		PrimerApellido:  u.Persona.PrimerApellido,
+		SegundoApellido: u.Persona.SegundoApellido,
+		Sexo:            u.Persona.Sexo,
+		Correo:          u.Persona.Correo,
+		Telefono:        u.Persona.Telefono,
+		Nacimiento:      u.Persona.Nacimiento,
+		CI:              u.Persona.CI,
+		CiudadID:        u.Persona.CiudadID,
+		Status:          u.Persona.Status,
+		CreatedAt:       u.User.CreatedAt,
+	}
+}
+
+// CreateAdminRequest crea un administrador: inserta persona + users en UNA
+// transacción (si algo falla no queda persona huérfana).
+type CreateAdminRequest struct {
+	Email           string  `json:"email"`
+	Password        string  `json:"password"`
+	Nombre          string  `json:"nombre"`
+	PrimerApellido  string  `json:"primer_apellido"`
+	SegundoApellido *string `json:"segundo_apellido"`
+	Sexo            string  `json:"sexo"`
+	Telefono        string  `json:"telefono"`
+	CI              string  `json:"ci"`
+	CiudadID        *int    `json:"ciudad_id"`
+	Nacimiento      *string `json:"nacimiento"`
+}
+
+// UpdateAdminRequest edita persona + credencial del administrador en UNA
+// transacción. Status nil = no cambia; Password vacío = no cambia.
+// Correo se sincroniza con Email si viene vacío.
+type UpdateAdminRequest struct {
+	Nombre          string  `json:"nombre"`
+	PrimerApellido  string  `json:"primer_apellido"`
+	SegundoApellido *string `json:"segundo_apellido"`
+	Sexo            string  `json:"sexo"`
+	Telefono        string  `json:"telefono"`
+	CI              string  `json:"ci"`
+	CiudadID        *int    `json:"ciudad_id"`
+	Nacimiento      *string `json:"nacimiento"`
+	Correo          string  `json:"correo"`
+	Email           string  `json:"email"`
+	Password        string  `json:"password"`
+	Status          *bool   `json:"status"`
 }

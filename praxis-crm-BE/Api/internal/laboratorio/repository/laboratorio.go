@@ -44,7 +44,7 @@ func (r *LaboratorioRepository) GetAll(ctx context.Context) ([]models.Laboratori
 	}
 	defer rows.Close()
 
-	var labs []models.Laboratorio
+	var labs []models.Laboratorio = []models.Laboratorio{}
 	for rows.Next() {
 		l, err := scanLaboratorio(rows.Scan)
 		if err != nil {
@@ -102,4 +102,49 @@ func (r *LaboratorioRepository) GetPreciosPorCiudad(ctx context.Context, ciudadI
 		items = append(items, lp)
 	}
 	return items, nil
+}
+
+func (r *LaboratorioRepository) Create(ctx context.Context, userID *int, req models.CreateLaboratorioRequest) (*models.Laboratorio, error) {
+	var id int
+	err := r.pool.QueryRow(ctx,
+		`INSERT INTO laboratorio (nombre, area, precio, comision_extra, creado_por)
+		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+		req.Nombre, req.Area, req.Precio, req.ComisionExtra, userID,
+	).Scan(&id)
+	if err != nil {
+		return nil, err
+	}
+	return r.GetByID(ctx, id)
+}
+
+func (r *LaboratorioRepository) Update(ctx context.Context, userID *int, id int, req models.UpdateLaboratorioRequest) (*models.Laboratorio, error) {
+	var foundID int
+	err := r.pool.QueryRow(ctx,
+		`UPDATE laboratorio SET
+			nombre = COALESCE($2, nombre),
+			area = COALESCE($3, area),
+			precio = COALESCE($4, precio),
+			comision_extra = COALESCE($5, comision_extra),
+			status = COALESCE($6, status),
+			modificado_por = $7, ultima_modificacion = NOW()
+		 WHERE id = $1 RETURNING id`,
+		id, req.Nombre, req.Area, req.Precio, req.ComisionExtra, req.Status, userID,
+	).Scan(&foundID)
+	if err != nil {
+		return nil, fmt.Errorf("laboratorio no encontrado")
+	}
+	return r.GetByID(ctx, foundID)
+}
+
+func (r *LaboratorioRepository) Delete(ctx context.Context, userID *int, id int) error {
+	tag, err := r.pool.Exec(ctx,
+		"UPDATE laboratorio SET status = false, modificado_por = $2, ultima_modificacion = NOW() WHERE id = $1",
+		id, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("laboratorio no encontrado")
+	}
+	return nil
 }

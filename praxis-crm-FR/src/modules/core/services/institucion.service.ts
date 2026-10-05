@@ -36,20 +36,7 @@ export type CreateInstitucionPayload = {
   clasificacion?: number
 }
 
-export type UpdateInstitucionPayload = {
-  nombre?: string
-  razon_social?: string
-  direccion?: unknown
-  telefono?: string
-  correo?: string
-  tipo_contrato?: string
-  nit?: string
-  visitador_id?: number | null
-  ciudad_id?: number | null
-  es_particular?: boolean
-  clasificacion?: number
-  status?: boolean
-}
+export type UpdateInstitucionPayload = Partial<CreateInstitucionPayload> & { status?: boolean }
 
 export type InstitucionPage = { total: number; page: number; limit: number; items: InstitucionBE[] }
 
@@ -62,11 +49,9 @@ export const institucionService = {
     return apiClient.get<InstitucionPage>(`/api/instituciones?${p.toString()}`)
   },
   getById: (id: number) => apiClient.get<InstitucionBE>(`/api/instituciones/${id}`),
-  // Escritura exclusiva de admin (Routes: allRoutes).
-  create: (payload: CreateInstitucionPayload) =>
-    apiClient.post<InstitucionBE>('/api/instituciones', payload),
-  update: (id: number, payload: UpdateInstitucionPayload) =>
-    apiClient.put<InstitucionBE>(`/api/instituciones/${id}`, payload),
-  remove: (id: number) =>
-    apiClient.del<{ message: string }>(`/api/instituciones/${id}`),
+  // Escritura exclusiva de admin
+  create: (data: CreateInstitucionPayload) => apiClient.post<InstitucionBE>('/api/instituciones', data),
+  update: (id: number, data: UpdateInstitucionPayload) =>
+    apiClient.put<InstitucionBE>(`/api/instituciones/${id}`, data),
+  remove: (id: number) => apiClient.del<{ message: string }>(`/api/instituciones/${id}`),
 }

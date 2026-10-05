@@ -1,19 +1,20 @@
 import { useState, useMemo, useEffect } from 'react'
 import { AdminLayout } from '../../components/AdminLayout/AdminLayout'
 import type { AdminView } from '../../components/AdminSidebar/AdminSidebar'
-import { MapPicker } from '../../components/MapPicker/MapPicker'
-import { SuccessModal } from '../../components/SuccessModal/SuccessModal'
-import { visitadorService, type VisitadorBE } from '../../../core/services/visitador.service'
+import { adminService, type AdminBE } from '../../../core/services/admin.service'
+import { ciudadService, type Ciudad } from '../../../core/services/ciudad.service'
 import { getInitials, avatarStyle } from '../../../core/utils/avatar'
-import './Visitadores.css'
+import { SuccessModal } from '../../components/SuccessModal/SuccessModal'
+import { ENV } from '../../../core/config/env'
+import './Administradores.css'
+import '../Visitadores/Visitadores.css'
 
-type Estado = 'Activo' | 'Inactivo'
+type Estado = 'Activo' | 'Eliminado'
 
-// Refleja Api/internal/visitador/models/visitador.go + persona base.
-// BE create requiere: nombre, primer_apellido, sexo.
-// BE update acepta: nombre, primer_apellido, telefono, activo, latitud, longitud.
-interface Visitador {
-  id: number
+// Refleja AdminItem del backend: users + persona (transacción).
+// status true(1)=activo, false(0)=eliminado lógico.
+interface Administrador {
+  personaId: number
   nombre: string
   primerApellido: string
   segundoApellido: string
@@ -21,8 +22,8 @@ interface Visitador {
   email: string
   telefono: string
   ci: string
-  latitud: number | null
-  longitud: number | null
+  ciudadId: number | null
+  nacimiento: string
   estado: Estado
 }
 
@@ -32,21 +33,21 @@ interface Props {
   onLogout: () => void
 }
 
-const mapBEtoFE = (b: VisitadorBE): Visitador => ({
-  id: b.persona_id,
+const mapBEtoFE = (b: AdminBE): Administrador => ({
+  personaId: b.persona_id,
   nombre: b.nombre || '',
   primerApellido: b.primer_apellido || '',
   segundoApellido: b.segundo_apellido || '',
   sexo: b.sexo || '',
-  email: b.correo || '',
+  email: b.email || '',
   telefono: b.telefono || '',
   ci: b.ci || '',
-  latitud: b.latitud ?? null,
-  longitud: b.longitud ?? null,
-  estado: b.activo ? 'Activo' : 'Inactivo',
+  ciudadId: b.ciudad_id ?? null,
+  nacimiento: b.nacimiento ? b.nacimiento.slice(0, 10) : '',
+  estado: b.status ? 'Activo' : 'Eliminado',
 })
 
-const fullName = (v: Pick<Visitador, 'nombre' | 'primerApellido' | 'segundoApellido'>) =>
+const fullName = (v: Pick<Administrador, 'nombre' | 'primerApellido' | 'segundoApellido'>) =>
   `${v.nombre} ${v.primerApellido}${v.segundoApellido ? ' ' + v.segundoApellido : ''}`.trim()
 
 const reqStyle: React.CSSProperties = { color: '#8a9ab5', fontWeight: 400, fontSize: 10, opacity: 0.85, marginLeft: 4, textTransform: 'lowercase' }
@@ -58,16 +59,17 @@ type FormState = {
   segundoApellido: string
   sexo: string
   email: string
+  password: string
   telefono: string
   ci: string
-  latitud: number | null
-  longitud: number | null
+  ciudadId: number | null
+  nacimiento: string
   estado: Estado
 }
 
 const EMPTY_FORM: FormState = {
   nombre: '', primerApellido: '', segundoApellido: '', sexo: '',
-  email: '', telefono: '', ci: '', latitud: null, longitud: null, estado: 'Activo',
+  email: '', password: '', telefono: '', ci: '', ciudadId: null, nacimiento: '', estado: 'Activo',
 }
 
 const Avatar: React.FC<{ nombre: string; primerApellido: string; segundoApellido?: string; size?: number; className?: string }> = ({ nombre, primerApellido, segundoApellido, size = 28, className }) => (
@@ -84,38 +86,43 @@ const Avatar: React.FC<{ nombre: string; primerApellido: string; segundoApellido
   </span>
 )
 
-export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLogout }) => {
-  const [visitadores, setVisitadores] = useState<Visitador[]>([])
+export const AdministradoresView: React.FC<Props> = ({ currentView, onNavigate, onLogout }) => {
+  const [admins, setAdmins] = useState<Administrador[]>([])
   const [search, setSearch] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'Todos' | Estado>('Todos')
   const [loading, setLoading] = useState(false)
+  const [apiStatus, setApiStatus] = useState<string>(`API: ${ENV.API_URL}`)
 
   const [showCreate, setShowCreate] = useState(false)
-  const [editing, setEditing] = useState<Visitador | null>(null)
-  const [deleting, setDeleting] = useState<Visitador | null>(null)
-  const [viewing, setViewing] = useState<Visitador | null>(null)
+  const [editing, setEditing] = useState<Administrador | null>(null)
+  const [deleting, setDeleting] = useState<Administrador | null>(null)
+  const [viewing, setViewing] = useState<Administrador | null>(null)
+  const [createdName, setCreatedName] = useState<string | null>(null)
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
-  const [editForm, setEditForm] = useState<(FormState & { id: number }) | null>(null)
-  const [createdName, setCreatedName] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<(FormState & { personaId: number }) | null>(null)
+  const [ciudades, setCiudades] = useState<Ciudad[]>([])
+
+  useEffect(() => {
+    ciudadService.list().then(d => setCiudades(Array.isArray(d) ? d : [])).catch(() => setCiudades([]))
+  }, [])
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    visitadorService
+    adminService
       .list()
       .then((data) => {
         if (cancelled) return
-        if (Array.isArray(data) && data.length > 0) {
-          setVisitadores(data.map(mapBEtoFE))
-        } else {
-          setVisitadores([])
-        }
+        const rows = Array.isArray(data) ? data.map(mapBEtoFE) : []
+        setAdmins(rows)
+        setApiStatus(`Conectado a ${ENV.API_URL} — ${rows.length} administradores desde /api/admins`)
       })
       .catch((err) => {
-        console.warn('[Visitadores] API no disponible', err)
+        console.warn('[Administradores] API no disponible', err)
         if (cancelled) return
-        setVisitadores([])
+        setAdmins([])
+        setApiStatus(`Error: sin conexión a ${ENV.API_URL} — ${err instanceof Error ? err.message : 'no se pudo cargar administradores'}`)
       })
       .finally(() => !cancelled && setLoading(false))
     return () => {
@@ -124,37 +131,39 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
   }, [])
 
   const filtered = useMemo(() => {
-    return visitadores.filter(v => {
+    return admins.filter(v => {
       const matchEstado = filtroEstado === 'Todos' || v.estado === filtroEstado
       const q = search.trim().toLowerCase()
-      const matchSearch = !q || fullName(v).toLowerCase().includes(q) || v.email.toLowerCase().includes(q) || v.telefono.includes(q) || v.ci.toLowerCase().includes(q)
+      const matchSearch = !q || fullName(v).toLowerCase().includes(q) || v.email.toLowerCase().includes(q) || v.ci.toLowerCase().includes(q)
       return matchEstado && matchSearch
     })
-  }, [visitadores, search, filtroEstado])
+  }, [admins, search, filtroEstado])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.nombre.trim() || !form.primerApellido.trim() || !form.sexo) return
-    // lat/lng solo se envían si el usuario movió el pin (sino null = no guardar)
-    const payload = {
-      nombre: form.nombre.trim(),
-      primer_apellido: form.primerApellido.trim(),
-      segundo_apellido: form.segundoApellido.trim() || undefined,
-      sexo: form.sexo,
-      correo: form.email.trim(),
-      telefono: form.telefono.trim(),
-      ci: form.ci.trim(),
-      latitud: form.latitud,
-      longitud: form.longitud,
-    }
+    if (!form.nombre.trim() || !form.primerApellido.trim() || !form.sexo || !form.email.trim() || !form.password) return
     try {
-      const created = await visitadorService.create(payload)
-      setVisitadores((prev) => [...prev, mapBEtoFE(created)])
+      // POST /api/admins: inserta persona + users (rol admin) en UNA transacción
+      const created = await adminService.create({
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
+        nombre: form.nombre.trim(),
+        primer_apellido: form.primerApellido.trim(),
+        segundo_apellido: form.segundoApellido.trim() || undefined,
+        sexo: form.sexo,
+        telefono: form.telefono.trim(),
+        ci: form.ci.trim(),
+        ciudad_id: form.ciudadId,
+        nacimiento: form.nacimiento || null,
+      })
+      setAdmins((prev) => [...prev, mapBEtoFE(created)])
+      setApiStatus(`Creado en ${ENV.API_URL} → ${form.nombre} ${form.primerApellido}`)
       setCreatedName(fullName({ nombre: form.nombre.trim(), primerApellido: form.primerApellido.trim(), segundoApellido: form.segundoApellido.trim() }))
       setForm(EMPTY_FORM)
       setShowCreate(false)
     } catch (err) {
-      console.warn('[Visitadores] create error', err)
+      console.warn('[Administradores] create error', err)
+      setApiStatus(`Error al crear administrador: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -162,51 +171,52 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
     e.preventDefault()
     if (!editForm) return
     try {
-      await visitadorService.update(editForm.id, {
+      // PUT /api/admins/{persona_id}: actualiza persona + credencial en UNA transacción.
+      // status true=Activo, false=Eliminado (permite reactivar).
+      const updated = await adminService.update(editForm.personaId, {
         nombre: editForm.nombre.trim(),
         primer_apellido: editForm.primerApellido.trim(),
-        telefono: editForm.telefono.trim(),
-        activo: editForm.estado === 'Activo',
-        latitud: editForm.latitud,
-        longitud: editForm.longitud,
-      })
-      setVisitadores((prev) => prev.map((v) => (v.id === editForm.id ? {
-        ...v,
-        nombre: editForm.nombre.trim(),
-        primerApellido: editForm.primerApellido.trim(),
-        segundoApellido: editForm.segundoApellido.trim(),
+        segundo_apellido: editForm.segundoApellido.trim() || null,
         sexo: editForm.sexo,
-        email: editForm.email.trim(),
         telefono: editForm.telefono.trim(),
         ci: editForm.ci.trim(),
-        latitud: editForm.latitud,
-        longitud: editForm.longitud,
-        estado: editForm.estado,
-      } : v)))
+        ciudad_id: editForm.ciudadId,
+        nacimiento: editForm.nacimiento || null,
+        correo: editForm.email.trim(),
+        email: editForm.email.trim(),
+        password: editForm.password.trim() || undefined,
+        status: editForm.estado === 'Activo',
+      })
+      setAdmins((prev) => prev.map((v) => (v.personaId === editForm.personaId ? mapBEtoFE(updated) : v)))
+      setApiStatus(`Actualizado en API: ${editForm.nombre} ${editForm.primerApellido}`)
       setEditing(null)
       setEditForm(null)
     } catch (err) {
-      console.warn('[Visitadores] update error', err)
+      console.warn('[Administradores] update error', err)
+      setApiStatus(`Error al actualizar: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
   const handleDelete = async () => {
     if (!deleting) return
     try {
-      await visitadorService.remove(deleting.id)
-      setVisitadores((prev) => prev.filter((v) => v.id !== deleting.id))
+      // DELETE /api/admins/{persona_id}: eliminación LÓGICA (status 1 -> 0)
+      await adminService.remove(deleting.personaId)
+      setAdmins((prev) => prev.map((v) => (v.personaId === deleting.personaId ? { ...v, estado: 'Eliminado' as Estado } : v)))
+      setApiStatus(`Desactivado en API (baja lógica): ${fullName(deleting)}`)
       setDeleting(null)
     } catch (err) {
-      console.warn('[Visitadores] delete error', err)
+      console.warn('[Administradores] delete error', err)
+      setApiStatus(`Error al eliminar: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
   return (
-    <AdminLayout currentView={currentView} onNavigate={onNavigate} onLogout={onLogout} title="Gestión de Visitadores" searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar visitador, correo, CI...">
+    <AdminLayout currentView={currentView} onNavigate={onNavigate} onLogout={onLogout} title="Gestión de Administradores" searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar administrador, correo, CI...">
       <div className="visitadores-head">
         <div>
-          <h2 className="visitadores-title">Lista de Personal Técnico</h2>
-          <p className="visitadores-sub">Campos según backend: nombre, apellidos, sexo, correo, teléfono, CI y ubicación.</p>
+          <h2 className="visitadores-title">Administradores del Sistema</h2>
+          <p className="visitadores-sub">Cuentas con rol admin: persona + usuario en una transacción. La eliminación es lógica (activo → eliminado).</p>
         </div>
         <button className="btn-registrar" onClick={() => setShowCreate(true)}>+ Registrar Nuevo</button>
       </div>
@@ -217,14 +227,14 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
           <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value as 'Todos' | Estado)} className="visitadores-select">
             <option value="Todos">Todos</option>
             <option value="Activo">Activo</option>
-            <option value="Inactivo">Inactivo</option>
+            <option value="Eliminado">Eliminado</option>
           </select>
         </label>
         <span className="visitadores-count">{filtered.length} resultado(s)</span>
       </div>
-      {loading && (
-        <div style={{ fontSize: 11, color: '#2d9c9c', margin: '6px 0 8px', fontWeight: 500 }}>Cargando...</div>
-      )}
+      <div style={{ fontSize: 11, color: loading ? '#2d9c9c' : '#6b7a99', margin: '6px 0 8px', fontWeight: 500 }}>
+        {loading ? 'Cargando desde API...' : apiStatus}
+      </div>
 
       <div className="visitadores-card">
         <div className="visitadores-table-wrap">
@@ -241,7 +251,7 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
             </thead>
             <tbody>
               {filtered.map(v => (
-                <tr key={v.id}>
+                <tr key={v.personaId}>
                   <td>
                     <div className="vt-name-cell">
                       <Avatar nombre={v.nombre} primerApellido={v.primerApellido} segundoApellido={v.segundoApellido} size={28} className="vt-avatar" />
@@ -259,14 +269,14 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
                   <td>
                     <div className="vt-actions">
                       <button className="vt-btn vt-btn--ver" onClick={() => setViewing(v)}>Ver</button>
-                      <button className="vt-btn vt-btn--editar" onClick={() => { setEditing(v); setEditForm({ ...v, segundoApellido: v.segundoApellido, sexo: v.sexo, email: v.email, telefono: v.telefono, ci: v.ci, latitud: v.latitud, longitud: v.longitud, estado: v.estado }) }}>Editar</button>
-                      <button className="vt-btn vt-btn--eliminar" onClick={() => setDeleting(v)}>Eliminar</button>
+                      <button className="vt-btn vt-btn--editar" onClick={() => { setEditing(v); setEditForm({ ...v, password: '' }) }}>Editar</button>
+                      {v.estado === 'Activo' && <button className="vt-btn vt-btn--eliminar" onClick={() => setDeleting(v)}>Eliminar</button>}
                     </div>
                   </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, color: '#7e8aa6' }}>{visitadores.length === 0 ? 'No hay visitadores registrados' : 'No se encontraron visitadores.'}</td></tr>
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, color: '#7e8aa6' }}>{admins.length === 0 ? 'No hay administradores registrados en la base de datos' : 'No se encontraron administradores.'}</td></tr>
               )}
             </tbody>
           </table>
@@ -277,7 +287,7 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
         <div className="vt-overlay" onClick={() => setShowCreate(false)}>
           <div className="vt-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal>
             <div className="vt-modal-head">
-              <h3>Registrar Nuevo Visitador</h3>
+              <h3>Registrar Nuevo Administrador</h3>
               <button className="vt-modal-close" onClick={() => setShowCreate(false)}>×</button>
             </div>
             <form onSubmit={handleCreate} className="vt-form">
@@ -291,16 +301,17 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
                   <option value="femenino">Femenino</option>
                 </select>
               </label>
-              <label>Correo Electrónico <span style={optStyle}>(opcional)</span><input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="correo@praxis.com" /></label>
+              <label>Email de acceso <span style={reqStyle}>* obligatorio</span><input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="admin@praxis.bo" /></label>
+              <label>Contraseña <span style={reqStyle}>* obligatorio (mín. 6)</span><input required type="password" minLength={6} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="••••••••" /></label>
               <label>Teléfono <span style={optStyle}>(opcional)</span><input value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="+591 70000000" /></label>
               <label>CI <span style={optStyle}>(opcional)</span><input value={form.ci} onChange={e => setForm({ ...form, ci: e.target.value })} placeholder="Ej. 6543217" /></label>
-              <label>Ubicación en mapa <span style={optStyle}>(opcional — vista previa Cochabamba, no se guarda)</span>
-                <MapPicker
-                  coords={form.latitud !== null && form.longitud !== null ? [form.latitud, form.longitud] : null}
-                  onChange={c => setForm({ ...form, latitud: c[0], longitud: c[1] })}
-                  height={160}
-                />
+              <label>Ciudad <span style={optStyle}>(opcional)</span>
+                <select value={form.ciudadId ?? ''} onChange={e => setForm({ ...form, ciudadId: e.target.value === '' ? null : Number(e.target.value) })}>
+                  <option value="">Sin ciudad</option>
+                  {ciudades.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
               </label>
+              <label>Fecha de nacimiento <span style={optStyle}>(opcional)</span><input type="date" value={form.nacimiento} onChange={e => setForm({ ...form, nacimiento: e.target.value })} /></label>
               <div className="vt-form-actions">
                 <button type="button" className="vt-btn-cancel" onClick={() => setShowCreate(false)}>Cancelar</button>
                 <button type="submit" className="vt-btn-submit">Registrar</button>
@@ -314,28 +325,29 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
         <div className="vt-overlay" onClick={() => { setEditing(null); setEditForm(null) }}>
           <div className="vt-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal>
             <div className="vt-modal-head">
-              <h3>Editar Visitador</h3>
+              <h3>Editar Administrador</h3>
               <button className="vt-modal-close" onClick={() => { setEditing(null); setEditForm(null) }}>×</button>
             </div>
             <form onSubmit={handleEditSave} className="vt-form">
               <label>Nombre <span style={reqStyle}>* obligatorio</span><input required value={editForm.nombre} onChange={e => setEditForm({ ...editForm, nombre: e.target.value })} /></label>
               <label>Primer Apellido <span style={reqStyle}>* obligatorio</span><input required value={editForm.primerApellido} onChange={e => setEditForm({ ...editForm, primerApellido: e.target.value })} /></label>
               <label>Segundo Apellido <span style={optStyle}>(opcional)</span><input value={editForm.segundoApellido} onChange={e => setEditForm({ ...editForm, segundoApellido: e.target.value })} /></label>
-              <label>Correo Electrónico <span style={optStyle}>(opcional)</span><input type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} /></label>
+              <label>Email de acceso <span style={reqStyle}>* obligatorio</span><input required type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} /></label>
+              <label>Nueva contraseña <span style={optStyle}>(vacío = no cambia)</span><input type="password" minLength={6} value={editForm.password} onChange={e => setEditForm({ ...editForm, password: e.target.value })} placeholder="Dejar vacío para no cambiar" /></label>
               <label>Teléfono <span style={optStyle}>(opcional)</span><input value={editForm.telefono} onChange={e => setEditForm({ ...editForm, telefono: e.target.value })} /></label>
               <label>CI <span style={optStyle}>(opcional)</span><input value={editForm.ci} onChange={e => setEditForm({ ...editForm, ci: e.target.value })} /></label>
-              <label>Estado
-                <select value={editForm.estado} onChange={e => setEditForm({ ...editForm, estado: e.target.value as Estado })}>
-                  <option value="Activo">Activo</option>
-                  <option value="Inactivo">Inactivo</option>
+              <label>Ciudad <span style={optStyle}>(opcional)</span>
+                <select value={editForm.ciudadId ?? ''} onChange={e => setEditForm({ ...editForm, ciudadId: e.target.value === '' ? null : Number(e.target.value) })}>
+                  <option value="">Sin ciudad</option>
+                  {ciudades.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                 </select>
               </label>
-              <label>Ubicación en mapa <span style={optStyle}>(opcional)</span>
-                <MapPicker
-                  coords={editForm.latitud !== null && editForm.longitud !== null ? [editForm.latitud, editForm.longitud] : null}
-                  onChange={c => setEditForm({ ...editForm, latitud: c[0], longitud: c[1] })}
-                  height={160}
-                />
+              <label>Fecha de nacimiento <span style={optStyle}>(opcional)</span><input type="date" value={editForm.nacimiento} onChange={e => setEditForm({ ...editForm, nacimiento: e.target.value })} /></label>
+              <label>Estado <span style={optStyle}>(Eliminado = baja lógica, reactivable)</span>
+                <select value={editForm.estado} onChange={e => setEditForm({ ...editForm, estado: e.target.value as Estado })}>
+                  <option value="Activo">Activo</option>
+                  <option value="Eliminado">Eliminado</option>
+                </select>
               </label>
               <div className="vt-form-actions">
                 <button type="button" className="vt-btn-cancel" onClick={() => { setEditing(null); setEditForm(null) }}>Cancelar</button>
@@ -350,18 +362,19 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
         <div className="vt-overlay" onClick={() => setViewing(null)}>
           <div className="vt-modal vt-modal--sm" onClick={e => e.stopPropagation()} role="dialog" aria-modal>
             <div className="vt-modal-head">
-              <h3>Detalle del Visitador</h3>
+              <h3>Detalle del Administrador</h3>
               <button className="vt-modal-close" onClick={() => setViewing(null)}>×</button>
             </div>
             <div className="vt-view-body">
               <Avatar nombre={viewing.nombre} primerApellido={viewing.primerApellido} segundoApellido={viewing.segundoApellido} size={64} className="vt-view-avatar" />
               <h4>{fullName(viewing)}</h4>
-              <p className="vt-view-email">{viewing.email || 'Sin correo'}</p>
+              <p className="vt-view-email">{viewing.email}</p>
               <div className="vt-view-grid">
                 <span>Sexo</span><strong>{viewing.sexo || '—'}</strong>
                 <span>Teléfono</span><strong>{viewing.telefono || '—'}</strong>
                 <span>CI</span><strong>{viewing.ci || '—'}</strong>
-                <span>Ubicación</span><strong>{viewing.latitud !== null && viewing.longitud !== null ? `${viewing.latitud.toFixed(5)}, ${viewing.longitud.toFixed(5)}` : 'Sin coordenadas'}</strong>
+                <span>Nacimiento</span><strong>{viewing.nacimiento || '—'}</strong>
+                <span>Ciudad</span><strong>{viewing.ciudadId ? (ciudades.find(c => c.id === viewing.ciudadId)?.nombre || viewing.ciudadId) : '—'}</strong>
                 <span>Estado</span><span className={`vt-badge ${viewing.estado === 'Activo' ? 'vt-badge--activo' : 'vt-badge--inactivo'}`}><span className="vt-dot" /> {viewing.estado}</span>
               </div>
               <button className="vt-btn-submit" style={{ width: '100%', marginTop: 16 }} onClick={() => setViewing(null)}>Cerrar</button>
@@ -374,23 +387,23 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
         <div className="vt-overlay" onClick={() => setDeleting(null)}>
           <div className="vt-modal vt-modal--sm" onClick={e => e.stopPropagation()} role="dialog" aria-modal>
             <div className="vt-modal-head">
-              <h3>Confirmar Eliminación</h3>
+              <h3>Confirmar Baja Lógica</h3>
               <button className="vt-modal-close" onClick={() => setDeleting(null)}>×</button>
             </div>
             <div className="vt-delete-body">
               <div className="vt-delete-icon">⚠️</div>
-              <p>¿Seguro que deseas eliminar a <strong>{fullName(deleting)}</strong>?</p>
-              <p className="vt-delete-hint">Esta acción eliminará el registro en la base de datos.</p>
+              <p>¿Desactivar a <strong>{fullName(deleting)}</strong>?</p>
+              <p className="vt-delete-hint">Eliminación lógica: status 1 → 0. No se borra de la BD y se puede reactivar desde Editar.</p>
               <div className="vt-form-actions">
                 <button className="vt-btn-cancel" onClick={() => setDeleting(null)}>Cancelar</button>
-                <button className="vt-btn vt-btn--eliminar" onClick={handleDelete}>Eliminar</button>
+                <button className="vt-btn vt-btn--eliminar" onClick={handleDelete}>Desactivar</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      <SuccessModal open={createdName !== null} onClose={() => setCreatedName(null)} kind="visitador" name={createdName ?? ''} />
+      <SuccessModal open={createdName !== null} onClose={() => setCreatedName(null)} kind="administrador" name={createdName ?? ''} />
     </AdminLayout>
   )
 }

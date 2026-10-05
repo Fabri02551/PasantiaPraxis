@@ -8,6 +8,7 @@ import { especialidadService } from '../../../core/services/especialidad.service
 import { visitaService } from '../../../core/services/visita.service'
 import { normalizeUbicaciones, hospitalFromDireccion, firstDireccionTexto, type UbicacionMedico } from '../../../core/utils/medicoDireccion'
 import { UbicacionMapa } from '../../../core/components/UbicacionMapa/UbicacionMapa'
+import { InfoModal, type InfoVariant, type InfoDetail } from '../../components/InfoModal/InfoModal'
 import './Planificador.css'
 
 type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
@@ -58,6 +59,13 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
   const [selectedUbicacion, setSelectedUbicacion] = useState('')
   const [visitas, setVisitas] = useState<VisitaTentativa[]>([NUEVA_VISITA()])
   const [saving, setSaving] = useState(false)
+  const [modal, setModal] = useState<{
+    variant: InfoVariant
+    title: string
+    message: string
+    details?: InfoDetail[]
+    redirectHome: boolean
+  } | null>(null)
 
   // Calendar state for date picker – single month view per picker
   const [calMonth, setCalMonth] = useState(() => new Date())
@@ -195,22 +203,42 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
 
   const handleRegistrar = async () => {
     if (!currentUser) {
-      alert('No se pudo identificar al visitador - vuelve a iniciar sesión')
+      setModal({
+        variant: 'error',
+        title: 'Sesión requerida',
+        message: 'No se pudo identificar al visitador. Vuelve a iniciar sesión.',
+        redirectHome: false,
+      })
       return
     }
     if (!destino) {
-      alert('No hay destinos en tu cartera para planificar (médicos o instituciones asignados a ti)')
+      setModal({
+        variant: 'error',
+        title: 'Sin destinos',
+        message: 'No hay destinos en tu cartera para planificar (médicos o instituciones asignados a ti).',
+        redirectHome: false,
+      })
       return
     }
     const sinFecha = visitas.filter((v) => !v.fecha)
     if (sinFecha.length > 0) {
-      alert(`Todas las visitas tentativas deben tener fecha seleccionada (falta la ${sinFecha[0].id === visitas[0].id ? 'primera' : 'alguna'}).`)
+      setModal({
+        variant: 'error',
+        title: 'Falta la fecha',
+        message: `Todas las visitas tentativas deben tener fecha seleccionada (falta la ${sinFecha[0].id === visitas[0].id ? 'primera' : 'alguna'}).`,
+        redirectHome: false,
+      })
       return
     }
 
     const miPersona = currentUser.persona_id
     if (!miPersona) {
-      alert('No se pudo identificar al visitador - vuelve a iniciar sesión')
+      setModal({
+        variant: 'error',
+        title: 'Sesión requerida',
+        message: 'No se pudo identificar al visitador. Vuelve a iniciar sesión.',
+        redirectHome: false,
+      })
       return
     }
 
@@ -240,12 +268,38 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
     setSaving(false)
 
     if (errores.length > 0) {
-      alert(`Se crearon ${creadas.length} de ${visitas.length} visita(s).\nErrores:\n- ${errores.join('\n- ')}`)
+      setModal({
+        variant: 'error',
+        title: 'Planificación parcial',
+        message: `Se crearon ${creadas.length} de ${visitas.length} visita(s). Revisa los errores e inténtalo de nuevo.`,
+        details: errores.slice(0, 5).map((e, i) => ({ label: `Error ${i + 1}`, value: e })),
+        redirectHome: false,
+      })
       return
     }
     const nombreDestino = `${destino.nombre} (${destino.tipo === 'medico' ? 'médico' : 'institución'})`
-    alert(`Planificación registrada para ${nombreDestino} en ${ubicaciones.find((u) => u.id === selectedUbicacion)?.direccion ?? '…'}: ${visitas.length} visita(s) tentativa(s) quedaron en estado "por visitar".`)
-    setVisitas([NUEVA_VISITA()])
+    const direccionDestino = ubicaciones.find((u) => u.id === selectedUbicacion)?.direccion ?? '…'
+    setModal({
+      variant: 'success',
+      title: 'Planificación registrada',
+      message: `Planificación registrada para ${nombreDestino} en ${direccionDestino}.`,
+      details: [
+        { label: 'Destino', value: nombreDestino },
+        { label: 'Ubicación', value: direccionDestino },
+        { label: 'Visitas', value: `${visitas.length} visita(s) tentativa(s)` },
+        { label: 'Estado', value: 'por visitar' },
+      ],
+      redirectHome: true,
+    })
+  }
+
+  const handleModalAccept = () => {
+    const goHome = modal?.redirectHome ?? false
+    setModal(null)
+    if (goHome) {
+      setVisitas([NUEVA_VISITA()])
+      onNavigate('home')
+    }
   }
 
   // helpers for calendar rendering
@@ -525,6 +579,18 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
           {saving ? 'Guardando…' : 'Registrar planificación'}
         </button>
       </div>
+
+      {modal && (
+        <InfoModal
+          open
+          variant={modal.variant}
+          title={modal.title}
+          message={modal.message}
+          details={modal.details}
+          acceptLabel="Aceptar"
+          onAccept={handleModalAccept}
+        />
+      )}
     </div>
   )
 }

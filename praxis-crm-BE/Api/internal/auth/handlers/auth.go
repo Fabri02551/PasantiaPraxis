@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/auth/models"
@@ -134,4 +135,84 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusOK, map[string]string{"message": "contraseña actualizada"})
+}
+
+// ============================================================
+// CRUD de administradores: persona <-> users en transacción,
+// eliminación lógica (persona.status 1 -> 0).
+// ============================================================
+
+func (h *AuthHandler) ListAdmins(w http.ResponseWriter, r *http.Request) {
+	admins, err := h.svc.ListAdmins(r.Context())
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, admins)
+}
+
+func (h *AuthHandler) GetAdmin(w http.ResponseWriter, r *http.Request) {
+	personaID, err := strconv.Atoi(r.PathValue("persona_id"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "persona_id inválido")
+		return
+	}
+
+	admin, err := h.svc.GetAdmin(r.Context(), personaID)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, admin)
+}
+
+func (h *AuthHandler) CreateAdmin(w http.ResponseWriter, r *http.Request) {
+	var req models.CreateAdminRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+
+	admin, err := h.svc.CreateAdmin(r.Context(), req)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusCreated, admin)
+}
+
+func (h *AuthHandler) UpdateAdmin(w http.ResponseWriter, r *http.Request) {
+	personaID, err := strconv.Atoi(r.PathValue("persona_id"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "persona_id inválido")
+		return
+	}
+
+	var req models.UpdateAdminRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+
+	admin, err := h.svc.UpdateAdmin(r.Context(), personaID, req)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, admin)
+}
+
+// DeleteAdmin es eliminación lógica: cambia persona.status de 1 a 0.
+func (h *AuthHandler) DeleteAdmin(w http.ResponseWriter, r *http.Request) {
+	personaID, err := strconv.Atoi(r.PathValue("persona_id"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "persona_id inválido")
+		return
+	}
+
+	if err := h.svc.DeleteAdmin(r.Context(), middleware.UserPersonaID(r.Context()), personaID); err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"message": "administrador desactivado"})
 }

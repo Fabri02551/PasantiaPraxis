@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { AdminSidebar, type AdminView } from '../../components/AdminSidebar/AdminSidebar'
-import { AdminHeader } from '../../components/AdminHeader/AdminHeader'
+import type { AdminView } from '../../components/AdminSidebar/AdminSidebar'
+import { AdminLayout } from '../../components/AdminLayout/AdminLayout'
 import { visitadorService } from '../../../core/services/visitador.service'
 import { medicoService } from '../../../core/services/medico.service'
 import { ciudadService } from '../../../core/services/ciudad.service'
@@ -41,12 +41,8 @@ export const AdminDashboard: React.FC<Props> = ({ currentView, onNavigate, onLog
   }, [])
 
   return (
-    <div className="admin-layout">
-      <AdminSidebar currentView={currentView} onNavigate={onNavigate} onLogout={onLogout} />
-      <div className="admin-main">
-        <AdminHeader searchValue={search} onSearchChange={setSearch} onNavigateNotifications={() => onNavigate('admin-notificaciones')} />
-
-        <div className="admin-content">
+    <AdminLayout currentView={currentView} onNavigate={onNavigate} onLogout={onLogout} title="Panel de Control" searchValue={search} onSearchChange={setSearch}>
+        <div className="admin-content" style={{ padding: 0 }}>
           <div className="admin-welcome">
             <h2 className="admin-welcome-title">¡Bienvenido de vuelta, Administrador!</h2>
             <p className="admin-welcome-sub">Aquí está el resumen del estado de las visitas de campo para hoy.</p>
@@ -137,8 +133,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentView, onNavigate, onLog
             <div style={{ padding: 24, textAlign: 'center', color: '#6b7a99', fontSize: 12 }}>Sin datos de visitas mensuales</div>
           </div>
         </div>
-      </div>
-    </div>
+    </AdminLayout>
   )
 }
 

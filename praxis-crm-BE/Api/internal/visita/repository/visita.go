@@ -50,7 +50,7 @@ func (r *VisitaRepository) GetAll(ctx context.Context) ([]models.Visita, error) 
 	}
 	defer rows.Close()
 
-	var visitas []models.Visita
+	var visitas []models.Visita = []models.Visita{}
 	for rows.Next() {
 		v, err := scanVisita(rows.Scan)
 		if err != nil {

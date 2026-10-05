@@ -13,7 +13,7 @@
 }
 .graficos-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
   gap: 14px;
 }
 .graficos-card {
@@ -49,3 +49,10 @@
 .graficos-empty { text-align: center; }
 .graficos-empty p { font-size: 12px; font-weight: 600; color: #1B2A4E; margin: 8px 0 4px; }
 .graficos-empty span { font-size: 11px; color: #7e8aa6; }
+
+@media (max-width: 640px) {
+  .graficos-grid { grid-template-columns: 1fr; }
+  .graficos-card { padding: 12px; min-height: 0; }
+  .graficos-bar-row { grid-template-columns: 72px 1fr 30px; gap: 8px; }
+  .graficos-line-labels { grid-template-columns: repeat(2,1fr); gap: 4px; }
+}

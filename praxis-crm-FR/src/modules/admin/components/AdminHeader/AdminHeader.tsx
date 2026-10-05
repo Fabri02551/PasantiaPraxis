@@ -7,6 +7,7 @@ interface Props {
   searchValue?: string
   onSearchChange?: (v: string) => void
   searchPlaceholder?: string
+  onMenu?: () => void
 }
 
 function formatFechaActual(date: Date) {
@@ -55,14 +56,21 @@ function NotifIcon({ variant }: { variant: NotificationItem['variant'] }) {
   )
 }
 
-export const AdminHeader: React.FC<Props> = ({ title = 'Panel de Control', searchValue, onSearchChange, searchPlaceholder = 'Buscar visitas, técnicos, labs...' }) => {
+export const AdminHeader: React.FC<Props> = ({ title = 'Panel de Control', searchValue, onSearchChange, searchPlaceholder = 'Buscar visitas, técnicos, labs...', onMenu }) => {
   const [showNotif, setShowNotif] = useState(false)
   const fechaTexto = formatFechaActual(new Date())
   const newCount = NOTIFICATIONS.filter(n => n.isNew).length
 
   return (
     <header className="admin-header">
-      <h1 className="admin-header-title">{title}</h1>
+      <div className="admin-header-left">
+        {onMenu && (
+          <button className="admin-menu-btn" onClick={onMenu} aria-label="Abrir menú">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
+          </button>
+        )}
+        <h1 className="admin-header-title">{title}</h1>
+      </div>
 
       <div className="admin-header-right">
         <div className="admin-search-wrap">

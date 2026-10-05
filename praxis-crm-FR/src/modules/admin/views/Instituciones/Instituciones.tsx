@@ -9,6 +9,7 @@ import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 import { MapPicker } from '../../components/MapPicker/MapPicker'
+import { SuccessModal } from '../../components/SuccessModal/SuccessModal'
 import { institucionService, type InstitucionBE } from '../../../core/services/institucion.service'
 import { visitadorService, type VisitadorBE } from '../../../core/services/visitador.service'
 import { ciudadService, type Ciudad } from '../../../core/services/ciudad.service'
@@ -86,6 +87,7 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
     ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: coordsCercaDeMi() }],
   }))
   const [ciudades, setCiudades] = useState<Ciudad[]>([])
+  const [createdName, setCreatedName] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
@@ -196,6 +198,7 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
       setCommittedQ('')
       load(1, '')
       showToast(`Institución registrada ✓ ${row.nombre}`, 'success')
+      setCreatedName(form.nombre.trim())
       resetForm()
       setShowCreate(false)
     } catch (err) {
@@ -517,6 +520,8 @@ export const InstitucionesView: React.FC<{ currentView: AdminView; onNavigate: (
       )}
 
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+
+      <SuccessModal open={createdName !== null} onClose={() => setCreatedName(null)} kind="institucion" name={createdName ?? ''} />
     </AdminLayout>
   )
 }
