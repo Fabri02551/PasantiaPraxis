@@ -289,3 +289,11 @@ func (r *AuthRepository) SetAdminStatus(ctx context.Context, personaID int, stat
 	}
 	return nil
 }
+
+func (r *AuthRepository) UpdatePasswordByEmail(ctx context.Context, email, passwordHash string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE users SET password_hash=$1, updated_at=NOW() WHERE email=$2`, passwordHash, email)
+	if err != nil {
+		return fmt.Errorf("error updating password: %w", err)
+	}
+	return nil
+}
