@@ -5,6 +5,7 @@ import { institucionService } from '../../../core/services/institucion.service'
 import { personaService } from '../../../core/services/persona.service'
 import { laboratorioService, type LaboratorioPrecioBE } from '../../../core/services/laboratorio.service'
 import { visitaService, type VisitaBE } from '../../../core/services/visita.service'
+import { ciudadService, type Ciudad } from '../../../core/services/ciudad.service'
 import { useGeolocation, distanciaMetros, formatearDistancia } from '../../../core/hooks/useGeolocation'
 import { UbicacionMapa } from '../../../core/components/UbicacionMapa/UbicacionMapa'
 import { normalizeUbicaciones } from '../../../core/utils/medicoDireccion'
@@ -68,6 +69,7 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
   const [guardandoVisita, setGuardandoVisita] = useState(false)
   const [msg, setMsg] = useState('')
   const [guardado, setGuardado] = useState(false)
+  const [ciudades, setCiudades] = useState<Ciudad[]>([])
 
   const gps = useGeolocation()
 
@@ -90,6 +92,19 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
   }, [])
 
   useEffect(() => {
+    let muerto = false
+    ciudadService
+      .list()
+      .then((data) => {
+        if (!muerto && Array.isArray(data)) setCiudades(data)
+      })
+      .catch(() => undefined)
+    return () => {
+      muerto = true
+    }
+  }, [])
+
+  useEffect(() => {
     if (!videoId) {
       setCargando(false)
       return
@@ -109,7 +124,7 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
 
         let esParticular = false
         let ciudadId: number | null = null
-        let nombre = visita?.company ?? `Visita #${videoId}`
+        let nombre = visita?.company ?? 'Visita pendiente'
         let subtitulo = visita?.detail ?? ''
 
         if (v.id_medico) {
@@ -363,7 +378,7 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
         satisfaccion: parseInt(satisfaccion || '0', 10) || 0,
         duracion: 0,
       })
-      alert(`Visita #${videoId} registrada correctamente`)
+      alert('Visita registrada correctamente')
       setGuardado(true)
       onNavigate('home')
     } catch (err) {
@@ -491,7 +506,7 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                 <h3 className="completar-medico-title" style={{ margin: 0 }}>Cotización de Laboratorios</h3>
                 <span style={{ fontSize: 11, color: '#7e8aa6' }}>
-                  Ciudad: {destino.ciudadId != null ? `#${destino.ciudadId}` : 'sin ciudad asignada'}{destino.esParticular ? ' · con comisión particular' : ''}
+                  Ciudad: {destino.ciudadId != null ? ciudades.find(c => c.id === destino.ciudadId)?.nombre ?? 'sin ciudad asignada' : 'sin ciudad asignada'}{destino.esParticular ? ' · con comisión particular' : ''}
                 </span>
               </div>
               <p style={{ fontSize: 11, color: '#7e8aa6', margin: '6px 0 10px' }}>

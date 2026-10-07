@@ -16,6 +16,9 @@ func Register(mux *http.ServeMux, h *handlers.AuthHandler, resetH *handlers.Pass
 		middleware.Auth(authSecret)(http.HandlerFunc(h.Me)))
 	mux.Handle("PUT /api/auth/me",
 		middleware.Auth(authSecret)(http.HandlerFunc(h.UpdateMe)))
+	// Cambio de contraseña del usuario autenticado (persona_id del token).
+	mux.Handle("PUT /api/auth/password",
+		middleware.Auth(authSecret)(http.HandlerFunc(h.ChangePassword)))
 
 	mux.HandleFunc("POST /api/auth/forgot-password", resetH.ForgotPassword)
 	mux.HandleFunc("POST /api/auth/reset-password", resetH.ResetPassword)

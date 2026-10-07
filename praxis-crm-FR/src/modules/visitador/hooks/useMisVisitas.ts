@@ -5,6 +5,7 @@ import { institucionService } from '../../core/services/institucion.service'
 import { personaService } from '../../core/services/persona.service'
 import { especialidadService } from '../../core/services/especialidad.service'
 import { visitaService } from '../../core/services/visita.service'
+import { ciudadService, type Ciudad } from '../../core/services/ciudad.service'
 import {
   hospitalFromDireccion,
   firstDireccionTexto,
@@ -74,12 +75,24 @@ export function visitaToACompletar(v: VisitaResuelta): VisitaACompletar {
 export function useMisVisitas() {
   const [visitas, setVisitas] = useState<VisitaResuelta[]>([])
   const [loading, setLoading] = useState(true)
+  // Ciudad del visitador logueado. El mapa de la ruta se centra acá, y no en
+  // el punto medio de los destinos: con la ruta repartida el punto medio cae
+  // fuera de la ciudad y el encuadre se va de la ciudad.
+  const [miCiudad, setMiCiudad] = useState<{ id: number; nombre: string } | null>(null)
 
   const cargar = useCallback(async () => {
     setLoading(true)
     try {
       const me = await authService.getMe()
       const miPersona = me?.persona_id ?? null
+
+      const [ciudadesRaw, miFila] = await Promise.all([
+        ciudadService.list().catch(() => []),
+        miPersona ? personaService.getById(miPersona).catch(() => null) : Promise.resolve(null),
+      ])
+      const nombreDeCiudad = new Map<number, string>()
+      if (Array.isArray(ciudadesRaw)) (ciudadesRaw as Ciudad[]).forEach((c) => nombreDeCiudad.set(c.id, c.nombre))
+      setMiCiudad(miFila?.ciudad_id ? { id: miFila.ciudad_id, nombre: nombreDeCiudad.get(miFila.ciudad_id) ?? '' } : null)
 
       const [medicosRaw, institucionesRaw, espesRaw, visitasRaw] = await Promise.all([
         medicoService.list().catch(() => []),
@@ -208,5 +221,5 @@ export function useMisVisitas() {
 
   const porVisitar = useMemo(() => visitas.filter((v) => !v.registrada), [visitas])
 
-  return { visitas, porVisitar, loading, cargar }
+  return { visitas, porVisitar, loading, cargar, miCiudad }
 }

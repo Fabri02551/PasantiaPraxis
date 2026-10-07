@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect } from 'react'
 import { AdminLayout } from '../../components/AdminLayout/AdminLayout'
 import type { AdminView } from '../../components/AdminSidebar/AdminSidebar'
 import { especialidadService, type Especialidad } from '../../../core/services/especialidad.service'
-import { ENV, API_LABEL } from '../../../core/config/env'
 import './Especialidades.css'
 import '../Visitadores/Visitadores.css'
 
@@ -15,7 +14,6 @@ export const EspecialidadesView: React.FC<{ currentView: AdminView; onNavigate: 
   const [deleting, setDeleting] = useState<Especialidad | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ nombre: '', codigo: '' })
-  const [apiStatus, setApiStatus] = useState(`API: ${API_LABEL}`)
   const [loading, setLoading] = useState(false)
 
   const reqStyle: React.CSSProperties = { color: '#8a9ab5', fontWeight: 400, fontSize: 10, opacity: 0.85, marginLeft: 4, textTransform: 'lowercase' }
@@ -27,15 +25,12 @@ export const EspecialidadesView: React.FC<{ currentView: AdminView; onNavigate: 
       const data = await especialidadService.list()
       if (Array.isArray(data)) {
         setEspecialidades(data)
-        setApiStatus(`Conectado a ${API_LABEL} — ${data.length} especialidades`)
       } else {
         setEspecialidades([])
-        setApiStatus(`Conectado a ${API_LABEL} — sin datos`)
       }
     } catch (err) {
       console.warn('[Especialidades] API no disponible', err)
       setEspecialidades([])
-      setApiStatus(`Error: sin conexión a ${API_LABEL} — ${err instanceof Error ? err.message : 'error'}`)
     } finally {
       setLoading(false)
     }
@@ -57,12 +52,10 @@ export const EspecialidadesView: React.FC<{ currentView: AdminView; onNavigate: 
     try {
       const created = await especialidadService.create({ nombre: form.nombre.trim(), codigo: form.codigo.trim().toUpperCase() })
       setEspecialidades(prev => [...prev, created])
-      setApiStatus(`Creado en API: ${form.nombre} (${form.codigo})`)
       setForm({ nombre: '', codigo: '' })
       setShowCreate(false)
     } catch (err) {
       console.warn('[Especialidades] create error', err)
-      setApiStatus(`Error al crear: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -72,12 +65,10 @@ export const EspecialidadesView: React.FC<{ currentView: AdminView; onNavigate: 
     try {
       const updated = await especialidadService.update(editForm.id, { nombre: editForm.nombre, codigo: editForm.codigo, status: editForm.status })
       setEspecialidades(prev => prev.map(es => es.id === updated.id ? updated : es))
-      setApiStatus(`Actualizado: ${updated.nombre}`)
       setEditing(null)
       setEditForm(null)
     } catch (err) {
       console.warn('[Especialidades] update error', err)
-      setApiStatus(`Error al actualizar: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -86,11 +77,9 @@ export const EspecialidadesView: React.FC<{ currentView: AdminView; onNavigate: 
     try {
       await especialidadService.remove(deleting.id)
       setEspecialidades(prev => prev.filter(es => es.id !== deleting.id))
-      setApiStatus(`Eliminado: ${deleting.nombre}`)
       setDeleting(null)
     } catch (err) {
       console.warn('[Especialidades] delete error', err)
-      setApiStatus(`Error al eliminar: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -100,7 +89,7 @@ export const EspecialidadesView: React.FC<{ currentView: AdminView; onNavigate: 
         <div>
           <h2 className="pruebas-title">Especialidades Médicas</h2>
           <p className="pruebas-sub">Gestiona las especialidades médicas disponibles para los médicos. Campos DB: nombre (obligatorio), código (obligatorio único), status.</p>
-          <p style={{ fontSize: 11, color: loading ? '#2d9c9c' : '#6b7a99', marginTop: 4 }}>{loading ? 'Cargando...' : apiStatus}</p>
+          {loading && <p style={{ fontSize: 11, color: '#2d9c9c', marginTop: 4 }}>Cargando...</p>}
         </div>
         <button className="btn-registrar" onClick={() => setShowCreate(true)}>+ Nueva Especialidad</button>
       </div>
@@ -146,7 +135,6 @@ export const EspecialidadesView: React.FC<{ currentView: AdminView; onNavigate: 
                 <span>Nombre</span><strong>{viewing.nombre}</strong>
                 <span>Código</span><strong>{viewing.codigo}</strong>
                 <span>Estado</span><strong>{viewing.status ? 'Activo' : 'Inactivo'}</strong>
-                <span>ID</span><strong>{viewing.id}</strong>
               </div>
               <button className="vt-btn-submit" style={{ width: '100%', marginTop: 16 }} onClick={() => setViewing(null)}>Cerrar</button>
             </div>
@@ -193,7 +181,7 @@ export const EspecialidadesView: React.FC<{ currentView: AdminView; onNavigate: 
             <div className="vt-delete-body">
               <div className="vt-delete-icon--minimal"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#8a9ab5" strokeWidth="1.6"><circle cx="12" cy="12" r="9" /><path d="M12 8v6" /><circle cx="12" cy="16" r="0.8" fill="#8a9ab5" stroke="none" /></svg></div>
               <p>¿Eliminar <strong>{deleting.nombre}</strong> ({deleting.codigo})?</p>
-              <p className="vt-delete-hint">Se eliminará de la base de datos ({ENV.API_URL}/api/especialidades).</p>
+              <p className="vt-delete-hint">Esta acción eliminará el registro de forma permanente.</p>
               <div className="vt-form-actions"><button className="vt-btn-cancel" onClick={() => setDeleting(null)}>Cancelar</button><button className="vt-btn vt-btn--eliminar" onClick={handleDelete}>Eliminar</button></div>
             </div>
           </div>

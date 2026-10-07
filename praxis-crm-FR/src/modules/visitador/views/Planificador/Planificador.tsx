@@ -132,7 +132,7 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
         if (cancelled) return
         console.warn('[Planificador] API no disponible', err)
         setDestinos([])
-        setCarteraConteo('sin conexión a la API')
+        setCarteraConteo('Sin conexión')
       })
     return () => {
       cancelled = true
@@ -428,7 +428,6 @@ export const PlanificadorView: React.FC<Props> = ({ onNavigate, currentView, onL
             <path d="M6 8a6 6 0 0 1 12 0c0 7-6 11-6 11s-6-4-6-11" />
             <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
           </svg>
-          <span className="notification-dot" />
         </button>
       </header>
 

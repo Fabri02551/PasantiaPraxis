@@ -80,7 +80,7 @@ export const AdminDashboard: React.FC<Props> = ({ currentView, onNavigate, onLog
                 {loading ? (
                   <p style={{ fontSize: 12, color: '#6b7a99' }}>Cargando...</p>
                 ) : visitadoresList.length === 0 ? (
-                  <p style={{ fontSize: 12, color: '#6b7a99' }}>Sin visitadores en la base de datos</p>
+                  <p style={{ fontSize: 12, color: '#6b7a99' }}>Sin visitadores</p>
                 ) : (
                   visitadoresList.map(r => (
                     <div key={r.name} className="admin-bar-row">
@@ -128,9 +128,9 @@ export const AdminDashboard: React.FC<Props> = ({ currentView, onNavigate, onLog
             <div className="admin-chart-card admin-chart-full">
             <div className="admin-chart-head">
               <h3 className="admin-chart-title">Resumen Mensual de Visitas</h3>
-              <div className="admin-legend"><span className="admin-legend-item"><i style={{ background: '#0e9a9e' }} />Datos BD</span><span className="admin-legend-item"><i style={{ background: '#f59e0b' }} />Sin endpoint</span></div>
+              <div className="admin-legend"><span className="admin-legend-item"><i style={{ background: '#0e9a9e' }} />Con datos</span><span className="admin-legend-item"><i style={{ background: '#f59e0b' }} />Sin datos</span></div>
             </div>
-            <div style={{ padding: 24, textAlign: 'center', color: '#6b7a99', fontSize: 12 }}>Sin datos de visitas mensuales - no hay endpoint en la base de datos (tabla visitador_medico sin API)</div>
+            <div style={{ padding: 24, textAlign: 'center', color: '#6b7a99', fontSize: 12 }}>Sin datos de visitas mensuales</div>
           </div>
         </div>
     </AdminLayout>

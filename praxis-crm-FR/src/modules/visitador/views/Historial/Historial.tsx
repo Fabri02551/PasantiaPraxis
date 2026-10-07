@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
 import { useMisVisitas, type VisitaResuelta } from '../../hooks/useMisVisitas'
+import { cuentaVencidas } from '../../hooks/useNotificaciones'
 import './Historial.css'
 
 type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
@@ -44,6 +45,7 @@ function toHistorial(v: VisitaResuelta) {
 
 export const HistorialView: React.FC<Props> = ({ onNavigate, currentView, onLogout }) => {
   const { visitas, loading } = useMisVisitas()
+  const vencidas = useMemo(() => cuentaVencidas(visitas), [visitas])
   const [menuOpen, setMenuOpen] = useState(false)
   const [filtro, setFiltro] = useState<Filtro>('Todas')
   const [selected, setSelected] = useState<ReturnType<typeof toHistorial> | null>(null)
@@ -74,7 +76,7 @@ export const HistorialView: React.FC<Props> = ({ onNavigate, currentView, onLogo
             <path d="M6 8a6 6 0 0 1 12 0c0 7-6 11-6 11s-6-4-6-11" />
             <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
           </svg>
-          <span className="notification-dot" />
+          {vencidas > 0 && <span className="notification-dot" />}
         </button>
       </header>
 

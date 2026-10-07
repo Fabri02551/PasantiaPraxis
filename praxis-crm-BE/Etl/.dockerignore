@@ -1,0 +1,5 @@
+# El binario solo necesita el código Go y los CSV que carga.
+logs/
+__pycache__/
+tools/
+rebuild_medicos.py

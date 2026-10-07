@@ -103,7 +103,7 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
         if (visitadores.has(id)) return visitadores.get(id)!
         const p = await personaService.getById(id).catch(() => null)
         const nombre = p ? [p.nombre, p.primer_apellido, p.segundo_apellido].filter(Boolean).join(' ').trim() : ''
-        visitadores.set(id, nombre || `#${id}`)
+        visitadores.set(id, nombre || 'Visitador sin nombre')
         return visitadores.get(id)!
       }
 
@@ -372,7 +372,6 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
             <path d="M6 8a6 6 0 0 1 12 0c0 7-6 11-6 11s-6-4-6-11" />
             <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
           </svg>
-          <span className="notification-dot" />
         </button>
       </header>
 
@@ -413,7 +412,7 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
               ))}
               {filteredDestinos.length === 0 && (
                 <span style={{ fontSize: 12, color: '#8a9ab5', padding: 8 }}>
-                  {destinos.length === 0 ? 'Sin destinos en la base de datos' : 'Sin resultados'}
+                  {destinos.length === 0 ? 'Sin destinos' : 'Sin resultados'}
                 </span>
               )}
             </div>

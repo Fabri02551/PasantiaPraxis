@@ -5,7 +5,6 @@ import { medicoService } from '../../../core/services/medico.service'
 import { institucionService, type InstitucionBE } from '../../../core/services/institucion.service'
 import { personaService } from '../../../core/services/persona.service'
 import { especialidadService } from '../../../core/services/especialidad.service'
-import { API_LABEL } from '../../../core/config/env'
 import { displayMedico } from '../../../core/utils/medicoPrefix'
 import { hospitalFromDireccion, firstDireccionTexto } from '../../../core/utils/medicoDireccion'
 import './Cartera.css'
@@ -35,7 +34,6 @@ export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout
   const [entradas, setEntradas] = useState<EntradaCartera[]>([])
   const [usuario, setUsuario] = useState<CurrentUser | null>(null)
   const [conteos, setConteos] = useState({ medicos: 0, instituciones: 0 })
-  const [apiStatus, setApiStatus] = useState(`API: ${API_LABEL}`)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -87,13 +85,11 @@ subtitulo: b.tipo_contrato || 'Institución',
         setUsuario(me)
         setConteos({ medicos: medicos.length, instituciones: instituciones.length })
         setEntradas([...medicos, ...instituciones])
-        setApiStatus(`Conectado a ${API_LABEL} — cartera de ${[me.nombre, me.primer_apellido, me.segundo_apellido].filter(Boolean).join(' ').trim() || me.email}`)
       })
       .catch((err) => {
         if (cancelled) return
         console.warn('[Cartera] API no disponible', err)
         setEntradas([])
-        setApiStatus(`Sin conexión a ${API_LABEL}`)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -142,7 +138,7 @@ subtitulo: b.tipo_contrato || 'Institución',
           <p>
             {conteos.medicos} médicos · {conteos.instituciones} instituciones · <strong>{resumenNombre}</strong>
           </p>
-          <p style={{ fontSize: 11, color: loading ? '#2d9c9c' : '#6b7a99', marginTop: 4 }}>{loading ? 'Cargando...' : apiStatus}</p>
+          {loading && <p style={{ fontSize: 11, color: '#2d9c9c', marginTop: 4 }}>Cargando...</p>}
         </div>
 
         <div className="cartera-search-wrap">

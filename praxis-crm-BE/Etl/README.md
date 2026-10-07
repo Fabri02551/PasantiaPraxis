@@ -73,9 +73,48 @@ etapa. Las contraseñas generadas para visitadores nuevos se escriben en
 
 ## Ejecución
 
+### Automática con docker compose (primera carga)
+
+`docker compose up` levanta un servicio `etl-init` que corre este mismo ETL una
+sola vez por base de datos:
+
+```bash
+docker compose up -d      # la primera vez carga los CSV; después no hace nada
+docker compose logs etl-init
+```
+
+Cómo decide:
+
+- El marcador es la tabla **`etl_corrida`** (la crea el propio comando con
+  `CREATE TABLE IF NOT EXISTS`, no está en `init.sql` porque ese script solo
+  corre cuando el volumen de Postgres está vacío).
+- Si hay una corrida con `ok = TRUE`, `etl-init` imprime
+  `la carga inicial ya se hizo ...; no se corre de nuevo` y sale con código 0.
+- Las corridas fallidas quedan con `ok = FALSE` y **no** bloquean: el siguiente
+  `docker compose up` las reintenta.
+- Un advisory lock evita dos cargas a la vez (por ejemplo dos `compose up`
+  simultáneos).
+- `api` depende de `etl-init` con `service_completed_successfully`: si la carga
+  falla, la API no arranca y el error se ve en `docker compose logs etl-init`.
+
+Para rehacerla a mano hay que borrar el marcador:
+
+```bash
+docker exec praxis-db psql -U praxis -d praxis_crm -c "DELETE FROM etl_corrida"
+docker compose up -d etl-init
+```
+
+Es seguro correrla otra vez: el pipeline es idempotente y a los visitadores que
+ya existen solo les actualiza los datos, sin tocar su contraseña.
+
+### Manual
+
 ```bash
 # Una sola corrida (por defecto el proceso se queda en loop con ETL_EVERY)
 ETL_ONCE=1 ETL_SRC_DIR=src go run ./cmd/etl
+
+# Igual que el servicio de compose, pero respetando el marcador etl_corrida
+go run ./cmd/etlinit
 
 # Solo visitadores, escribe logs/visitadores_*.log con credenciales
 go run ./cmd/visitadores -src src/vistadores/visitadores.csv -src-dir src -logs logs

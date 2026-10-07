@@ -4,19 +4,37 @@ services:
     container_name: praxis-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: praxis_crm
-      POSTGRES_USER: praxis
-      POSTGRES_PASSWORD: praxis_secret
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT}:5433"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./praxis-crm-BE/docker/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U praxis -d praxis_crm"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - default
+
+  etl-init:
+    build:
+      context: ./praxis-crm-BE/Etl
+      dockerfile: Dockerfile
+    container_name: praxis-etl-init
+    restart: "no"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      ETL_SRC_DIR: ${ETL_SRC_DIR}
+      ETL_EVERY: ${ETL_EVERY}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - default
 
   api:
     build:
@@ -24,14 +42,9 @@ services:
       dockerfile: Dockerfile
     container_name: praxis-api
     restart: unless-stopped
-    ports:
-      - "8080:8080"
+    expose:
+      - "${API_PORT}"
     environment:
-      API_PORT: "8080"
-      APP_ENV: development
-      DATABASE_URL: postgres://praxis:praxis_secret@db:5432/praxis_crm?sslmode=disable
-      JWT_SECRET: change-me-in-production
-      JWT_EXPIRATION_HOURS: "24"
       SMTP_HOST: "${SMTP_HOST}"
       SMTP_PORT: "${SMTP_PORT}"
       SMTP_USERNAME: "${SMTP_USERNAME}"
@@ -39,26 +52,40 @@ services:
       SMTP_FROM: "${SMTP_FROM}"
       SMTP_FROM_NAME: "${SMTP_FROM_NAME}"
       SMTP_ENCRYPTION: "${SMTP_ENCRYPTION}"
+      API_PORT: ${API_PORT}
+      APP_ENV: ${APP_ENV}
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS}
     depends_on:
       db:
         condition: service_healthy
+      etl-init:
+        condition: service_completed_successfully
+    networks:
+      - default
 
   web:
     build:
       context: ./praxis-crm-FR
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_MAP_TILE_URL: ${VITE_MAP_TILE_URL}
     container_name: praxis-web
     restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "3000:443"
-    volumes:
-      # Solo lectura: el nginx solo necesita leer el par cert/key.
-      - ./certs:/etc/nginx/certs:ro
+    expose:
+      - "80"
     depends_on:
       api:
         condition: service_started
+    networks:
+      - default
+      - dokploy-network
 
 volumes:
   pgdata:
+
+networks:
+  dokploy-network:
+    external: true
