@@ -1,3 +1,5 @@
 
 # Certificados de desarrollo (mkcert). Son por máquina: el CN lleva la IP local.
 certs/
+.env
+.admin_nicolas.txt

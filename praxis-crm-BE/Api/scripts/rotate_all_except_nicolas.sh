@@ -8,7 +8,7 @@ DB_USER=praxis
 DB_NAME=praxis_crm
 DB_PASS=praxis_secret
 SMTP_USER=soporte@laboratoriopraxis.com
-SMTP_PASS=DOCdfsSd11@
+SMTP_PASS="${SMTP_PASS:?definí SMTP_PASS en el entorno}"
 SMTP_HOST=smtp.hostinger.com
 SMTP_PORT=465
 
