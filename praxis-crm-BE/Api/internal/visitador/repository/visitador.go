@@ -16,10 +16,10 @@ func NewVisitadorRepository(pool *pgxpool.Pool) *VisitadorRepository {
 	return &VisitadorRepository{pool: pool}
 }
 
-func (r *VisitadorRepository) Create(ctx context.Context, userID *int, v *models.Visitador) error {
+func (r *VisitadorRepository) Create(ctx context.Context, userID *int, v *models.Visitador) (int, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("error starting transaction: %w", err)
+		return 0, fmt.Errorf("error starting transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
@@ -30,7 +30,7 @@ func (r *VisitadorRepository) Create(ctx context.Context, userID *int, v *models
 		v.Nombre, v.PrimerApellido, v.SegundoApellido, v.Sexo, v.Correo, v.Telefono, v.CI,
 	).Scan(&personaID)
 	if err != nil {
-		return fmt.Errorf("error creating persona: %w", err)
+		return 0, fmt.Errorf("error creating persona: %w", err)
 	}
 
 	_, err = tx.Exec(ctx,
@@ -38,10 +38,11 @@ func (r *VisitadorRepository) Create(ctx context.Context, userID *int, v *models
 		personaID, userID, v.Latitud, v.Longitud,
 	)
 	if err != nil {
-		return fmt.Errorf("error creating visitador: %w", err)
+		return 0, fmt.Errorf("error creating visitador: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil { return 0, err }
+	return personaID, nil
 }
 
 func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, error) {

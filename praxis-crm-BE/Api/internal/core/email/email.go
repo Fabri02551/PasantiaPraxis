@@ -108,3 +108,78 @@ func buildResetTemplate(input SendResetPasswordInput) (string, error) {
 	_ = t.Execute(&out, map[string]string{"Link": link, "ExpiresIn": input.ExpiresIn})
 	return out.String(), nil
 }
+
+type SendCredentialsInput struct {
+	To        string
+	Email     string
+	Password  string
+	AppURL    string
+}
+
+func (s *Service) SendCredentials(input SendCredentialsInput) error {
+	if s.cfg.SMTPUsername == "" || s.cfg.SMTPPassword == "" || s.cfg.SMTPFrom == "" {
+		return errors.New("smtp no configurado")
+	}
+
+	subject := "Tus credenciales - Laboratorio Praxis"
+	body, err := buildCredsTemplate(input)
+	if err != nil {
+		return err
+	}
+
+	auth := smtp.PlainAuth("", s.cfg.SMTPUsername, s.cfg.SMTPPassword, s.cfg.SMTPHost)
+	addr := fmt.Sprintf("%s:%s", s.cfg.SMTPHost, s.cfg.SMTPPort)
+	port, _ := strconv.Atoi(s.cfg.SMTPPort)
+
+	if strings.ToLower(s.cfg.SMTPEncryption) == "tls" || port == 465 {
+		tlsConfig := &tls.Config{ServerName: s.cfg.SMTPHost}
+		conn, err := tls.Dial("tcp", addr, tlsConfig)
+		if err != nil {
+			return err
+		}
+		c, err := smtp.NewClient(conn, s.cfg.SMTPHost)
+		if err != nil {
+			return err
+		}
+		defer c.Close()
+		if err := c.Auth(auth); err != nil {
+			return err
+		}
+		if err := c.Mail(s.cfg.SMTPFrom); err != nil {
+			return err
+		}
+		if err := c.Rcpt(input.To); err != nil {
+			return err
+		}
+		wc, err := c.Data()
+		if err != nil {
+			return err
+		}
+		_, _ = wc.Write(buildMessage(s.cfg.SMTPFrom, s.cfg.SMTPFromName, input.To, subject, body))
+		_ = wc.Close()
+		return c.Quit()
+	}
+
+	return smtp.SendMail(addr, auth, s.cfg.SMTPFrom, []string{input.To}, buildMessage(s.cfg.SMTPFrom, s.cfg.SMTPFromName, input.To, subject, body))
+}
+
+func buildCredsTemplate(input SendCredentialsInput) (string, error) {
+	tmpl := `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head><body>
+<p>Hola,</p>
+<p>Tu cuenta ha sido creada.</p>
+<p><strong>Email:</strong> {{.Email}}<br/>
+<strong>Contraseña:</strong> {{.Password}}</p>
+<p>Inicia sesión en <a href="{{.Link}}">{{.Link}}</a></p>
+<p>Por seguridad, cambia tu contraseña al iniciar sesión.</p>
+<p>Saludos,<br/>Laboratorio Praxis</p>
+</body></html>`
+	t := template.Must(template.New("creds").Parse(tmpl))
+	var out bytes.Buffer
+	link := strings.TrimRight(input.AppURL, "/")
+	if link == "" {
+		link = "https://crm.laboratoriopraxis.com"
+	}
+	_ = t.Execute(&out, map[string]string{"Email": input.Email, "Password": input.Password, "Link": link})
+	return out.String(), nil
+}

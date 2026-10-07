@@ -131,7 +131,8 @@ func main() {
 
 	// Visitador module
 	visitadorRepo := vrepo.NewVisitadorRepository(pool)
-	visitadorSvc := vsvc.NewVisitadorService(visitadorRepo)
+	visitadorAuthRepo := vrepo.NewVisitadorAuthRepository(pool)
+	visitadorSvc := vsvc.NewVisitadorService(visitadorRepo, emailSvc, visitadorAuthRepo)
 	visitadorHandler := vhandlers.NewVisitadorHandler(visitadorSvc)
 	vroutes.Register(mux, visitadorHandler, cfg.JWTSecret)
 
