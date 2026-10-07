@@ -24,6 +24,7 @@ import (
 	ciudadsvc "gitlab.com/labpraxis/praxis-crm-be/api/internal/ciudad/services"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/config"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/database"
+	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/email"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/middleware"
 	especialidadhandlers "gitlab.com/labpraxis/praxis-crm-be/api/internal/especialidad/handlers"
 	especialidadrepo "gitlab.com/labpraxis/praxis-crm-be/api/internal/especialidad/repository"
@@ -80,7 +81,11 @@ func main() {
 	authRepo := repository.NewAuthRepository(pool)
 	authSvc := authsvc.NewAuthService(authRepo, cfg)
 	authHandler := handlers.NewAuthHandler(authSvc)
-	routes.Register(mux, authHandler, cfg.JWTSecret)
+	resetRepo := repository.NewPasswordResetRepository(pool)
+	emailSvc := email.New(cfg)
+	resetSvc := authsvc.NewPasswordResetService(resetRepo, authRepo, emailSvc, cfg)
+	resetHandler := handlers.NewPasswordResetHandler(resetSvc)
+	routes.Register(mux, authHandler, resetHandler, cfg.JWTSecret)
 
 	// Ciudad module
 	ciudadRepo := ciudadrepo.NewCiudadRepository(pool)

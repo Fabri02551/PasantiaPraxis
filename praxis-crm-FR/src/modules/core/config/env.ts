@@ -18,6 +18,7 @@ export const ENV = {
   API_URL: import.meta.env.VITE_API_URL?.toString().replace(/\/$/, '') ?? '',
   MAP_TILE_URL:
     import.meta.env.VITE_MAP_TILE_URL?.toString() || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  APP_URL: import.meta.env.VITE_APP_URL?.toString().replace(/\/$/, '') ?? '',
 } as const
 
 export const getApiUrl = () => ENV.API_URL

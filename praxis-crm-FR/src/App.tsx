@@ -3,6 +3,7 @@ import { storage } from './modules/core/lib/storage'
 import { Toast } from './modules/core/components/Toast/Toast'
 import { LoginForm } from './modules/auth/views/Login/Login'
 import { ForgotPasswordView } from './modules/auth/views/ForgotPassword/ForgotPassword'
+import { ResetPasswordView } from './modules/auth/views/ResetPassword/ResetPassword'
 import { VisitadorHome } from './modules/visitador/views/Home/Home'
 import { VisitRegistrationView } from './modules/visitador/views/VisitRegistration/VisitRegistration'
 import { CalendarView } from './modules/visitador/views/Calendar/Calendar'
@@ -30,6 +31,7 @@ import type { AdminView } from './modules/admin/components/AdminSidebar/AdminSid
 type View =
   | 'login'
   | 'forgot-password'
+  | 'reset-password'
   | 'home'
   | 'registro'
   | 'calendario'
@@ -46,6 +48,10 @@ type View =
 
 function App() {
   const [view, setView] = useState<View>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('token')) return 'reset-password'
+    }
     const role = storage.getRole()
     const token = storage.getToken()
     if (token && role === 'admin') return 'admin-dashboard'
@@ -104,6 +110,8 @@ function App() {
     content = <LoginForm onLogin={handleLogin} onForgot={() => setView('forgot-password')} />
   } else if (view === 'forgot-password') {
     content = <ForgotPasswordView onBack={() => setView('login')} />
+  } else if (view === 'reset-password') {
+    content = <ResetPasswordView onBack={() => setView('login')} />
   } else if (view === 'admin-dashboard') {
     content = <AdminDashboard currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
   } else if (view === 'admin-visitadores') {

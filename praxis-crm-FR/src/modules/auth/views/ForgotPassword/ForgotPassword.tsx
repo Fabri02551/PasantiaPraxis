@@ -10,7 +10,7 @@ export const ForgotPasswordView: React.FC<Props> = ({ onBack }) => {
   const [error, setError] = useState('')
   const [sent, setSent] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     const v = email.trim()
@@ -22,6 +22,13 @@ export const ForgotPasswordView: React.FC<Props> = ({ onBack }) => {
     if (!ok) {
       setError('Correo inválido')
       return
+    }
+    try {
+      const { ENV } = await import('../../../core/config/env')
+      const appUrl = ENV.APP_URL || window.location.origin
+      await import('../../services/auth.service').then((m) => m.authService.forgotPassword(v, appUrl))
+    } catch (err) {
+      // No revelamos si existe o no; mostramos mensaje genérico
     }
     setSent(true)
   }

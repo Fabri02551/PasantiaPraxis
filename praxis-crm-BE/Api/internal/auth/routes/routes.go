@@ -7,7 +7,7 @@ import (
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/middleware"
 )
 
-func Register(mux *http.ServeMux, h *handlers.AuthHandler, authSecret string) {
+func Register(mux *http.ServeMux, h *handlers.AuthHandler, resetH *handlers.PasswordResetHandler, authSecret string) {
 	mux.HandleFunc("POST /api/auth/login", h.Login)
 	mux.Handle("POST /api/auth/register",
 		middleware.Auth(authSecret)(middleware.RequireRole("admin")(http.HandlerFunc(h.Register))))
@@ -16,6 +16,9 @@ func Register(mux *http.ServeMux, h *handlers.AuthHandler, authSecret string) {
 		middleware.Auth(authSecret)(http.HandlerFunc(h.Me)))
 	mux.Handle("PUT /api/auth/me",
 		middleware.Auth(authSecret)(http.HandlerFunc(h.UpdateMe)))
+
+	mux.HandleFunc("POST /api/auth/forgot-password", resetH.ForgotPassword)
+	mux.HandleFunc("POST /api/auth/reset-password", resetH.ResetPassword)
 
 	// CRUD de administradores (solo rol admin): persona <-> users en
 	// transacción, con eliminación lógica (persona.status 1 -> 0).
