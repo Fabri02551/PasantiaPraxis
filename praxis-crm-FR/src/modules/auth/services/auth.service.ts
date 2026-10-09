@@ -50,6 +50,16 @@ export type UpdateProfilePayload = {
   ci: string
 }
 
+export type ForgotPasswordRequest = {
+  email: string
+  app_url: string
+}
+
+export type ResetPasswordRequest = {
+  token: string
+  password: string
+}
+
 export const authService = {
   login: async (req: LoginRequest) => {
     const res = await apiClient.post<TokenResponse>('/api/auth/login', req, { auth: false })
@@ -63,6 +73,10 @@ export const authService = {
   },
   getMe: () => apiClient.get<CurrentUser>('/api/auth/me'),
   updateMe: (payload: UpdateProfilePayload) => apiClient.put<CurrentUser>('/api/auth/me', payload),
+  forgotPassword: (email: string, appUrl: string) =>
+    apiClient.post<{ message: string }>('/api/auth/forgot-password', { email, app_url: appUrl }, { auth: false }),
+  resetPassword: (token: string, password: string) =>
+    apiClient.post<{ message: string }>('/api/auth/reset-password', { token, password }, { auth: false }),
   changePassword: (payload: ChangePasswordPayload) =>
     apiClient.put<{ message: string }>('/api/auth/password', payload),
   logout: () => storage.clear(),
