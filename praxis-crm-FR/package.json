@@ -23,6 +23,7 @@
     "react-leaflet": "^5.0.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.5.3",
     "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^7.0.1",
@@ -36,5 +37,8 @@
     "oxlint": "^1.79.0",
     "typescript": "~6.0.2",
     "vite": "^8.2.2"
+  },
+  "allowScripts": {
+    "sharp@0.32.6": true
   }
 }
