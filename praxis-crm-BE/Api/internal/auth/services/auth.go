@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"log"
 	"strings"
 	"time"
 
@@ -12,6 +13,9 @@ import (
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/auth/models"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/auth/repository"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/config"
+	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/pkg/mailer"
+	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/pkg/passwd"
+	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/pkg/texto"
 )
 
 type AuthService struct {
@@ -24,6 +28,7 @@ func NewAuthService(repo *repository.AuthRepository, cfg config.Config) *AuthSer
 }
 
 func (s *AuthService) Register(ctx context.Context, req models.RegisterRequest) (*models.TokenResponse, error) {
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 	existing, _ := s.repo.GetByEmail(ctx, req.Email)
 	if existing != nil {
 		return nil, errors.New("el email ya está registrado")
@@ -45,8 +50,8 @@ func (s *AuthService) Register(ctx context.Context, req models.RegisterRequest) 
 	}
 
 	persona := &models.Persona{
-		Nombre:         req.Nombre,
-		PrimerApellido: req.PrimerApellido,
+		Nombre:         texto.Mayusculas(req.Nombre),
+		PrimerApellido: texto.Mayusculas(req.PrimerApellido),
 		Sexo:           req.Sexo,
 		Correo:         req.Email,
 		Telefono:       req.Telefono,
@@ -105,8 +110,16 @@ func (s *AuthService) GetAdmin(ctx context.Context, personaID int) (*models.Admi
 	return up.ToAdmin(), nil
 }
 
-// CreateAdmin crea persona + usuario admin en UNA transacción.
-func (s *AuthService) CreateAdmin(ctx context.Context, req models.CreateAdminRequest) (*models.AdminItem, error) {
+// CreateAdmin crea persona + usuario admin en UNA transacción y manda las
+// credenciales por correo al Email del request.
+//
+// El formulario del panel ya no trae contraseña: si no viene, la genera la
+// API. Cuando el correo se manda bien la contraseña no sale de acá (en la
+// base queda el hash); si no se pudo mandar (sin SMTP o fallo del
+// servidor) se devuelve en AdminCreado.PasswordGenerado para que el
+// administrador la reparta a mano en vez de quedarse con una cuenta
+// inaccesible.
+func (s *AuthService) CreateAdmin(ctx context.Context, req models.CreateAdminRequest) (*models.AdminCreado, error) {
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 	req.Nombre = strings.TrimSpace(req.Nombre)
 	req.PrimerApellido = strings.TrimSpace(req.PrimerApellido)
@@ -114,17 +127,24 @@ func (s *AuthService) CreateAdmin(ctx context.Context, req models.CreateAdminReq
 	req.Telefono = strings.TrimSpace(req.Telefono)
 	req.CI = strings.TrimSpace(req.CI)
 
-	if req.Email == "" || req.Password == "" {
-		return nil, errors.New("email y password son requeridos")
-	}
-	if len(req.Password) < 6 {
-		return nil, errors.New("el password debe tener al menos 6 caracteres")
+	if req.Email == "" {
+		return nil, errors.New("email es requerido")
 	}
 	if req.Nombre == "" || req.PrimerApellido == "" {
 		return nil, errors.New("nombre y primer apellido son requeridos")
 	}
 	if req.Sexo == "" {
 		return nil, errors.New("sexo es requerido")
+	}
+
+	if strings.TrimSpace(req.Password) == "" {
+		generada, err := passwd.Random()
+		if err != nil {
+			return nil, err
+		}
+		req.Password = generada
+	} else if len(req.Password) < 6 {
+		return nil, errors.New("el password debe tener al menos 6 caracteres")
 	}
 
 	if existing, _ := s.repo.GetByEmail(ctx, req.Email); existing != nil {
@@ -169,7 +189,33 @@ func (s *AuthService) CreateAdmin(ctx context.Context, req models.CreateAdminReq
 		return nil, err
 	}
 
-	return s.GetAdmin(ctx, personaID)
+	admin, err := s.GetAdmin(ctx, personaID)
+	if err != nil {
+		return nil, err
+	}
+
+	creado := &models.AdminCreado{AdminItem: admin}
+	nombreCompleto := strings.TrimSpace(req.Nombre + " " + req.PrimerApellido)
+	if err := s.enviarCredenciales(req.Email, nombreCompleto, req.Password, "admin"); err != nil {
+		creado.PasswordGenerado = req.Password
+	}
+	return creado, nil
+}
+
+// enviarCredenciales manda por correo la contraseña recién generada. El
+// envío es síncrono y acotado (2 intentos de 3s) para que, si falla, la
+// contraseña todavía se pueda devolver en la respuesta del alta.
+func (s *AuthService) enviarCredenciales(destino, nombre, password, rol string) error {
+	m := mailer.New(s.cfg)
+	if !m.Habilitado() {
+		return errors.New("smtp no configurado (SMTP_HOST vacío)")
+	}
+	if err := m.EnviarCredenciales(destino, nombre, destino, password, rol); err != nil {
+		mailer.AvisoCredenciales(destino, err)
+		return err
+	}
+	log.Printf("[mailer] credenciales de %s enviadas a %s", rol, destino)
+	return nil
 }
 
 // UpdateAdmin edita persona + credencial en UNA transacción.

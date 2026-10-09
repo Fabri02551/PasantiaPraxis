@@ -2,10 +2,8 @@ package visitador
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -13,6 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"gitlab.com/labpraxis/praxis-crm-be/etl/internal/catalog"
+	"gitlab.com/labpraxis/praxis-crm-be/etl/internal/passwd"
 )
 
 type Loader struct {
@@ -82,7 +81,7 @@ func (l *Loader) Load(ctx context.Context, visitadores []Visitador, ciudades *ca
 			continue
 		}
 
-		password, err := randomPassword()
+		password, err := passwd.Random()
 		if err != nil {
 			res.Estado = "error"
 			res.Detalle = fmt.Sprintf("generando contraseña: %v", err)
@@ -248,19 +247,4 @@ func resolverCiudad(ciudades *catalog.Ciudades, codigo string) (*int, string) {
 		return &id, ciudades.NombrePorID(id)
 	}
 	return nil, ""
-}
-
-const passwordCharset = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789"
-
-func randomPassword() (string, error) {
-	max := big.NewInt(int64(len(passwordCharset)))
-	var sb strings.Builder
-	for i := 0; i < 12; i++ {
-		n, err := rand.Int(rand.Reader, max)
-		if err != nil {
-			return "", err
-		}
-		sb.WriteByte(passwordCharset[n.Int64()])
-	}
-	return sb.String(), nil
 }

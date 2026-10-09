@@ -7,10 +7,13 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"gitlab.com/labpraxis/praxis-crm-be/etl/internal/config"
+	"gitlab.com/labpraxis/praxis-crm-be/etl/internal/mailer"
 	"gitlab.com/labpraxis/praxis-crm-be/etl/internal/stages"
 	"gitlab.com/labpraxis/praxis-crm-be/etl/internal/visitador"
 )
@@ -60,4 +63,48 @@ func main() {
 
 	fmt.Printf("ETL visitadores completado: %s\n", visitador.Resumen(res.Resultados))
 	fmt.Printf("Log de credenciales: %s\n", path)
+
+	// Mismo envío que hace el pipeline completo: cada visitador insertado
+	// recibe su contraseña y ETL_ADMIN_EMAIL el resumen. Un fallo de SMTP
+	// no cambia el resultado de la carga.
+	cfg := config.Load()
+	var creds []mailer.Credencial
+	for _, r := range res.Resultados {
+		if r.Estado != "insertado" || r.Password == "" {
+			continue
+		}
+		creds = append(creds, mailer.Credencial{
+			Nombre:   strings.TrimSpace(r.Nombre + " " + r.PrimerApellido + " " + r.SegundoApellido),
+			Email:    r.Email,
+			Password: r.Password,
+			Rol:      "visitador",
+		})
+	}
+	m := mailer.New(cfg)
+	switch {
+	case len(creds) == 0:
+		fmt.Println("Correos: sin credenciales nuevas")
+	case !m.Habilitado():
+		fmt.Printf("Correos: no enviados, SMTP_HOST sin configurado (%d credenciales solo en %s)\n", len(creds), logDir)
+	default:
+		// Cuenta aparte lo que va a la casilla de cada visitador y lo que
+		// va al resumen de ETL_ADMIN_EMAIL, para que el log deje claro que
+		// cada uno recibe el suyo.
+		individuales := 0
+		for _, c := range creds {
+			if cfg.AdminEmail == "" || !strings.EqualFold(c.Email, cfg.AdminEmail) {
+				individuales++
+			}
+		}
+		resumen := 0
+		if cfg.AdminEmail != "" {
+			resumen = 1
+		}
+		enviados, fallidos, errs := m.NotificarNuevos(creds, cfg.AdminEmail)
+		fmt.Printf("Correos: enviados=%d fallidos=%d | a su correo: %d | resumen para el admin: %d\n",
+			enviados, fallidos, individuales, resumen)
+		for _, e := range errs {
+			fmt.Printf("  error: %s\n", e)
+		}
+	}
 }

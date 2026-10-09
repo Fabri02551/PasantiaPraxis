@@ -18,11 +18,18 @@ export type AdminBE = {
   ciudad_id?: number | null
   status: boolean
   created_at?: string
+  /**
+   * Contraseña generada por el backend. Aparece SOLO cuando no se pudo
+   * enviar el correo (sin SMTP o fallo del servidor): es la única copia
+   * en claro y sirve para repartirla a mano.
+   */
+  password_generado?: string
 }
 
 export type CreateAdminPayload = {
   email: string
-  password: string
+  /** Opcional: si no viene, el backend genera la contraseña y la manda por correo. */
+  password?: string
   nombre: string
   primer_apellido: string
   segundo_apellido?: string

@@ -13,6 +13,12 @@ export type VisitadorBE = {
   longitud?: number | null
   activo: boolean
   created_at: string
+  /**
+   * Contraseña generada por el backend. Aparece SOLO cuando no se pudo
+   * enviar el correo (sin SMTP o fallo del servidor): es la única copia
+   * en claro y sirve para repartirla a mano.
+   */
+  password_generado?: string
 }
 
 type CreatePayload = {

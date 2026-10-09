@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -20,6 +21,15 @@ func NewVisitadorHandler(svc *services.VisitadorService) *VisitadorHandler {
 	return &VisitadorHandler{svc: svc}
 }
 
+// createVisitadorResponse es el alta del visitador. PasswordGenerado solo
+// aparece cuando no se pudo enviar el correo: es la única copia en claro de
+// la contraseña que sale de la API, para que el administrador la reparta a
+// mano. Si el correo salió bien, no está en la respuesta.
+type createVisitadorResponse struct {
+	models.Visitador
+	PasswordGenerado string `json:"password_generado,omitempty"`
+}
+
 func (h *VisitadorHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateVisitadorRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -33,6 +43,12 @@ func (h *VisitadorHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Sexo == "" {
 		response.Error(w, http.StatusBadRequest, "sexo es requerido")
+		return
+	}
+	// El correo es la dirección a la que llegan el usuario y la contraseña
+	// generada: sin él no se puede crear la cuenta de acceso.
+	if strings.TrimSpace(req.Correo) == "" {
+		response.Error(w, http.StatusBadRequest, "el correo es requerido: ahi se envian el usuario y la contraseña")
 		return
 	}
 
@@ -49,12 +65,17 @@ func (h *VisitadorHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Activo:          true,
 	}
 
-	if err := h.svc.Create(r.Context(), middleware.UserPersonaID(r.Context()), v); err != nil {
+	passwordGenerada, err := h.svc.Create(r.Context(), middleware.UserPersonaID(r.Context()), v)
+	if err != nil {
+		if errors.Is(err, models.ErrCorreoYaRegistrado) {
+			response.Error(w, http.StatusConflict, err.Error())
+			return
+		}
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	response.JSON(w, http.StatusCreated, v)
+	response.JSON(w, http.StatusCreated, createVisitadorResponse{Visitador: *v, PasswordGenerado: passwordGenerada})
 }
 
 func (h *VisitadorHandler) List(w http.ResponseWriter, r *http.Request) {

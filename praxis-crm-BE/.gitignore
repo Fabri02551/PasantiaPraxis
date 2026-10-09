@@ -15,6 +15,10 @@ vendor/
 # Logs
 *.log
 
+# Python (herramientas puntuales del ETL)
+__pycache__/
+*.pyc
+
 # Sistema operativo
 .DS_Store
 Thumbs.db

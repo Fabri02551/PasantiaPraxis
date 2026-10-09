@@ -16,9 +16,16 @@ visitadores ya cargados.
 | 1 | ciudad | `src/ciudad/ciudades.csv` | `ciudad` |
 | 2 | especialidad | `src/especialidad/especialidades.csv` | `especialidad` |
 | 3 | visitador | `src/vistadores/visitadores.csv` | `persona`, `visitador`, `users` |
+| 3b | admin | `ETL_ADMIN_EMAIL` | `persona`, `users` (rol `admin`) |
 | 4 | medico | `src/medicos/medicos_carteras.csv` | `persona`, `medico` |
 | 5 | institucion | `src/instituciones/instituciones_carteras.csv` | `institucion` |
 | 6 | laboratorio | `src/laboratorios/precios_base_por_departamento.csv` | `laboratorio`, `laboratorio_ciudad` |
+
+La etapa **admin** no lee ningún CSV: siembra la cuenta administradora
+(`ETL_ADMIN_EMAIL`, por defecto `nicolastocoyucra@gmail.com`) con contraseña
+aleatoria. Si la cuenta ya existe **no toca su contraseña** (para no pisar la
+que el usuario cambió desde el perfil) y solo la promueve a `admin` si venía
+con otro rol. Sin `ETL_ADMIN_EMAIL` la etapa queda omitida.
 
 ### Tablas que el ETL NO toca
 
@@ -64,12 +71,46 @@ visitadores ya cargados.
 ## Visita del pipeline
 
 ```
-ciudad → especialidad → visitador → medico → institucion → laboratorio
+ciudad → especialidad → visitador → admin → medico → institucion → laboratorio
 ```
 
 El log de consola imprime insertados/actualizados/omitidos/errores por
 etapa. Las contraseñas generadas para visitadores nuevos se escriben en
 `logs/visitadores_*.log` (ignorado por git, no commitear).
+
+## Correos de credenciales
+
+Al terminar la corrida, cada cuenta **creada en esa corrida** recibe su
+contraseña **en su propia casilla** (SMTP de `SMTP_*` en el `.env`) y
+`ETL_ADMIN_EMAIL` recibe además un resumen con todas las credenciales
+nuevas. Las cuentas que ya existían no reciben nada: a ellas no se les
+regeneró contraseña (en la base solo está el hash).
+
+El log de la corrida lo deja explícito, para que no se confunda el resumen
+con los envíos individuales:
+
+```
+[correo]  enviados=12 fallidos=1 | a su correo: 11 | resumen para el admin: 1
+```
+
+El servicio `etl-init` de compose corre **una sola vez por base de datos**
+(base vacía): esa es la corrida en la que todos los visitadores del CSV son
+nuevos y por eso todos reciben el suyo.
+
+- Sin `SMTP_HOST` no se manda nada: las contraseñas quedan solo en
+  `logs/visitadores_*.log` y la corrida sigue normal.
+- Un fallo de SMTP tampoco aborta la carga: queda como `[correo]` en
+  `logs/etl_*.log`. `etlinit` solo falla si falla la base, porque si no la
+  API no arrancaría.
+- Cada correo se reintenta hasta 3 veces: los servidores cortan conexiones
+  de vez en cuando y un corte no debería dejar a un visitador sin clave.
+
+Si aun así un envío se pierde, la contraseña está en `logs/` y se puede
+mandar de nuevo sin resetearla:
+
+```bash
+go run ./cmd/reenvio -email visitador@x.com -password XXXX -nombre "Nombre Apellido"
+```
 
 ## Ejecución
 
@@ -128,6 +169,13 @@ Variables de entorno:
 | `ETL_SRC_DIR` | `src` | Raíz de los CSV |
 | `ETL_ONCE` | (vacío) | Si existe, corre una vez y termina |
 | `ETL_EVERY` | `24h` | Frecuencia cuando no hay `ETL_ONCE` |
+| `ETL_ADMIN_EMAIL` | `nicolastocoyucra@gmail.com` | Cuenta admin que siembra; vacío = no siembra |
+| `SMTP_HOST` | (vacío) | Servidor SMTP; vacío = no manda correos |
+| `SMTP_PORT` | `465` | Puerto SMTP |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | — | Credenciales de autenticación |
+| `SMTP_FROM` / `SMTP_FROM_NAME` | `SMTP_USERNAME` | Remitente mostrado |
+| `SMTP_ENCRYPTION` | `ssl` | `ssl` (465), `starttls` (587) o `plain` |
+| `APP_URL` | `https://crm.laboratoriopraxis.com` | Enlace de ingreso que aparece en los correos |
 
 ## Fuentes
 

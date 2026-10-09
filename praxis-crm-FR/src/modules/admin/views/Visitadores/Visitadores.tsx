@@ -5,6 +5,7 @@ import { MapPicker } from '../../components/MapPicker/MapPicker'
 import { SuccessModal } from '../../components/SuccessModal/SuccessModal'
 import { visitadorService, type VisitadorBE } from '../../../core/services/visitador.service'
 import { getInitials, avatarStyle } from '../../../core/utils/avatar'
+import { credencialesDetail } from '../../../core/utils/credenciales'
 import './Visitadores.css'
 
 type Estado = 'Activo' | 'Inactivo'
@@ -98,6 +99,8 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [editForm, setEditForm] = useState<(FormState & { id: number }) | null>(null)
   const [createdName, setCreatedName] = useState<string | null>(null)
+  const [createdDetail, setCreatedDetail] = useState<string | null>(null)
+  const [apiError, setApiError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -134,7 +137,7 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.nombre.trim() || !form.primerApellido.trim() || !form.sexo) return
+    if (!form.nombre.trim() || !form.primerApellido.trim() || !form.sexo || !form.email.trim()) return
     // lat/lng solo se envían si el usuario movió el pin (sino null = no guardar)
     const payload = {
       nombre: form.nombre.trim(),
@@ -148,13 +151,20 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
       longitud: form.longitud,
     }
     try {
+      // El backend crea persona + visitador + users en UNA transacción y
+      // manda el usuario y la contraseña generada al correo del formulario.
       const created = await visitadorService.create(payload)
+      setApiError(null)
       setVisitadores((prev) => [...prev, mapBEtoFE(created)])
       setCreatedName(fullName({ nombre: form.nombre.trim(), primerApellido: form.primerApellido.trim(), segundoApellido: form.segundoApellido.trim() }))
+      setCreatedDetail(credencialesDetail(created.password_generado, payload.correo))
       setForm(EMPTY_FORM)
       setShowCreate(false)
     } catch (err) {
       console.warn('[Visitadores] create error', err)
+      // 409 = correo ya registrado; 400 = falta algún campo. Sin esto el
+      // modal se cerraría igual y parecería que se creó.
+      setApiError(err instanceof Error ? err.message : 'No se pudo crear el visitador')
     }
   }
 
@@ -206,9 +216,9 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
       <div className="visitadores-head">
         <div>
           <h2 className="visitadores-title">Lista de Personal Técnico</h2>
-          <p className="visitadores-sub">Campos según backend: nombre, apellidos, sexo, correo, teléfono, CI y ubicación.</p>
+          <p className="visitadores-sub">Al registrarlo se crea su cuenta de acceso y el usuario con la contraseña se envía a su correo.</p>
         </div>
-        <button className="btn-registrar" onClick={() => setShowCreate(true)}>+ Registrar Nuevo</button>
+        <button className="btn-registrar" onClick={() => { setApiError(null); setShowCreate(true) }}>+ Registrar Nuevo</button>
       </div>
 
       <div className="visitadores-toolbar">
@@ -222,8 +232,10 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
         </label>
         <span className="visitadores-count">{filtered.length} resultado(s)</span>
       </div>
-      {loading && (
-        <div style={{ fontSize: 11, color: '#2d9c9c', margin: '6px 0 8px', fontWeight: 500 }}>Cargando...</div>
+      {(loading || apiError) && (
+        <div style={{ fontSize: 11, color: apiError ? '#c0392b' : '#2d9c9c', margin: '6px 0 8px', fontWeight: 500 }}>
+          {loading ? 'Cargando...' : apiError}
+        </div>
       )}
 
       <div className="visitadores-card">
@@ -291,7 +303,7 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
                   <option value="femenino">Femenino</option>
                 </select>
               </label>
-              <label>Correo Electrónico <span style={optStyle}>(opcional)</span><input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="correo@praxis.com" /></label>
+              <label>Correo Electrónico <span style={reqStyle}>* obligatorio — ahí llegan usuario y contraseña</span><input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="correo@praxis.com" /></label>
               <label>Teléfono <span style={optStyle}>(opcional)</span><input value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="+591 70000000" /></label>
               <label>CI <span style={optStyle}>(opcional)</span><input value={form.ci} onChange={e => setForm({ ...form, ci: e.target.value })} placeholder="Ej. 6543217" /></label>
               <label>Ubicación en mapa <span style={optStyle}>(opcional — vista previa Cochabamba, no se guarda)</span>
@@ -301,8 +313,11 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
                   height={160}
                 />
               </label>
+              {apiError && (
+                <div style={{ fontSize: 11, color: '#c0392b', fontWeight: 500 }}>{apiError}</div>
+              )}
               <div className="vt-form-actions">
-                <button type="button" className="vt-btn-cancel" onClick={() => setShowCreate(false)}>Cancelar</button>
+                <button type="button" className="vt-btn-cancel" onClick={() => { setApiError(null); setShowCreate(false) }}>Cancelar</button>
                 <button type="submit" className="vt-btn-submit">Registrar</button>
               </div>
             </form>
@@ -390,7 +405,13 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
         </div>
       )}
 
-      <SuccessModal open={createdName !== null} onClose={() => setCreatedName(null)} kind="visitador" name={createdName ?? ''} />
+      <SuccessModal
+        open={createdName !== null}
+        onClose={() => { setCreatedName(null); setCreatedDetail(null) }}
+        kind="visitador"
+        name={createdName ?? ''}
+        detail={createdDetail ?? undefined}
+      />
     </AdminLayout>
   )
 }

@@ -7,3 +7,6 @@ certs/
 .env
 .env.*
 !.env.example
+
+# Ajustes locales de docker compose (HTTPS/certs/puertos): nunca al repo.
+docker-compose.override.yml

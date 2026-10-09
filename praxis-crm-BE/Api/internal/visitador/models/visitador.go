@@ -1,6 +1,14 @@
 package models
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+// ErrCorreoYaRegistrado marca un intento de crear un visitador con un correo
+// que ya tiene cuenta en users. Lo usan el repositorio para devolverlo y el
+// handler para responder 409 en vez de 500.
+var ErrCorreoYaRegistrado = errors.New("el correo ya está registrado por otro usuario")
 
 type Visitador struct {
 	PersonaID       int       `json:"persona_id"`

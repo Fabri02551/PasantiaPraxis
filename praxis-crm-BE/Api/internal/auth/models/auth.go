@@ -161,6 +161,9 @@ func (u *UserWithPersona) ToAdmin() *AdminItem {
 
 // CreateAdminRequest crea un administrador: inserta persona + users en UNA
 // transacción (si algo falla no queda persona huérfana).
+//
+// Password es opcional: el panel ya no lo pide. Cuando viene vacío la API
+// genera la contraseña y la manda por correo al Email del request.
 type CreateAdminRequest struct {
 	Email           string  `json:"email"`
 	Password        string  `json:"password"`
@@ -172,6 +175,17 @@ type CreateAdminRequest struct {
 	CI              string  `json:"ci"`
 	CiudadID        *int    `json:"ciudad_id"`
 	Nacimiento      *string `json:"nacimiento"`
+}
+
+// AdminCreado es la respuesta del alta de administrador.
+//
+// PasswordGenerado solo tiene valor cuando NO se pudo enviar el correo (sin
+// SMTP o fallo del servidor): es la única copia en claro de la contraseña
+// que sale de la API, para que el administrador pueda repartirla a mano. Si
+// el correo salió bien, no aparece en la respuesta.
+type AdminCreado struct {
+	*AdminItem
+	PasswordGenerado string `json:"password_generado,omitempty"`
 }
 
 // UpdateAdminRequest edita persona + credencial del administrador en UNA

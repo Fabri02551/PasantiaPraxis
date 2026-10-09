@@ -4,6 +4,7 @@ import type { AdminView } from '../../components/AdminSidebar/AdminSidebar'
 import { adminService, type AdminBE } from '../../../core/services/admin.service'
 import { ciudadService, type Ciudad } from '../../../core/services/ciudad.service'
 import { getInitials, avatarStyle } from '../../../core/utils/avatar'
+import { credencialesDetail } from '../../../core/utils/credenciales'
 import { SuccessModal } from '../../components/SuccessModal/SuccessModal'
 import { ENV } from '../../../core/config/env'
 import './Administradores.css'
@@ -59,7 +60,6 @@ type FormState = {
   segundoApellido: string
   sexo: string
   email: string
-  password: string
   telefono: string
   ci: string
   ciudadId: number | null
@@ -67,9 +67,14 @@ type FormState = {
   estado: Estado
 }
 
+// El formulario de edición sigue pudiendo resetear la contraseña a mano
+// (vacío = no cambia): lo que se quitó es el campo del alta, porque ahí la
+// genera el backend y la manda por correo.
+type EditFormState = FormState & { personaId: number; password: string }
+
 const EMPTY_FORM: FormState = {
   nombre: '', primerApellido: '', segundoApellido: '', sexo: '',
-  email: '', password: '', telefono: '', ci: '', ciudadId: null, nacimiento: '', estado: 'Activo',
+  email: '', telefono: '', ci: '', ciudadId: null, nacimiento: '', estado: 'Activo',
 }
 
 const Avatar: React.FC<{ nombre: string; primerApellido: string; segundoApellido?: string; size?: number; className?: string }> = ({ nombre, primerApellido, segundoApellido, size = 28, className }) => (
@@ -98,9 +103,10 @@ export const AdministradoresView: React.FC<Props> = ({ currentView, onNavigate, 
   const [deleting, setDeleting] = useState<Administrador | null>(null)
   const [viewing, setViewing] = useState<Administrador | null>(null)
   const [createdName, setCreatedName] = useState<string | null>(null)
+  const [createdDetail, setCreatedDetail] = useState<string | null>(null)
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
-  const [editForm, setEditForm] = useState<(FormState & { personaId: number }) | null>(null)
+  const [editForm, setEditForm] = useState<EditFormState | null>(null)
   const [ciudades, setCiudades] = useState<Ciudad[]>([])
 
   useEffect(() => {
@@ -141,12 +147,13 @@ export const AdministradoresView: React.FC<Props> = ({ currentView, onNavigate, 
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.nombre.trim() || !form.primerApellido.trim() || !form.sexo || !form.email.trim() || !form.password) return
+    if (!form.nombre.trim() || !form.primerApellido.trim() || !form.sexo || !form.email.trim()) return
     try {
-      // POST /api/admins: inserta persona + users (rol admin) en UNA transacción
+      // POST /api/admins: inserta persona + users (rol admin) en UNA
+      // transacción. No se manda contraseña: la genera el backend y la
+      // envía por correo al email del formulario.
       const created = await adminService.create({
         email: form.email.trim().toLowerCase(),
-        password: form.password,
         nombre: form.nombre.trim(),
         primer_apellido: form.primerApellido.trim(),
         segundo_apellido: form.segundoApellido.trim() || undefined,
@@ -159,6 +166,7 @@ export const AdministradoresView: React.FC<Props> = ({ currentView, onNavigate, 
       setAdmins((prev) => [...prev, mapBEtoFE(created)])
       setApiStatus(`Creado en ${ENV.API_URL} → ${form.nombre} ${form.primerApellido}`)
       setCreatedName(fullName({ nombre: form.nombre.trim(), primerApellido: form.primerApellido.trim(), segundoApellido: form.segundoApellido.trim() }))
+      setCreatedDetail(credencialesDetail(created.password_generado, form.email.trim()))
       setForm(EMPTY_FORM)
       setShowCreate(false)
     } catch (err) {
@@ -216,7 +224,7 @@ export const AdministradoresView: React.FC<Props> = ({ currentView, onNavigate, 
       <div className="visitadores-head">
         <div>
           <h2 className="visitadores-title">Administradores del Sistema</h2>
-          <p className="visitadores-sub">Cuentas con rol admin: persona + usuario en una transacción. La eliminación es lógica (activo → eliminado).</p>
+          <p className="visitadores-sub">Cuentas con rol admin: persona + usuario en una transacción. La contraseña la genera el sistema y se envía al correo. La eliminación es lógica (activo → eliminado).</p>
         </div>
         <button className="btn-registrar" onClick={() => setShowCreate(true)}>+ Registrar Nuevo</button>
       </div>
@@ -301,8 +309,7 @@ export const AdministradoresView: React.FC<Props> = ({ currentView, onNavigate, 
                   <option value="femenino">Femenino</option>
                 </select>
               </label>
-              <label>Email de acceso <span style={reqStyle}>* obligatorio</span><input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="admin@praxis.bo" /></label>
-              <label>Contraseña <span style={reqStyle}>* obligatorio (mín. 6)</span><input required type="password" minLength={6} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="••••••••" /></label>
+              <label>Email de acceso <span style={reqStyle}>* obligatorio — ahí llegan usuario y contraseña</span><input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="admin@praxis.bo" /></label>
               <label>Teléfono <span style={optStyle}>(opcional)</span><input value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="+591 70000000" /></label>
               <label>CI <span style={optStyle}>(opcional)</span><input value={form.ci} onChange={e => setForm({ ...form, ci: e.target.value })} placeholder="Ej. 6543217" /></label>
               <label>Ciudad <span style={optStyle}>(opcional)</span>
@@ -403,7 +410,13 @@ export const AdministradoresView: React.FC<Props> = ({ currentView, onNavigate, 
         </div>
       )}
 
-      <SuccessModal open={createdName !== null} onClose={() => setCreatedName(null)} kind="administrador" name={createdName ?? ''} />
+      <SuccessModal
+        open={createdName !== null}
+        onClose={() => { setCreatedName(null); setCreatedDetail(null) }}
+        kind="administrador"
+        name={createdName ?? ''}
+        detail={createdDetail ?? undefined}
+      />
     </AdminLayout>
   )
 }

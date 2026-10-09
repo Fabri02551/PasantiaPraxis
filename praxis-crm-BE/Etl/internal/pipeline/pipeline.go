@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"gitlab.com/labpraxis/praxis-crm-be/etl/internal/admin"
 	"gitlab.com/labpraxis/praxis-crm-be/etl/internal/config"
 	"gitlab.com/labpraxis/praxis-crm-be/etl/internal/stages"
 	"gitlab.com/labpraxis/praxis-crm-be/etl/internal/visitador"
@@ -54,6 +55,10 @@ func New(cfg config.Config, pool *pgxpool.Pool) Pipeline {
 // porque cada fila de la cartera trae su visitador asignado y esa columna
 // se resuelve contra los visitadores ya cargados; al revés, los médicos
 // quedarían con visitador_id NULL.
+//
+// Además de las etapas de datos, la corrida siembra la cuenta administradora
+// (admin.Asegurar, sin dependencias de FK) y manda por correo las
+// credenciales que creó en este paso.
 func (p Pipeline) Run(ctx context.Context) error {
 	inicio := time.Now()
 	logDir := filepath.Join(p.cfg.SrcDir, "..", "logs")
@@ -114,6 +119,30 @@ func (p Pipeline) Run(ctx context.Context) error {
 	}
 	log.Printf("[visitador] %d nombres indexados para las carteras", vis.Mapa.TotalAliases())
 
+	// 3b. admin: siembra la cuenta administradora (persona + users). No
+	// depende de ninguna etapa; va acá para que los correos de
+	// credenciales de la corrida salgan todos juntos.
+	resAdmin, err := admin.Asegurar(ctx, p.pool, p.cfg)
+	if err != nil {
+		run.Error = fmt.Errorf("etapa admin: %w", err)
+		return run.Error
+	}
+	run.Admin = resAdmin
+	log.Printf("[admin] %s", resAdmin)
+	// Respaldo de la contraseña recién generada: si el correo no llega,
+	// queda en logs/admin_*.log (mismo criterio que los visitadores).
+	if path, err := admin.GuardarLog(resAdmin, logDir); err != nil {
+		log.Printf("[admin] no se pudo escribir el log de credenciales: %v", err)
+	} else {
+		run.LogAdmin = path
+	}
+
+	// 3c. correos con las credenciales creadas en esta corrida. Un fallo
+	// de SMTP no aborta la carga: queda en el log y las contraseñas
+	// siguen en logs/visitadores_*.log.
+	run.Correo = enviarCredenciales(p.cfg, resAdmin, vis.Resultados)
+	log.Printf("[correo] %s", run.Correo)
+
 	// 4. medico
 	run.Medico, err = stages.EtapaMedico(ctx, p.pool, src("medicos", "medicos_carteras.csv"),
 		ciudades, especialidades, vis.Mapa)
@@ -141,8 +170,10 @@ func (p Pipeline) Run(ctx context.Context) error {
 	log.Printf("=== resumen ===")
 	log.Printf("  medico:      %s", run.Medico)
 	log.Printf("  institucion: %s", run.Institucion)
-	log.Printf("  laboratorio: %s", run.Laboratorio)
+	log.Printf("  laboratorio:  %s", run.Laboratorio)
 	log.Printf("  visitador:   %s", visitador.Resumen(vis.Resultados))
+	log.Printf("  admin:       %s", run.Admin)
+	log.Printf("  correos:     %s", run.Correo)
 	log.Printf("  no se cargan: %v", TablasQueNoSeCargan)
 	log.Printf("  clasificacion de instituciones: la sube el usuario a mano desde revisar_clasificacion.csv")
 	log.Printf("=== corrida terminada en %s ===", time.Since(inicio).Round(time.Millisecond))

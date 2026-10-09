@@ -247,6 +247,24 @@ visitadorService.update(1, {telefono:"+591...", activo:true})
 visitadorService.remove(1)
 ```
 
+### Credenciales del visitador (y del administrador)
+
+El alta **no pide contraseña**: el backend la genera (`core/pkg/passwd`), la
+guarda como bcrypt en `users` (rol `visitador`) dentro de la misma
+transacción y la manda por correo al `correo` del request (`SMTP_*` de la
+API). El formulario marca ese correo como obligatorio.
+
+- `201` normal → el correo salió bien; la respuesta **no** trae la contraseña.
+- `201` con `password_generado` → no se pudo enviar (sin `SMTP_HOST` o fallo
+  del servidor): es la única copia en claro y el panel la muestra una vez.
+- `409` `el correo ya está registrado por otro usuario` → `users.email` UNIQUE.
+- `400` sin `correo`.
+
+Igual que acá, `POST /api/admins` ya no recibe `password`: la genera, la
+hashea y la envía al `email` del request (`AdminCreado.password_generado`
+solo aparece si el correo no salió). `PUT /api/admins/{persona_id}` sigue
+aceptando `password` para resetearla a mano.
+
 ---
 
 ## 9. Matriz CRUD Resumen para Frontend

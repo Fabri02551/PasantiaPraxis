@@ -16,10 +16,25 @@ func NewVisitadorRepository(pool *pgxpool.Pool) *VisitadorRepository {
 	return &VisitadorRepository{pool: pool}
 }
 
-func (r *VisitadorRepository) Create(ctx context.Context, userID *int, v *models.Visitador) error {
+// Create inserta persona + visitador + users (rol visitador) en UNA
+// transacción y devuelve el persona_id. El usuario es el que permite el
+// login: sin esa fila el visitador queda en la agenda pero no puede entrar.
+func (r *VisitadorRepository) Create(ctx context.Context, userID *int, v *models.Visitador, passwordHash string) (int, error) {
+	// users.email es UNIQUE: conviene avisar con un mensaje claro antes
+	// que dejar la transacción explotando contra el índice.
+	var existe bool
+	if err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM users WHERE lower(email) = lower($1))`, v.Correo,
+	).Scan(&existe); err != nil {
+		return 0, fmt.Errorf("verificando el correo del visitador: %w", err)
+	}
+	if existe {
+		return 0, models.ErrCorreoYaRegistrado
+	}
+
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("error starting transaction: %w", err)
+		return 0, fmt.Errorf("error starting transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
@@ -30,7 +45,7 @@ func (r *VisitadorRepository) Create(ctx context.Context, userID *int, v *models
 		v.Nombre, v.PrimerApellido, v.SegundoApellido, v.Sexo, v.Correo, v.Telefono, v.CI,
 	).Scan(&personaID)
 	if err != nil {
-		return fmt.Errorf("error creating persona: %w", err)
+		return 0, fmt.Errorf("error creating persona: %w", err)
 	}
 
 	_, err = tx.Exec(ctx,
@@ -38,10 +53,20 @@ func (r *VisitadorRepository) Create(ctx context.Context, userID *int, v *models
 		personaID, userID, v.Latitud, v.Longitud,
 	)
 	if err != nil {
-		return fmt.Errorf("error creating visitador: %w", err)
+		return 0, fmt.Errorf("error creating visitador: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	if _, err = tx.Exec(ctx,
+		`INSERT INTO users (persona_id, email, password_hash, role) VALUES ($1, $2, $3, 'visitador')`,
+		personaID, v.Correo, passwordHash,
+	); err != nil {
+		return 0, fmt.Errorf("error creating user: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("error committing transaction: %w", err)
+	}
+	return personaID, nil
 }
 
 func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, error) {

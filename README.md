@@ -13,10 +13,20 @@ docker compose logs -f etl-init
 
 | Servicio | URL | Qué es |
 |---|---|---|
-| `web` | https://localhost (nginx con cert de dev) | Frontend compilado por Vite |
+| `web` | https://localhost:3000 (o `http://localhost`) | Frontend (nginx) compilado por Vite |
 | `api` | http://localhost:8080 | API Go (JWT) |
 | `etl-init` | — | Corre el ETL **una sola vez por base de datos** y termina |
-| `db` | localhost:5432 | PostgreSQL 16 |
+| `db` | localhost:5433 | PostgreSQL 16 (host 5433 → contenedor 5432) |
+
+- `web` y `api` publican puertos **en local**; el HTTPS de `web` sale de
+  `docker-compose.override.yml`, que **no se commitea** (está en `.gitignore`)
+  y monta `certs/` + `praxis-crm-FR/nginx-ssl.conf`. Al desplegar con dokploy
+  el repo llega sin ese archivo: el nginx queda solo en el 80 y el TLS lo
+  termina el proxy del dominio, así que nada choca con traefik.
+- El GPS del visitador necesita contexto seguro: anda en `https://localhost:3000`
+  y también en `http://localhost` (localhost es seguro por definición). Si
+  entrás por IP desde el celular, ahí usá el https con los certs de
+  `scripts/dev-certs.sh`.
 
 El servicio `etl-init` carga los CSV en el primer arranque; después solo
 registra que ya se hizo (tabla `etl_corrida`). Ver
