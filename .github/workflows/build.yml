@@ -1,0 +1,49 @@
+# En cada push sube el bundle web (compilado en modo android) a Capgo.
+# Los celulares con la app instalada lo bajan y lo aplican solos en el
+# próximo lanzamiento de la app (canal production, autoUpdate onLaunch).
+#
+# Requiere el secret del repo: CAPGO_TOKEN (la API key de capgo.app).
+# NO pegues la key en este archivo ni en el repo: Settings → Secrets and
+# variables → Actions → New repository secret → nombre CAPGO_TOKEN.
+name: Build y update OTA (Capgo)
+
+on:
+  push:
+    branches: [Dev, main]
+
+jobs:
+  capgo-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: praxis-crm-FR/package-lock.json
+
+      - name: Instalar dependencias
+        working-directory: praxis-crm-FR
+        run: npm ci
+
+      # Importante: modo android (--mode android), no el build normal.
+      # El bundle que baja el celular tiene que llamar a la API con URL
+      # absoluta (.env.android), porque adentro de la app no hay nginx.
+      - name: Build web (modo android)
+        working-directory: praxis-crm-FR
+        run: npm run build:android
+
+      - name: Subir bundle a Capgo
+        working-directory: praxis-crm-FR
+        # --auto-bump le pone al bundle la próxima versión libre sola, así
+        # cada push sube una versión distinta y los dispositivos la toman.
+        run: >
+          npx @capgo/cli@latest bundle upload com.laboratoriopraxis.crm
+          --path ./dist
+          --channel production
+          --auto-bump
+        env:
+          CAPGO_TOKEN: ${{ secrets.CAPGO_TOKEN }}
