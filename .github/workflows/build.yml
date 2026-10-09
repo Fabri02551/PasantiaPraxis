@@ -51,7 +51,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
 
       # 5. Compilar el archivo APK con Gradle
       - name: Compilar APK (Debug)
