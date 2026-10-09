@@ -1,27 +1,21 @@
-# En cada push sube el bundle web (compilado en modo android) a Capgo.
-# Los celulares con la app instalada lo bajan y lo aplican solos en el
-# próximo lanzamiento de la app (canal production, autoUpdate onLaunch).
-#
-# Requiere el secret del repo: CAPGO_TOKEN (la API key de capgo.app).
-# NO pegues la key en este archivo ni en el repo: Settings → Secrets and
-# variables → Actions → New repository secret → nombre CAPGO_TOKEN.
-name: Build y update OTA (Capgo)
+# En cada push sube el bundle web a Capgo (OTA) y genera el APK para GitHub Releases.
+name: Build, OTA Update (Capgo) y APK Release
 
 on:
   push:
     branches: [Dev, main]
 
 jobs:
-  capgo-upload:
+  capgo-and-release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20'
           cache: 'npm'
           cache-dependency-path: praxis-crm-FR/package-lock.json
 
@@ -29,17 +23,14 @@ jobs:
         working-directory: praxis-crm-FR
         run: npm ci
 
-      # Importante: modo android (--mode android), no el build normal.
-      # El bundle que baja el celular tiene que llamar a la API con URL
-      # absoluta (.env.android), porque adentro de la app no hay nginx.
+      # 1. Compilación web para Android
       - name: Build web (modo android)
         working-directory: praxis-crm-FR
         run: npm run build:android
 
+      # 2. Subida OTA a Capgo
       - name: Subir bundle a Capgo
         working-directory: praxis-crm-FR
-        # --auto-bump le pone al bundle la próxima versión libre sola, así
-        # cada push sube una versión distinta y los dispositivos la toman.
         run: >
           npx @capgo/cli@latest bundle upload com.laboratoriopraxis.crm
           --path ./dist
@@ -47,3 +38,44 @@ jobs:
           --auto-bump
         env:
           CAPGO_TOKEN: ${{ secrets.CAPGO_TOKEN }}
+
+      # 3. Sincronizar bundle web compilado dentro del proyecto nativo Android
+      - name: Capacitor Sync Android
+        working-directory: praxis-crm-FR
+        run: npx cap sync android
+
+      # 4. Configurar Java para compilar la app de Android
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      # 5. Compilar el archivo APK con Gradle
+      - name: Compilar APK (Debug)
+        working-directory: praxis-crm-FR/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      # 6. Generar el Tag de versión dinámico
+      - name: Generar Tag y Nombre de Versión
+        id: vars
+        run: |
+          TAG_NAME="v1.0.${{ github.run_number }}"
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+
+      # 7. Crear el Release en GitHub y adjuntar el APK
+      - name: Publicar en GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: "Release ${{ steps.vars.outputs.tag }}"
+          body: |
+            Actualización automática generada desde la rama `${{ github.ref_name }}`.
+            Commit: ${{ github.sha }}
+          draft: false
+          prerelease: false
+          files: praxis-crm-FR/android/app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
