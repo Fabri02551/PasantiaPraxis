@@ -366,7 +366,7 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
                 <th>Médico</th>
                 <th>Especialidad</th>
                 <th>Hospital</th>
-                <th>Ubicaciones</th>
+                <th># ubicación(es)</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -381,7 +381,7 @@ export const MedicosAdminView: React.FC<{ currentView: AdminView; onNavigate: (v
                   </td>
                   <td><span className="medicos-espec">{m.especialidad ? ((especialidades ?? []).find(e => String(e.id) === m.especialidad)?.nombre || m.especialidad) : '—'}</span></td>
                   <td style={{ fontSize: 11.5 }}>{m.hospital || '—'}</td>
-                  <td><span className="medicos-ubi-badge">{m.ubicaciones.length} {m.ubicaciones.length === 1 ? 'ubicación' : 'ubicaciones'}</span></td>
+                  <td><span className="medicos-ubi-badge">{m.ubicaciones.length}</span></td>
                   <td>
                     <div className="pruebas-actions">
                       <button className="vt-btn vt-btn--ver" onClick={() => setViewing(m)}>Ver</button>

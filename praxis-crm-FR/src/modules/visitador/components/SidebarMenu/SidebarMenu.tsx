@@ -1,3 +1,6 @@
+import { useEffect, useState } from 'react'
+import { authService, type CurrentUser } from '../../../auth/services/auth.service'
+import { getInitials, avatarStyle } from '../../../core/utils/avatar'
 import './SidebarMenu.css'
 
 type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
@@ -17,6 +20,19 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   currentView,
   onLogout,
 }) => {
+  const [me, setMe] = useState<CurrentUser | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    authService.getMe().then((u) => { if (!cancelled) setMe(u) }).catch(() => { if (!cancelled) setMe(null) })
+    return () => { cancelled = true }
+  }, [open])
+
+  const displayName = me
+    ? [me.nombre, me.primer_apellido, me.segundo_apellido].filter(Boolean).join(' ').trim()
+    : ''
+  const roleLabel = me?.role === 'admin' ? 'Administrador' : 'Visitador'
+
   const handleNav = (view: View) => {
     onNavigate(view)
     onClose()
@@ -35,14 +51,17 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
         aria-label="Menú de navegación"
       >
         <div className="sidebar-profile">
-          <img
-            src="https://i.pravatar.cc/100?img=12"
-            alt="Ing. Carlos Mendoza"
-            className="sidebar-avatar"
-          />
+          <span
+            className="sidebar-avatar sidebar-avatar--initials"
+            style={avatarStyle(displayName || 'visitador')}
+            aria-label={displayName || 'Mi cuenta'}
+            role="img"
+          >
+            {me ? getInitials(me.nombre, me.primer_apellido, me.segundo_apellido) : '••'}
+          </span>
           <div className="sidebar-profile-text">
-            <span className="sidebar-name">Ing. Carlos Mendoza</span>
-            <span className="sidebar-role">Técnico de Campo</span>
+            <span className="sidebar-name">{displayName || 'Mi cuenta'}</span>
+            <span className="sidebar-role">{roleLabel}</span>
           </div>
         </div>
 

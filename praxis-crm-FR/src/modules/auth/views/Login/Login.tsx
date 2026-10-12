@@ -70,7 +70,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ logoSrc, onLogin, onForgot
         <div className="login-branding">
           <div className="login-logo-wrapper">
             {logoSrc ? (
-              <img src={logoSrc} alt="Praxis" className="login-logo-img" />
+              <img src={logoSrc} alt="Praxis — Laboratorio Clínico" className="login-logo-img login-logo-full" />
             ) : (
               <div className="login-logo-placeholder" aria-label="Logo Praxis">
                 <svg
@@ -88,8 +88,14 @@ export const LoginForm: React.FC<LoginFormProps> = ({ logoSrc, onLogin, onForgot
               </div>
             )}
           </div>
-          <h1 className="login-title">Praxis</h1>
-          <p className="login-subtitle">Laboratorio clínico</p>
+          {/* El logo oficial ya incluye "Praxis / Laboratorio Clínico": el texto
+              solo se muestra como respaldo cuando no hay imagen. */}
+          {!logoSrc && (
+            <>
+              <h1 className="login-title">Praxis</h1>
+              <p className="login-subtitle">Laboratorio clínico</p>
+            </>
+          )}
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>
@@ -156,10 +162,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ logoSrc, onLogin, onForgot
           <button type="submit" className="btn-primary" disabled={loading}>
             {loading ? 'Conectando...' : 'Iniciar Sesión'}
           </button>
-
-          <p className="login-footer">
-            ¿Problemas de acceso? <a href="#">Soporte TI</a>
-          </p>
         </form>
       </div>
     </div>
