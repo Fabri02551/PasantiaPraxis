@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
 import { authService, type CurrentUser } from '../../../auth/services/auth.service'
+import { getInitials, avatarStyle } from '../../../core/utils/avatar'
 import './Profile.css'
 
 type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
@@ -30,8 +31,6 @@ const EMPTY_FORM: ProfileForm = {
   nacimiento: '',
   ci: '',
 }
-
-const AVATAR_FALLBACK = 'https://i.pravatar.cc/200?img=12'
 
 const ROLE_LABEL: Record<string, string> = {
   visitador: 'Visitador',
@@ -256,7 +255,14 @@ export const ProfileView: React.FC<Props> = ({ onNavigate, currentView, onLogout
         ) : (
           <>
             <section className="profile-card">
-              <img src={AVATAR_FALLBACK} alt={fullName(profile) || 'Perfil'} className="profile-avatar" />
+              <span
+                className="profile-avatar profile-avatar--initials"
+                style={avatarStyle(fullName(profile))}
+                aria-label={fullName(profile) || 'Perfil'}
+                role="img"
+              >
+                {getInitials(profile.nombre, profile.primer_apellido, profile.segundo_apellido)}
+              </span>
               <h2 className="profile-name">{fullName(profile) || 'Sin nombre'}</h2>
               <p className="profile-role">{roleLabel(profile.role)}</p>
             </section>

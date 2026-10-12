@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
+	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/crypto"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/pkg/response"
 )
 
@@ -16,8 +17,11 @@ const RoleKey contextKey = "role"
 const PersonaIDKey contextKey = "persona_id"
 
 type Claims struct {
+	// Role y PersonaID llegan CIFRADOS desde generateToken (ver
+	// internal/auth/services). Aquí se descifran antes de guardarlos
+	// en el contexto. PersonaID vacío = nil.
 	Role      string `json:"role"`
-	PersonaID *int   `json:"persona_id"`
+	PersonaID string `json:"persona_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -64,8 +68,26 @@ func Auth(secret string) func(http.Handler) http.Handler {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), RoleKey, claims.Role)
-			ctx = context.WithValue(ctx, PersonaIDKey, claims.PersonaID)
+			// Descifra rol y persona_id. Si falla, el token es inválido o fue
+			// emitido antes del cifrado: se exige re-login.
+			role, err := crypto.DecryptString(secret, claims.Role)
+			if err != nil {
+				response.Error(w, http.StatusUnauthorized, "token inválido o expirado")
+				return
+			}
+
+			var personaID *int
+			if claims.PersonaID != "" {
+				id, err := crypto.DecryptInt(secret, claims.PersonaID)
+				if err != nil {
+					response.Error(w, http.StatusUnauthorized, "token inválido o expirado")
+					return
+				}
+				personaID = &id
+			}
+
+			ctx := context.WithValue(r.Context(), RoleKey, role)
+			ctx = context.WithValue(ctx, PersonaIDKey, personaID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

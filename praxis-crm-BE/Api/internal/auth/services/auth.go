@@ -13,6 +13,7 @@ import (
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/auth/models"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/auth/repository"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/config"
+	apicrypto "gitlab.com/labpraxis/praxis-crm-be/api/internal/core/crypto"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/pkg/mailer"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/pkg/passwd"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/pkg/texto"
@@ -392,17 +393,33 @@ func (s *AuthService) ChangePassword(ctx context.Context, personaID int, req mod
 }
 
 type Claims struct {
+	// Role y PersonaID viajan CIFRADOS (AES-256-GCM, base64) para que no
+	// sean legibles con un simple base64 del payload del JWT.
+	// PersonaID vacío = usuario sin persona asociada (nil).
 	Role      string `json:"role"`
-	PersonaID *int   `json:"persona_id"`
+	PersonaID string `json:"persona_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
 func (s *AuthService) generateToken(user *models.User) (*models.TokenResponse, error) {
 	expiresAt := time.Now().Add(s.cfg.JWTExpiration)
 
+	encRole, err := apicrypto.EncryptString(s.cfg.JWTSecret, user.Role)
+	if err != nil {
+		return nil, err
+	}
+
+	encPersonaID := ""
+	if user.PersonaID != nil {
+		encPersonaID, err = apicrypto.EncryptInt(s.cfg.JWTSecret, *user.PersonaID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	claims := &Claims{
-		Role:      user.Role,
-		PersonaID: user.PersonaID,
+		Role:      encRole,
+		PersonaID: encPersonaID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

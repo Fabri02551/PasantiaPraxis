@@ -4,7 +4,7 @@ import { storage } from '../../../core/lib/storage'
 import { getInitials, avatarStyle } from '../../../core/utils/avatar'
 import './AdminSidebar.css'
 
-export type AdminView = 'admin-dashboard' | 'admin-visitadores' | 'admin-administradores' | 'admin-graficos' | 'admin-calendario' | 'admin-laboratorios' | 'admin-instituciones' | 'admin-medicos' | 'admin-especialidades' | 'admin-comentarios' | 'admin-notificaciones' | 'admin-perfil'
+export type AdminView = 'admin-dashboard' | 'admin-visitadores' | 'admin-administradores' | 'admin-graficos' | 'admin-calendario' | 'admin-laboratorios' | 'admin-instituciones' | 'admin-medicos' | 'admin-especialidades' | 'admin-comentarios' | 'admin-notificaciones' | 'admin-perfil' | 'admin-cartera' | 'admin-reportes'
 
 interface Props {
   currentView: AdminView
@@ -96,6 +96,16 @@ export const AdminSidebar: React.FC<Props> = ({ currentView, onNavigate, onLogou
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><path d="M20 8l-2 2 2 2M22 12h-4" /></svg>
           <span className="admin-nav-text">Médicos</span>
           {isActive('admin-medicos') && <span className="admin-active-bar" />}
+        </button>
+        <button className={`admin-nav-item ${isActive('admin-cartera') ? 'active' : ''}`} onClick={() => go('admin-cartera')}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="7" width="20" height="15" rx="2" /><path d="M16 11a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2" /><path d="M2 12h16" /></svg>
+          <span className="admin-nav-text">Cartera</span>
+          {isActive('admin-cartera') && <span className="admin-active-bar" />}
+        </button>
+        <button className={`admin-nav-item ${isActive('admin-reportes') ? 'active' : ''}`} onClick={() => go('admin-reportes')}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M10 13H8M16 17H8M13 13h2" /></svg>
+          <span className="admin-nav-text">Reportes</span>
+          {isActive('admin-reportes') && <span className="admin-active-bar" />}
         </button>
         <button className={`admin-nav-item ${isActive('admin-especialidades') ? 'active' : ''}`} onClick={() => go('admin-especialidades')}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>

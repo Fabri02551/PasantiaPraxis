@@ -1,0 +1,185 @@
+.cartera-admin-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.cartera-admin-list {
+  background: #fff;
+  border: 1px solid #e8ecf1;
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 4px 16px rgba(27, 42, 78, 0.04);
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.cartera-admin-subtitle {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #1b2a4e;
+}
+
+.cartera-admin-status {
+  font-size: 12.5px;
+  color: #7e8aa6;
+  padding: 16px 8px;
+  text-align: center;
+  margin: 0;
+}
+
+.cartera-admin-error {
+  color: #e35d5d;
+  font-weight: 600;
+}
+
+.cartera-admin-visitadores {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cartera-admin-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cartera-admin-item:hover {
+  background: #f4f6f9;
+}
+
+.cartera-admin-item.active {
+  background: #eef6f6;
+  border-color: #c8ecec;
+}
+
+.cartera-admin-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.cartera-admin-item-text,
+.cartera-admin-medico-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.cartera-admin-item-name,
+.cartera-admin-medico-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1b2a4e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cartera-admin-item-count,
+.cartera-admin-medico-sub {
+  font-size: 11.5px;
+  color: #6b7a99;
+}
+
+.cartera-admin-detail {
+  background: #fff;
+  border: 1px solid #e8ecf1;
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 4px 16px rgba(27, 42, 78, 0.04);
+  min-height: 300px;
+}
+
+.cartera-admin-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.cartera-admin-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #1b2a4e;
+}
+
+.cartera-admin-sub {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: #6b7a99;
+}
+
+.cartera-admin-search {
+  height: 40px;
+  min-width: 220px;
+  border: 1px solid #e2e6ed;
+  border-radius: 10px;
+  padding: 0 12px;
+  font-size: 13px;
+  color: #1b2a4e;
+  background: #fff;
+  color-scheme: light;
+  outline: none;
+}
+
+.cartera-admin-search:focus {
+  border-color: #2d9c9c;
+  box-shadow: 0 0 0 3px rgba(45, 156, 156, 0.12);
+}
+
+.cartera-admin-medicos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.cartera-admin-medico {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #eef1f5;
+  border-radius: 12px;
+  background: #fcfcfd;
+}
+
+@media (max-width: 900px) {
+  .cartera-admin-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .cartera-admin-list {
+    max-height: none;
+  }
+
+  .cartera-admin-medicos {
+    grid-template-columns: 1fr;
+  }
+}

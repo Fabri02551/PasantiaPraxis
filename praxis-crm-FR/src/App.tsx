@@ -21,6 +21,8 @@ import { InstitucionesView as InstitucionesAdminView } from './modules/admin/vie
 import { MedicosAdminView } from './modules/admin/views/MedicosAdmin/MedicosAdmin'
 import { EspecialidadesView } from './modules/admin/views/Especialidades/Especialidades'
 import { AdminComentariosView } from './modules/admin/views/Comentarios/AdminComentarios'
+import { CarteraAdminView } from './modules/admin/views/CarteraAdmin/CarteraAdmin'
+import { ReportesView } from './modules/admin/views/Reportes/Reportes'
 import { VisitadorComentariosView } from './modules/visitador/views/Comentarios/Comentarios'
 import { PlanificadorView } from './modules/visitador/views/Planificador/Planificador'
 import { HistorialView } from './modules/visitador/views/Historial/Historial'
@@ -107,7 +109,7 @@ function App() {
 
   let content: React.ReactNode
   if (view === 'login') {
-    content = <LoginForm onLogin={handleLogin} onForgot={() => setView('forgot-password')} />
+    content = <LoginForm logoSrc="/praxis-logo.png" onLogin={handleLogin} onForgot={() => setView('forgot-password')} />
   } else if (view === 'forgot-password') {
     content = <ForgotPasswordView onBack={() => setView('login')} />
   } else if (view === 'reset-password') {
@@ -132,6 +134,10 @@ function App() {
     content = <EspecialidadesView currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
   } else if (view === 'admin-comentarios') {
     content = <AdminComentariosView currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
+  } else if (view === 'admin-cartera') {
+    content = <CarteraAdminView currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
+  } else if (view === 'admin-reportes') {
+    content = <ReportesView currentView={view} onNavigate={handleNavigate} onLogout={handleLogout} />
   } else if (view === 'home') {
     content = <VisitadorHome onNavigate={handleNavigate} currentView={view} onLogout={handleLogout} onCompletar={handleCompletarVisita} />
   } else if (view === 'registro') {

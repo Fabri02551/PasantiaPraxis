@@ -79,6 +79,16 @@
   display: block;
 }
 
+/* Logo oficial Praxis (horizontal): ocupa el ancho de la tarjeta y mantiene
+   su proporción. Sin recorte ni fondo porque la imagen ya trae el branding. */
+.login-logo-img.login-logo-full {
+  width: 210px;
+  max-width: 100%;
+  height: auto;
+  border-radius: 0;
+  margin: 0 auto;
+}
+
 .login-title {
   font-size: 22px;
   font-weight: 800;
