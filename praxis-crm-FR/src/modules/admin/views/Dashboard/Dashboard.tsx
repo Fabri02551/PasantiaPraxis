@@ -92,15 +92,17 @@ export const AdminDashboard: React.FC<Props> = ({ currentView, onNavigate, onLog
           {/* CHARTS ROW 1 */}
           <div className="admin-charts-row">
             <div className="admin-chart-card">
-              <h3 className="admin-chart-title">Visitadores en BD</h3>
+              <h3 className="admin-chart-title">Top Visitadores (visitas registradas)</h3>
               <div className="admin-bar-list">
                 {loading ? (
                   <p style={{ fontSize: 12, color: '#6b7a99' }}>Cargando...</p>
                 ) : visitadoresList.length === 0 ? (
                   <p style={{ fontSize: 12, color: '#6b7a99' }}>Sin visitadores</p>
+                ) : totalSemana === 0 && visitadoresList.every(r => r.val === 0) ? (
+                  <p style={{ fontSize: 12, color: '#6b7a99' }}>Sin visitas registradas todavía</p>
                 ) : (
-                  visitadoresList.map(r => (
-                    <div key={r.name} className="admin-bar-row">
+                  visitadoresList.map((r, i) => (
+                    <div key={i} className="admin-bar-row">
                       <span className="admin-bar-name">{r.name}</span>
                       <div className="admin-bar-track">
                         <div className="admin-bar-fill" style={{ width: `${r.val > 0 ? Math.min(100, 12 + (r.val / Math.max(1, ...visitadoresList.map(x => x.val))) * 88) : 6}%`, background: '#0e7490' }} />
@@ -115,12 +117,15 @@ export const AdminDashboard: React.FC<Props> = ({ currentView, onNavigate, onLog
             <div className="admin-chart-card">
               <h3 className="admin-chart-title">Productividad de la Empresa (Visitas Semanales)</h3>
               <div className="admin-line-chart">
+                {totalSemana === 0 && !loading && (
+                  <p style={{ fontSize: 12, color: '#6b7a99', textAlign: 'center' }}>Sin visitas registradas en las últimas 4 semanas</p>
+                )}
                 <svg viewBox="0 0 340 140" className="admin-line-svg" preserveAspectRatio="none">
                   {/* grid */}
                   <line x1="40" y1="20" x2="40" y2="110" stroke="#e8ecf1" strokeWidth="1" />
                   <line x1="40" y1="110" x2="320" y2="110" stroke="#e8ecf1" strokeWidth="1" />
                   <line x1="40" y1="65" x2="320" y2="65" stroke="#f4f6f9" strokeWidth="1" />
-                  {/* line */}
+                  {/* línea y puntos calculados desde /api/visitas */}
                   <polyline
                     fill="none"
                     stroke="#0e9a9e"

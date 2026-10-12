@@ -3,10 +3,13 @@
 certs/
 
 # Entornos: el archivo vive en la raíz del repo y no se commitea.
-# La plantilla .env.example sí se commitea.
+# La plantilla .env.example sí se commitea. El .env.android también: solo
+# tiene la URL pública de la API (nada secreto) y lo necesita el build
+# de la app Android.
 .env
 .env.*
 !.env.example
+!.env.android
 
 # Ajustes locales de docker compose (HTTPS/certs/puertos): nunca al repo.
 docker-compose.override.yml
