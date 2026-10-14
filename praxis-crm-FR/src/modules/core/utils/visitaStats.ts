@@ -71,3 +71,71 @@ export function realizadasPorVisitador(visitas: VisitaBE[]): Map<number, number>
   })
   return map
 }
+
+// Conteo de realizadas por médico (persona_id del médico).
+export function realizadasPorMedico(visitas: VisitaBE[]): Map<number, number> {
+  const map = new Map<number, number>()
+  visitas.forEach((v) => {
+    if (!esRealizada(v) || v.id_medico == null) return
+    map.set(v.id_medico, (map.get(v.id_medico) ?? 0) + 1)
+  })
+  return map
+}
+
+// Cantidad de médicos DISTINTOS que cada visitador ya visitó.
+export function medicosDistintosPorVisitador(visitas: VisitaBE[]): Map<number, number> {
+  const sets = new Map<number, Set<number>>()
+  visitas.forEach((v) => {
+    if (!esRealizada(v) || v.id_medico == null) return
+    const s = sets.get(v.id_visitador) ?? new Set<number>()
+    s.add(v.id_medico)
+    sets.set(v.id_visitador, s)
+  })
+  return new Map([...sets].map(([k, s]) => [k, s.size]))
+}
+
+// Serie diaria (últimos N días) de visitas realizadas, agrupada por persona
+// (visitador o médico). Devuelve las etiquetas de día, las top-N series y la
+// serie "Otros" (suma del resto) para no saturar la gráfica.
+export type SerieDiaria = { id: number; counts: number[] }
+
+export function realizadasPorDiaPorPersona(
+  visitas: VisitaBE[],
+  opt: { clave: 'visitador' | 'medico'; dias?: number; top?: number },
+): { labels: string[]; series: SerieDiaria[]; otros: number[] } {
+  const dias = opt.dias ?? 7
+  const top = opt.top ?? 5
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
+  const fechas: Date[] = []
+  const labels: string[] = []
+  for (let i = dias - 1; i >= 0; i--) {
+    const d = new Date(hoy)
+    d.setDate(d.getDate() - i)
+    fechas.push(d)
+    labels.push(`${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`)
+  }
+  const idxPorDia = new Map(fechas.map((d, i) => [diaKey(d), i]))
+  const porPersona = new Map<number, number[]>()
+  const totales = new Map<number, number>()
+  visitas.forEach((v) => {
+    if (!esRealizada(v)) return
+    const id = opt.clave === 'visitador' ? v.id_visitador : v.id_medico
+    if (id == null) return
+    const d = fechaRealizada(v)
+    if (d == null) return
+    const i = idxPorDia.get(diaKey(d))
+    if (i == null) return
+    const arr = porPersona.get(id) ?? new Array(dias).fill(0)
+    arr[i] += 1
+    porPersona.set(id, arr)
+    totales.set(id, (totales.get(id) ?? 0) + 1)
+  })
+  const ids = [...porPersona.keys()].sort((a, b) => (totales.get(b) ?? 0) - (totales.get(a) ?? 0))
+  const topIds = ids.slice(0, top)
+  const restoIds = ids.slice(top)
+  const series: SerieDiaria[] = topIds.map((id) => ({ id, counts: porPersona.get(id)! }))
+  const otros = new Array(dias).fill(0)
+  restoIds.forEach((id) => porPersona.get(id)!.forEach((c, i) => { otros[i] += c }))
+  return { labels, series, otros }
+}

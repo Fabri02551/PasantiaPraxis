@@ -27,11 +27,11 @@ import (
 
 // Identidad de la persona administradora que siembra el ETL. persona.nombre
 // y persona.primer_apellido son NOT NULL, así que no pueden quedar vacíos.
-// Coincide con la persona que ya existe en la base para que una recarga no
-// duplique identidades.
+// El correo siempre sale de ETL_ADMIN_EMAIL; el nombre es genérico para que
+// la cuenta se identifique como el admin del sistema y no como una persona.
 const (
-	nombre          = "Nicolas"
-	primerApellido  = "Tocoyucra"
+	nombre          = "Praxis"
+	primerApellido  = "Admin"
 	segundoApellido = ""
 )
 
