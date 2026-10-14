@@ -9,6 +9,7 @@ type Laboratorio struct {
 	ID            int             `json:"id"`
 	Nombre        string          `json:"nombre"`
 	Area          string          `json:"area"`
+	Clave         *string         `json:"clave,omitempty"`
 	Precio        float64         `json:"precio"`
 	ComisionExtra float64         `json:"comision_extra"`
 	Status        bool            `json:"status"`
@@ -26,6 +27,7 @@ type LaboratorioPrecio struct {
 	ID            int     `json:"id"`
 	Nombre        string  `json:"nombre"`
 	Area          string  `json:"area"`
+	Clave         string  `json:"clave"`
 	Costo         float64 `json:"costo"`
 	ComisionExtra float64 `json:"comision_extra"`
 }
@@ -33,10 +35,13 @@ type LaboratorioPrecio struct {
 type CreateLaboratorioRequest struct {
 	Nombre        string  `json:"nombre"`
 	Area          string  `json:"area"`
+	Clave         string  `json:"clave,omitempty"`
 	Precio        float64 `json:"precio"`
 	ComisionExtra float64 `json:"comision_extra,omitempty"`
 }
 
+// UpdateLaboratorioRequest: la clave NO se edita una vez creada, solo se carga
+// al crear el estudio.
 type UpdateLaboratorioRequest struct {
 	Nombre        *string  `json:"nombre,omitempty"`
 	Area          *string  `json:"area,omitempty"`

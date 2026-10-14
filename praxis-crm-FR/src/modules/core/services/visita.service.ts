@@ -42,7 +42,6 @@ export type VisitaBE = {
   satisfaccion?: number
   duracion?: number
   ingreso?: number
-  papeleta?: number
   registrada?: boolean
   estado?: string // 'por_visitar' | 'realizada'
   extraordinaria?: boolean
@@ -75,7 +74,6 @@ export type RegistrarVisitaPayload = {
   observacion?: unknown
   satisfaccion?: number
   duracion?: number
-  papeleta?: number
 }
 
 export const visitaService = {

@@ -29,7 +29,6 @@ type Visita struct {
 	Satisfaccion          int             `json:"satisfaccion"`
 	Duracion              int             `json:"duracion"`
 	Ingreso               string          `json:"ingreso"`
-	Papeleta              int             `json:"papeleta"`
 	Registrada            bool            `json:"registrada"`
 	Estado                string          `json:"estado"`
 	Extraordinaria        bool            `json:"extraordinaria"`
@@ -80,7 +79,6 @@ type RegistrarVisitaRequest struct {
 	Observacion           json.RawMessage `json:"observacion,omitempty"`
 	Satisfaccion          int             `json:"satisfaccion"`
 	Duracion              int             `json:"duracion"`
-	Papeleta              int             `json:"papeleta"`
 	// Distancia calculada por el servidor. Se exporta para que el service lo
 	// asigne antes de llamar al repo, pero no viene del JSON del cliente.
 	DistanciaDestinoM *float64 `json:"-"`

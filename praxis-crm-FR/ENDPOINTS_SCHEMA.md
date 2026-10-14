@@ -338,7 +338,7 @@ await visitadorService.list() // ya lleva Authorization
 
 **Create (tentativa del planificador):** `CreateVisitaRequest:28` `{id_visitador* (obligatorio admin, automático visitador), id_medico* OR institucion_id*, fecha_visita_tentativa* (timestamp ISO)}` → visita `ingreso=0, registrada=false, fecha_visita=NULL` (la real se escribe al registrar).
 - **FE:** `src/modules/core/services/visita.service.ts` — el Planificador crea 1 visita por tentativa (médico → `id_medico=p.persona_id`, institución → `institucion_id=i.id`).
-- **Registrar (visita real):** `RegistrarVisitaRequest:44` `{fecha_visita*, latitud?, longitud?, firma?, observacion?, satisfaccion#, duracion#, papeleta#}` llena la visita (via `completar-visita`).
+- **Registrar (visita real):** `RegistrarVisitaRequest:44` `{fecha_visita*, latitud?, longitud?, firma?, observacion?, satisfaccion#, duracion#}` llena la visita (via `completar-visita` o visita extraordinaria).
 
 ---
 

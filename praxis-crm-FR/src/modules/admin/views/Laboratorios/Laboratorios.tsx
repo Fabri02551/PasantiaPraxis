@@ -9,6 +9,7 @@ import '../Visitadores/Visitadores.css'
 type Prueba = {
   id: number
   codigo: string
+  clave: string
   tipo: string
   departamento: string
   precioCompra: number
@@ -32,6 +33,7 @@ const parseCostos = (raw: LaboratorioBE['costos_ciudad']): CostoCiudad[] => {
 const mapBEtoFE = (b: LaboratorioBE): Prueba => ({
   id: b.id,
   codigo: `LAB-${b.id}`,
+  clave: b.clave ?? '',
   tipo: b.nombre,
   departamento: b.area || 'Sin área',
   precioCompra: Number(b.precio) || 0,
@@ -51,7 +53,7 @@ export const LaboratoriosView: React.FC<{ currentView: AdminView; onNavigate: (v
   const [editForm, setEditForm] = useState<Prueba | null>(null)
   const [deleting, setDeleting] = useState<Prueba | null>(null)
   const [showCreate, setShowCreate] = useState(false)
-  const [form, setForm] = useState<Omit<Prueba, 'id' | 'codigo' | 'costosCiudad'>>({ tipo: '', departamento: '', precioCompra: 0, comisionExtra: 0 })
+  const [form, setForm] = useState<Omit<Prueba, 'id' | 'codigo' | 'costosCiudad'>>({ clave: '', tipo: '', departamento: '', precioCompra: 0, comisionExtra: 0 })
 
   useEffect(() => {
     let cancelled = false
@@ -79,7 +81,13 @@ export const LaboratoriosView: React.FC<{ currentView: AdminView; onNavigate: (v
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return pruebas
-    return pruebas.filter(p => p.codigo.toLowerCase().includes(q) || p.tipo.toLowerCase().includes(q) || p.departamento.toLowerCase().includes(q))
+    return pruebas.filter(
+      p =>
+        p.codigo.toLowerCase().includes(q) ||
+        p.clave.toLowerCase().includes(q) ||
+        p.tipo.toLowerCase().includes(q) ||
+        p.departamento.toLowerCase().includes(q),
+    )
   }, [pruebas, search])
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -89,12 +97,13 @@ export const LaboratoriosView: React.FC<{ currentView: AdminView; onNavigate: (v
       const created = await laboratorioService.create({
         nombre: form.tipo.trim(),
         area: form.departamento.trim() || 'SIN AREA',
+        clave: form.clave.trim() || undefined,
         precio: Number(form.precioCompra) || 0,
         comision_extra: Number(form.comisionExtra) || 0,
       })
       setPruebas(prev => [...prev, mapBEtoFE(created)])
       setApiStatus(`Creado en ${ENV.API_URL} → ${created.nombre}`)
-      setForm({ tipo: '', departamento: '', precioCompra: 0, comisionExtra: 0 })
+      setForm({ clave: '', tipo: '', departamento: '', precioCompra: 0, comisionExtra: 0 })
       setShowCreate(false)
     } catch (err) {
       console.warn('[Laboratorios] create error', err)
@@ -137,7 +146,7 @@ export const LaboratoriosView: React.FC<{ currentView: AdminView; onNavigate: (v
   }
 
   return (
-    <AdminLayout currentView={currentView} onNavigate={onNavigate} onLogout={onLogout} title="Laboratorio" searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar por código o estudio...">
+      <AdminLayout currentView={currentView} onNavigate={onNavigate} onLogout={onLogout} title="Laboratorio" searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar por nombre, clave o área...">
       <div className="pruebas-head">
         <div>
           <h2 className="pruebas-title">Lista de Precios — Laboratorio</h2>
@@ -155,6 +164,7 @@ export const LaboratoriosView: React.FC<{ currentView: AdminView; onNavigate: (v
             <thead>
               <tr>
                 <th>Código</th>
+                <th>Clave</th>
                 <th>Tipo de Prueba</th>
                 <th>Departamento</th>
                 <th>Precio Compra</th>
@@ -166,6 +176,7 @@ export const LaboratoriosView: React.FC<{ currentView: AdminView; onNavigate: (v
               {filtered.map(p => (
                 <tr key={p.id}>
                   <td><span className="pruebas-codigo">{p.codigo}</span></td>
+                  <td>{p.clave ? <span className="pruebas-codigo">{p.clave}</span> : <span style={{ color: '#8a9ab5' }}>—</span>}</td>
                   <td className="pruebas-tipo">{p.tipo}</td>
                   <td><span className="pruebas-depto">{p.departamento}</span></td>
                   <td className="pruebas-precio">Bs. {p.precioCompra.toFixed(2)}</td>
@@ -179,7 +190,7 @@ export const LaboratoriosView: React.FC<{ currentView: AdminView; onNavigate: (v
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24, color: '#7e8aa6' }}>{loading ? 'Cargando...' : pruebas.length === 0 ? 'Sin pruebas - sin datos en BD' : 'Sin resultados.'}</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: '#7e8aa6' }}>{loading ? 'Cargando...' : pruebas.length === 0 ? 'Sin pruebas - sin datos en BD' : 'Sin resultados.'}</td></tr>}
             </tbody>
           </table>
         </div>
@@ -192,6 +203,7 @@ export const LaboratoriosView: React.FC<{ currentView: AdminView; onNavigate: (v
             <div className="vt-view-body" style={{ textAlign: 'left' }}>
               <div className="vt-view-grid">
                 <span>Código</span><strong>{viewing.codigo}</strong>
+                <span>Clave</span><strong>{viewing.clave || '—'}</strong>
                 <span>Tipo</span><strong>{viewing.tipo}</strong>
                 <span>Departamento</span><strong>{viewing.departamento}</strong>
                 <span>Precio Compra</span><strong>Bs. {viewing.precioCompra.toFixed(2)}</strong>
@@ -222,6 +234,7 @@ export const LaboratoriosView: React.FC<{ currentView: AdminView; onNavigate: (v
             <div className="vt-modal-head"><h3>Nuevo Tipo de Prueba</h3><button className="vt-modal-close" onClick={() => setShowCreate(false)} aria-label="Cerrar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button></div>
             <form onSubmit={handleCreate} className="vt-form">
               <label>Tipo de Prueba <span style={{ color: '#8a9ab5', fontSize: 10 }}>* obligatorio — backend: nombre</span><input required value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} placeholder="Nombre del estudio" /></label>
+              <label>Clave <span style={{ color: '#8a9ab5', fontSize: 10 }}>(opcional — backend: clave; solo al crear)</span><input value={form.clave} onChange={e => setForm({ ...form, clave: e.target.value })} placeholder="Ej. HEM-001" maxLength={50} /></label>
               <label>Departamento <span style={{ color: '#8a9ab5', fontSize: 10 }}>(opcional — backend: area)</span><input value={form.departamento} onChange={e => setForm({ ...form, departamento: e.target.value })} placeholder="Ej. Inmunología" /></label>
               <label>Precio Compra (Bs.) <span style={{ color: '#8a9ab5', fontSize: 10 }}>(backend: precio)</span><input type="number" step="0.01" min={0} value={form.precioCompra} onChange={e => setForm({ ...form, precioCompra: Number(e.target.value) })} /></label>
               <label>Comisión Extra (Bs.) <span style={{ color: '#8a9ab5', fontSize: 10 }}>(backend: comision_extra)</span><input type="number" step="0.01" min={0} value={form.comisionExtra} onChange={e => setForm({ ...form, comisionExtra: Number(e.target.value) })} /></label>
@@ -237,6 +250,7 @@ export const LaboratoriosView: React.FC<{ currentView: AdminView; onNavigate: (v
             <div className="vt-modal-head"><h3>Editar Prueba</h3><button className="vt-modal-close" onClick={() => { setEditing(null); setEditForm(null) }} aria-label="Cerrar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button></div>
             <form onSubmit={handleEditSave} className="vt-form">
               <label>Código<input value={editForm.codigo} disabled /></label>
+              <label>Clave <span style={{ color: '#8a9ab5', fontSize: 10 }}>(no editable)</span><input value={editForm.clave} disabled /></label>
               <label>Tipo de Prueba<input required value={editForm.tipo} onChange={e => setEditForm({ ...editForm, tipo: e.target.value })} /></label>
               <label>Departamento<input value={editForm.departamento} onChange={e => setEditForm({ ...editForm, departamento: e.target.value })} /></label>
               <label>Precio Compra (Bs.)<input type="number" step="0.01" min={0} value={editForm.precioCompra} onChange={e => setEditForm({ ...editForm, precioCompra: Number(e.target.value) })} /></label>

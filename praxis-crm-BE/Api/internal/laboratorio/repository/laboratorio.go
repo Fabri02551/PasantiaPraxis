@@ -9,7 +9,7 @@ import (
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/laboratorio/models"
 )
 
-const selectCols = `l.id, l.nombre, l.area, l.precio::float8, l.comision_extra::float8, l.status,
+const selectCols = `l.id, l.nombre, l.area, l.clave, l.precio::float8, l.comision_extra::float8, l.status,
 		  COALESCE(json_agg(json_build_object('ciudad_id', c.id, 'ciudad', c.nombre, 'costo', lc.costo::float8)
 		    ORDER BY c.nombre) FILTER (WHERE lc.ciudad_id IS NOT NULL), '[]'),
 		  l.creado_por, l.modificado_por, l.fecha_creacion, l.ultima_modificacion`
@@ -28,7 +28,7 @@ func NewLaboratorioRepository(pool *pgxpool.Pool) *LaboratorioRepository {
 
 func scanLaboratorio(scan func(dest ...any) error) (*models.Laboratorio, error) {
 	var l models.Laboratorio
-	err := scan(&l.ID, &l.Nombre, &l.Area, &l.Precio, &l.ComisionExtra, &l.Status, &l.CostosCiudad,
+	err := scan(&l.ID, &l.Nombre, &l.Area, &l.Clave, &l.Precio, &l.ComisionExtra, &l.Status, &l.CostosCiudad,
 		&l.CreadoPor, &l.ModificadoPor, &l.FechaCreacion, &l.UltimaModificacion)
 	if err != nil {
 		return nil, err
@@ -74,14 +74,14 @@ func (r *LaboratorioRepository) GetPreciosPorCiudad(ctx context.Context, ciudadI
 	var query string
 	var args []any
 	if ciudadID != nil {
-		query = `SELECT l.id, l.nombre, l.area, COALESCE(lc.costo, 0)::float8, l.comision_extra::float8
+		query = `SELECT l.id, l.nombre, l.area, COALESCE(l.clave, ''), COALESCE(lc.costo, 0)::float8, l.comision_extra::float8
 		  FROM laboratorio l
 		  LEFT JOIN laboratorio_ciudad lc ON lc.laboratorio_id = l.id AND lc.ciudad_id = $1
 		  WHERE l.status = true
 		  ORDER BY l.area, l.nombre`
 		args = append(args, *ciudadID)
 	} else {
-		query = `SELECT l.id, l.nombre, l.area, l.precio::float8, l.comision_extra::float8
+		query = `SELECT l.id, l.nombre, l.area, COALESCE(l.clave, ''), l.precio::float8, l.comision_extra::float8
 		  FROM laboratorio l
 		  WHERE l.status = true
 		  ORDER BY l.area, l.nombre`
@@ -96,7 +96,7 @@ func (r *LaboratorioRepository) GetPreciosPorCiudad(ctx context.Context, ciudadI
 	var items []models.LaboratorioPrecio
 	for rows.Next() {
 		var lp models.LaboratorioPrecio
-		if err := rows.Scan(&lp.ID, &lp.Nombre, &lp.Area, &lp.Costo, &lp.ComisionExtra); err != nil {
+		if err := rows.Scan(&lp.ID, &lp.Nombre, &lp.Area, &lp.Clave, &lp.Costo, &lp.ComisionExtra); err != nil {
 			return nil, err
 		}
 		items = append(items, lp)
@@ -107,9 +107,9 @@ func (r *LaboratorioRepository) GetPreciosPorCiudad(ctx context.Context, ciudadI
 func (r *LaboratorioRepository) Create(ctx context.Context, userID *int, req models.CreateLaboratorioRequest) (*models.Laboratorio, error) {
 	var id int
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO laboratorio (nombre, area, precio, comision_extra, creado_por)
-		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		req.Nombre, req.Area, req.Precio, req.ComisionExtra, userID,
+		`INSERT INTO laboratorio (nombre, area, clave, precio, comision_extra, creado_por)
+		 VALUES ($1, $2, NULLIF(TRIM($3::text), ''), $4, $5, $6) RETURNING id`,
+		req.Nombre, req.Area, req.Clave, req.Precio, req.ComisionExtra, userID,
 	).Scan(&id)
 	if err != nil {
 		return nil, err

@@ -53,6 +53,8 @@ CREATE TABLE laboratorio (
     id SERIAL PRIMARY KEY,
     nombre VARCHAR(255) NOT NULL,
     area VARCHAR(150) NOT NULL,
+    -- Clave/código del estudio (editable solo al crear; opcional).
+    clave VARCHAR(50),
     precio NUMERIC(10,2) NOT NULL DEFAULT 0,
     comision_extra NUMERIC(5,2) NOT NULL DEFAULT 0,
     status BOOLEAN DEFAULT true,
@@ -191,7 +193,6 @@ CREATE TABLE visita (
     satisfaccion SMALLINT DEFAULT 0 CHECK (satisfaccion BETWEEN 0 AND 5),
     duracion SMALLINT DEFAULT 0,
     ingreso DECIMAL(10,2) DEFAULT 0,
-    papeleta INTEGER DEFAULT 0,
     registrada BOOLEAN DEFAULT false,
     estado VARCHAR(20) NOT NULL DEFAULT 'por_visitar'
 );

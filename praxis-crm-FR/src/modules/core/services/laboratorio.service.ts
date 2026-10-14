@@ -12,6 +12,8 @@ export type LaboratorioBE = {
   id: number
   nombre: string
   area: string
+  /** Clave/código del estudio: se carga al crear y no se edita. */
+  clave?: string | null
   precio: number
   comision_extra?: number
   status: boolean
@@ -25,6 +27,7 @@ export type LaboratorioBE = {
 export type CreateLaboratorioPayload = {
   nombre: string
   area: string
+  clave?: string
   precio: number
   comision_extra?: number
 }
@@ -37,6 +40,7 @@ export type LaboratorioPrecioBE = {
   id: number
   nombre: string
   area: string
+  clave?: string
   costo: number
   comision_extra: number
 }

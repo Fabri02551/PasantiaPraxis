@@ -54,6 +54,7 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
   const [selectedUbicacionId, setSelectedUbicacionId] = useState('')
   const [observaciones, setObservaciones] = useState('')
   const [exigencias, setExigencias] = useState('')
+  const [satisfaccion, setSatisfaccion] = useState('')
   const [destinos, setDestinos] = useState<DestinoExtra[]>([])
   const [miPersona, setMiPersona] = useState<number | null>(null)
   const [guardando, setGuardando] = useState(false)
@@ -249,7 +250,13 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
     const q = busqueda.trim().toLowerCase()
     if (!q) return []
     const enRows = new Set(rows.map((r) => r.laboratorio_id))
-    return disponibles.filter((p) => !enRows.has(p.id) && (p.nombre.toLowerCase().includes(q) || p.area.toLowerCase().includes(q)))
+    return disponibles.filter(
+      (p) =>
+        !enRows.has(p.id) &&
+        (p.nombre.toLowerCase().includes(q) ||
+          (p.clave ?? '').toLowerCase().includes(q) ||
+          p.area.toLowerCase().includes(q)),
+    )
   })()
 
   const agregarEstudio = (p: LaboratorioPrecioBE) => {
@@ -327,7 +334,7 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
         destino_longitud: destinoCoords?.[1] ?? null,
         firma,
         observacion: obs,
-        satisfaccion: 0,
+        satisfaccion: parseInt(satisfaccion || '0', 10) || 0,
         duracion: 0,
       })
 
@@ -344,6 +351,7 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
       alert(`Visita extraordinaria registrada${selected ? ` para ${selected.nombre}` : ''}`)
       setObservaciones('')
       setExigencias('')
+      setSatisfaccion('')
       setHasSignature(false)
       setSelectedKey('')
       setSelectedUbicacionId('')
@@ -484,7 +492,7 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
               <input
                 className="form-input"
                 style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #dbe1ec', fontSize: 13 }}
-                placeholder="Buscar estudio para agregar…"
+                placeholder="Buscar por nombre o clave…"
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
               />
@@ -521,7 +529,10 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
                       }}
                       onClick={() => agregarEstudio(p)}
                     >
-                      <span style={{ fontWeight: 600, color: '#1b2a4e' }}>{p.nombre}</span>
+                      <span style={{ fontWeight: 600, color: '#1b2a4e' }}>
+                        {p.clave ? `${p.clave} · ` : ''}
+                        {p.nombre}
+                      </span>
                       <span style={{ color: '#6b7a99', whiteSpace: 'nowrap' }}>{p.area} · ${p.costo.toFixed(2)}</span>
                     </button>
                   ))}
@@ -586,6 +597,20 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
                 </tfoot>
               </table>
             </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Satisfacción (0–5)</label>
+            <input
+              type="number"
+              min={0}
+              max={5}
+              step={1}
+              className="form-input"
+              placeholder="0"
+              value={satisfaccion}
+              onChange={e => setSatisfaccion(e.target.value)}
+            />
           </div>
 
           <div className="form-group">

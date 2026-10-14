@@ -24,7 +24,7 @@ func NewVisitaRepository(pool *pgxpool.Pool) *VisitaRepository {
 const scanCols = `id, id_visitador, id_medico, institucion_id, fecha_visita, fecha_visita_tentativa,
 	latitud, longitud, ubicacion_destino_id, destino_direccion, destino_latitud, destino_longitud,
 	gps_precision_m, distancia_destino_m, sin_evidencia_ubicacion,
-	firma, observacion, satisfaccion, duracion, ingreso, papeleta, registrada, estado, extraordinaria`
+	firma, observacion, satisfaccion, duracion, ingreso, registrada, estado, extraordinaria`
 
 func scanVisita(scan func(dest ...any) error) (*models.Visita, error) {
 	var v models.Visita
@@ -33,7 +33,7 @@ func scanVisita(scan func(dest ...any) error) (*models.Visita, error) {
 		&v.Latitud, &v.Longitud, &v.UbicacionDestinoID, &v.DestinoDireccion, &v.DestinoLatitud, &v.DestinoLongitud,
 		&v.GPSPrecisionM, &v.DistanciaDestinoM, &v.SinEvidenciaUbicacion,
 		&v.Firma, &v.Observacion, &v.Satisfaccion,
-		&v.Duracion, &v.Ingreso, &v.Papeleta, &v.Registrada, &v.Estado, &v.Extraordinaria,
+		&v.Duracion, &v.Ingreso, &v.Registrada, &v.Estado, &v.Extraordinaria,
 	)
 	if err != nil {
 		return nil, err
@@ -149,7 +149,6 @@ func (r *VisitaRepository) Registrar(ctx context.Context, id int, req models.Reg
 		        observacion = $13,
 		        satisfaccion = $14,
 		        duracion = $15,
-		        papeleta = $16,
 		        registrada = true,
 		        estado = 'realizada'
 		 WHERE id = $1
@@ -158,7 +157,7 @@ func (r *VisitaRepository) Registrar(ctx context.Context, id int, req models.Reg
 			req.DistanciaDestinoM, req.SinEvidenciaUbicacion, req.UbicacionDestinoID,
 			req.DestinoDireccion, req.DestinoLatitud, req.DestinoLongitud,
 			req.Firma, observacion(req.Observacion),
-			req.Satisfaccion, req.Duracion, req.Papeleta,
+			req.Satisfaccion, req.Duracion,
 		).Scan(dest...)
 	})
 	if err != nil {
