@@ -48,8 +48,11 @@ export const AdminDashboard: React.FC<Props> = ({ currentView, onNavigate, onLog
 
   const semanal = useMemo(() => realizadasPorSemana(visitas, 4), [visitas])
   const mensual = useMemo(() => realizadasPorMes(visitas, 6), [visitas])
+  const totalSemana = useMemo(() => semanal.reduce((acc, b) => acc + b.count, 0), [semanal])
+  
   const maxSemanal = Math.max(1, ...semanal.map(b => b.count))
   const maxMensual = Math.max(1, ...mensual.map(b => b.count))
+  
   // SVG 340x140: x reparte 50→310, y mapea max→20 y 0→110.
   const puntos = semanal.map((b, i) => {
     const x = 50 + (i * (310 - 50)) / Math.max(1, semanal.length - 1)
