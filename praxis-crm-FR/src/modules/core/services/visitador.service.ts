@@ -9,6 +9,7 @@ export type VisitadorBE = {
   correo: string
   telefono?: string
   ci?: string
+  ciudad_id?: number | null
   latitud?: number | null
   longitud?: number | null
   activo: boolean
@@ -29,6 +30,7 @@ type CreatePayload = {
   correo: string
   telefono?: string
   ci?: string
+  ciudad_id?: number | null
   persona_id?: number
   latitud?: number | null
   longitud?: number | null

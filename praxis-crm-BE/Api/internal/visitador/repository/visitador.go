@@ -40,9 +40,9 @@ func (r *VisitadorRepository) Create(ctx context.Context, userID *int, v *models
 
 	var personaID int
 	err = tx.QueryRow(ctx,
-		`INSERT INTO persona (nombre, primer_apellido, segundo_apellido, sexo, correo, telefono, ci)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-		v.Nombre, v.PrimerApellido, v.SegundoApellido, v.Sexo, v.Correo, v.Telefono, v.CI,
+		`INSERT INTO persona (nombre, primer_apellido, segundo_apellido, sexo, correo, telefono, ci, ciudad_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+		v.Nombre, v.PrimerApellido, v.SegundoApellido, v.Sexo, v.Correo, v.Telefono, v.CI, v.CiudadID,
 	).Scan(&personaID)
 	if err != nil {
 		return 0, fmt.Errorf("error creating persona: %w", err)
@@ -72,6 +72,7 @@ func (r *VisitadorRepository) Create(ctx context.Context, userID *int, v *models
 func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, COALESCE(p.sexo, ''), COALESCE(p.correo, ''), COALESCE(p.telefono, ''), COALESCE(p.ci, ''),
+		        p.ciudad_id,
 		        v.latitud, v.longitud, v.activo,
 		        v.creado_por, v.modificado_por, v.fecha_creacion, v.ultima_modificacion
 		 FROM visitador v
@@ -87,6 +88,7 @@ func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, err
 	for rows.Next() {
 		var v models.Visitador
 		if err := rows.Scan(&v.PersonaID, &v.Nombre, &v.PrimerApellido, &v.SegundoApellido, &v.Sexo, &v.Correo, &v.Telefono, &v.CI,
+			&v.CiudadID,
 			&v.Latitud, &v.Longitud, &v.Activo,
 			&v.CreadoPor, &v.ModificadoPor, &v.FechaCreacion, &v.UltimaModificacion); err != nil {
 			return nil, err
@@ -100,12 +102,14 @@ func (r *VisitadorRepository) GetByID(ctx context.Context, id int) (*models.Visi
 	v := &models.Visitador{}
 	err := r.pool.QueryRow(ctx,
 		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, COALESCE(p.sexo, ''), COALESCE(p.correo, ''), COALESCE(p.telefono, ''), COALESCE(p.ci, ''),
+		        p.ciudad_id,
 		        v.latitud, v.longitud, v.activo,
 		        v.creado_por, v.modificado_por, v.fecha_creacion, v.ultima_modificacion
 		 FROM visitador v
 		 JOIN persona p ON p.id = v.persona_id
 		 WHERE v.persona_id = $1`, id,
 	).Scan(&v.PersonaID, &v.Nombre, &v.PrimerApellido, &v.SegundoApellido, &v.Sexo, &v.Correo, &v.Telefono, &v.CI,
+		&v.CiudadID,
 		&v.Latitud, &v.Longitud, &v.Activo,
 		&v.CreadoPor, &v.ModificadoPor, &v.FechaCreacion, &v.UltimaModificacion)
 	if err != nil {

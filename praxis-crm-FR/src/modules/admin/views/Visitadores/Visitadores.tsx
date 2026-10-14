@@ -4,6 +4,7 @@ import type { AdminView } from '../../components/AdminSidebar/AdminSidebar'
 import { MapPicker } from '../../components/MapPicker/MapPicker'
 import { SuccessModal } from '../../components/SuccessModal/SuccessModal'
 import { visitadorService, type VisitadorBE } from '../../../core/services/visitador.service'
+import { ciudadService, type Ciudad } from '../../../core/services/ciudad.service'
 import { getInitials, avatarStyle } from '../../../core/utils/avatar'
 import { credencialesDetail } from '../../../core/utils/credenciales'
 import './Visitadores.css'
@@ -22,6 +23,7 @@ interface Visitador {
   email: string
   telefono: string
   ci: string
+  ciudadId: number | null
   latitud: number | null
   longitud: number | null
   estado: Estado
@@ -42,6 +44,7 @@ const mapBEtoFE = (b: VisitadorBE): Visitador => ({
   email: b.correo || '',
   telefono: b.telefono || '',
   ci: b.ci || '',
+  ciudadId: b.ciudad_id ?? null,
   latitud: b.latitud ?? null,
   longitud: b.longitud ?? null,
   estado: b.activo ? 'Activo' : 'Inactivo',
@@ -61,6 +64,7 @@ type FormState = {
   email: string
   telefono: string
   ci: string
+  ciudadId: number | null
   latitud: number | null
   longitud: number | null
   estado: Estado
@@ -68,7 +72,7 @@ type FormState = {
 
 const EMPTY_FORM: FormState = {
   nombre: '', primerApellido: '', segundoApellido: '', sexo: '',
-  email: '', telefono: '', ci: '', latitud: null, longitud: null, estado: 'Activo',
+  email: '', telefono: '', ci: '', ciudadId: null, latitud: null, longitud: null, estado: 'Activo',
 }
 
 const Avatar: React.FC<{ nombre: string; primerApellido: string; segundoApellido?: string; size?: number; className?: string }> = ({ nombre, primerApellido, segundoApellido, size = 28, className }) => (
@@ -87,6 +91,7 @@ const Avatar: React.FC<{ nombre: string; primerApellido: string; segundoApellido
 
 export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLogout }) => {
   const [visitadores, setVisitadores] = useState<Visitador[]>([])
+  const [ciudades, setCiudades] = useState<Ciudad[]>([])
   const [search, setSearch] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'Todos' | Estado>('Todos')
   const [loading, setLoading] = useState(false)
@@ -101,6 +106,13 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
   const [createdName, setCreatedName] = useState<string | null>(null)
   const [createdDetail, setCreatedDetail] = useState<string | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
+
+  useEffect(() => {
+    ciudadService
+      .list()
+      .then(d => setCiudades(Array.isArray(d) ? d.filter(c => c.status !== false) : []))
+      .catch(() => setCiudades([]))
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -147,6 +159,7 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
       correo: form.email.trim(),
       telefono: form.telefono.trim(),
       ci: form.ci.trim(),
+      ciudad_id: form.ciudadId,
       latitud: form.latitud,
       longitud: form.longitud,
     }
@@ -189,6 +202,7 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
         email: editForm.email.trim(),
         telefono: editForm.telefono.trim(),
         ci: editForm.ci.trim(),
+        ciudadId: editForm.ciudadId,
         latitud: editForm.latitud,
         longitud: editForm.longitud,
         estado: editForm.estado,
@@ -306,6 +320,12 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
               <label>Correo Electrónico <span style={reqStyle}>* obligatorio — ahí llegan usuario y contraseña</span><input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="correo@praxis.com" /></label>
               <label>Teléfono <span style={optStyle}>(opcional)</span><input value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="+591 70000000" /></label>
               <label>CI <span style={optStyle}>(opcional)</span><input value={form.ci} onChange={e => setForm({ ...form, ci: e.target.value })} placeholder="Ej. 6543217" /></label>
+              <label>Ciudad <span style={optStyle}>(opcional)</span>
+                <select value={form.ciudadId ?? ''} onChange={e => setForm({ ...form, ciudadId: e.target.value === '' ? null : Number(e.target.value) })}>
+                  <option value="">Sin ciudad</option>
+                  {ciudades.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              </label>
               <label>Ubicación en mapa <span style={optStyle}>(opcional — vista previa Cochabamba, no se guarda)</span>
                 <MapPicker
                   coords={form.latitud !== null && form.longitud !== null ? [form.latitud, form.longitud] : null}
@@ -376,6 +396,7 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
                 <span>Sexo</span><strong>{viewing.sexo || '—'}</strong>
                 <span>Teléfono</span><strong>{viewing.telefono || '—'}</strong>
                 <span>CI</span><strong>{viewing.ci || '—'}</strong>
+                <span>Ciudad</span><strong>{viewing.ciudadId ? (ciudades.find(c => c.id === viewing.ciudadId)?.nombre || viewing.ciudadId) : '—'}</strong>
                 <span>Ubicación</span><strong>{viewing.latitud !== null && viewing.longitud !== null ? `${viewing.latitud.toFixed(5)}, ${viewing.longitud.toFixed(5)}` : 'Sin coordenadas'}</strong>
                 <span>Estado</span><span className={`vt-badge ${viewing.estado === 'Activo' ? 'vt-badge--activo' : 'vt-badge--inactivo'}`}><span className="vt-dot" /> {viewing.estado}</span>
               </div>
