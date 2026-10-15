@@ -62,14 +62,38 @@ jobs:
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "version=$VERSION_NAME" >> $GITHUB_OUTPUT
 
-      # 6. Compilar el archivo APK con Gradle
-      - name: Compilar APK (Debug)
+      # 6. Restaurar keystore de release desde secrets (si existen)
+      - name: Restaurar keystore de release
+        working-directory: praxis-crm-FR/android
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KS_KEYPASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KS_B64" ]; then
+            echo "Sin secrets de keystore: se compila debug sin firma release."
+            exit 0
+          fi
+          echo "$KS_B64" | base64 -d > praxis-release.jks
+          printf 'storeFile=../praxis-release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$KS_PASS" "$KS_ALIAS" "$KS_KEYPASS" > app/keystore.properties
+
+      # 7. Compilar el APK con Gradle (release si hay keystore, si no debug)
+      - name: Compilar APK
+        id: apk
         working-directory: praxis-crm-FR/android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug -PversionCode=${{ github.run_number }} -PversionName=${{ steps.vars.outputs.version }}
+          if [ -f app/keystore.properties ]; then
+            ./gradlew assembleRelease -PversionCode=${{ github.run_number }} -PversionName=${{ steps.vars.outputs.version }}
+            echo "apk=praxis-crm-FR/android/app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_OUTPUT"
+          else
+            ./gradlew assembleDebug -PversionCode=${{ github.run_number }} -PversionName=${{ steps.vars.outputs.version }}
+            echo "apk=praxis-crm-FR/android/app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
+          fi
 
-      # 7. Crear el Release en GitHub y adjuntar el APK
+      # 8. Crear el Release en GitHub y adjuntar el APK
       - name: Publicar en GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
@@ -80,6 +104,6 @@ jobs:
             Commit: ${{ github.sha }}
           draft: false
           prerelease: false
-          files: praxis-crm-FR/android/app/build/outputs/apk/debug/app-debug.apk
+          files: ${{ steps.apk.outputs.apk }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
