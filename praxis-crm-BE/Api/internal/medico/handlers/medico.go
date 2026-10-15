@@ -33,6 +33,24 @@ func NewMedicoHandler(svc *services.MedicoService) *MedicoHandler {
 }
 
 func (h *MedicoHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+	if vIDStr := r.URL.Query().Get("visitador_id"); vIDStr != "" {
+		vID, err := strconv.Atoi(vIDStr)
+		if err != nil {
+			response.Error(w, http.StatusBadRequest, "visitador_id inválido")
+			return
+		}
+		medicos, err := h.svc.GetByVisitadorID(r.Context(), vID)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if medicos == nil {
+			medicos = []models.Medico{}
+		}
+		response.JSON(w, http.StatusOK, medicos)
+		return
+	}
+
 	// Paginación opcional: ?page=&limit=&q=. Sin page/limit se devuelve la
 	// lista completa, como siempre, para no romper a los consumidores actuales.
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
@@ -161,6 +179,10 @@ func (h *MedicoHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.Error(w, http.StatusBadRequest, "json inválido")
 		return
+	}
+
+	if middleware.UserRole(r.Context()) == "visitador" {
+		req.VisitadorID = nil
 	}
 
 	medico, err := h.svc.Update(r.Context(), middleware.UserPersonaID(r.Context()), personaID, req)

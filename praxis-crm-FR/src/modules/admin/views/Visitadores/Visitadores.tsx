@@ -7,6 +7,7 @@ import { visitadorService, type VisitadorBE } from '../../../core/services/visit
 import { ciudadService, type Ciudad } from '../../../core/services/ciudad.service'
 import { getInitials, avatarStyle } from '../../../core/utils/avatar'
 import { credencialesDetail } from '../../../core/utils/credenciales'
+import { Paginador } from '../../../core/components/Paginador/Paginador'
 import './Visitadores.css'
 
 type Estado = 'Activo' | 'Inactivo'
@@ -95,6 +96,8 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
   const [search, setSearch] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'Todos' | Estado>('Todos')
   const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 10
 
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<Visitador | null>(null)
@@ -146,6 +149,17 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
       return matchEstado && matchSearch
     })
   }, [visitadores, search, filtroEstado])
+
+  useEffect(() => {
+    setPage(1)
+  }, [search, filtroEstado])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+
+  const pagedVisitadores = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE
+    return filtered.slice(start, start + PAGE_SIZE)
+  }, [filtered, page])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -266,7 +280,7 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
               </tr>
             </thead>
             <tbody>
-              {filtered.map(v => (
+              {pagedVisitadores.map(v => (
                 <tr key={v.id}>
                   <td>
                     <div className="vt-name-cell">
@@ -296,6 +310,12 @@ export const VisitadoresView: React.FC<Props> = ({ currentView, onNavigate, onLo
               )}
             </tbody>
           </table>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderTop: '1px solid #e8ecf1' }}>
+          <span style={{ fontSize: 11, color: '#6b7a99', fontWeight: 600 }}>
+            {filtered.length} {filtered.length === 1 ? 'visitador' : 'visitadores'}
+          </span>
+          <Paginador page={page} totalPages={totalPages} onPage={setPage} />
         </div>
       </div>
 

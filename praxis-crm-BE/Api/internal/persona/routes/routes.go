@@ -15,6 +15,6 @@ func Register(mux *http.ServeMux, h *handlers.PersonaHandler, authSecret string)
 	mux.Handle("GET /api/personas", http.HandlerFunc(h.GetAll))
 	mux.Handle("GET /api/personas/{id}", http.HandlerFunc(h.GetByID))
 	mux.Handle("POST /api/personas", auth(personaWrite(http.HandlerFunc(h.Create))))
-	mux.Handle("PUT /api/personas/{id}", auth(adminOnly(http.HandlerFunc(h.Update))))
+	mux.Handle("PUT /api/personas/{id}", auth(personaWrite(http.HandlerFunc(h.Update))))
 	mux.Handle("DELETE /api/personas/{id}", auth(adminOnly(http.HandlerFunc(h.Delete))))
 }

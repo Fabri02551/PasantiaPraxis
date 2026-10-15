@@ -74,7 +74,8 @@ func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, err
 		`SELECT v.persona_id, p.nombre, p.primer_apellido, p.segundo_apellido, COALESCE(p.sexo, ''), COALESCE(p.correo, ''), COALESCE(p.telefono, ''), COALESCE(p.ci, ''),
 		        p.ciudad_id,
 		        v.latitud, v.longitud, v.activo,
-		        v.creado_por, v.modificado_por, v.fecha_creacion, v.ultima_modificacion
+		        v.creado_por, v.modificado_por, v.fecha_creacion, v.ultima_modificacion,
+		        (SELECT COUNT(*) FROM medico m WHERE m.visitador_id = v.persona_id) AS total_medicos
 		 FROM visitador v
 		 JOIN persona p ON p.id = v.persona_id
 		 ORDER BY v.fecha_creacion DESC`,
@@ -90,7 +91,8 @@ func (r *VisitadorRepository) List(ctx context.Context) ([]models.Visitador, err
 		if err := rows.Scan(&v.PersonaID, &v.Nombre, &v.PrimerApellido, &v.SegundoApellido, &v.Sexo, &v.Correo, &v.Telefono, &v.CI,
 			&v.CiudadID,
 			&v.Latitud, &v.Longitud, &v.Activo,
-			&v.CreadoPor, &v.ModificadoPor, &v.FechaCreacion, &v.UltimaModificacion); err != nil {
+			&v.CreadoPor, &v.ModificadoPor, &v.FechaCreacion, &v.UltimaModificacion,
+			&v.TotalMedicos); err != nil {
 			return nil, err
 		}
 		visitadores = append(visitadores, v)

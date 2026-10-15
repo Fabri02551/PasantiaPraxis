@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { storage } from './modules/core/lib/storage'
 import { Toast } from './modules/core/components/Toast/Toast'
+import { AutoUpdater } from './modules/core/components/AutoUpdater/AutoUpdater'
 import { LoginForm } from './modules/auth/views/Login/Login'
 import { ForgotPasswordView } from './modules/auth/views/ForgotPassword/ForgotPassword'
 import { ResetPasswordView } from './modules/auth/views/ResetPassword/ResetPassword'
@@ -183,6 +184,7 @@ function App() {
 
   return (
     <>
+      <AutoUpdater />
       {sessionToast && <Toast message={sessionToast.msg} type={sessionToast.type} onClose={() => setSessionToast(null)} />}
       {content}
     </>

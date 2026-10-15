@@ -1,0 +1,184 @@
+.autoupdate-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 42, 78, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 99999;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  animation: autoupdateFadeIn 0.2s ease-out;
+}
+
+@keyframes autoupdateFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.autoupdate-modal {
+  background: #ffffff;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 380px;
+  padding: 24px 20px;
+  box-shadow: 0 16px 40px rgba(27, 42, 78, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: center;
+  animation: autoupdatePop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes autoupdatePop {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.autoupdate-icon-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #eef6f6 0%, #d4ecec 100%);
+  color: #2d9c9c;
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+}
+
+.autoupdate-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: #1b2a4e;
+  margin: 0;
+}
+
+.autoupdate-badge-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.autoupdate-badge-curr {
+  font-size: 11px;
+  color: #8a9ab5;
+  background: #f4f6f9;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.autoupdate-badge-arrow {
+  color: #2d9c9c;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.autoupdate-badge-new {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #0e502e;
+  background: #e6f7ed;
+  border: 1px solid #a7f3d0;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.autoupdate-desc {
+  font-size: 12.5px;
+  color: #6b7a99;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.autoupdate-progress-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.autoupdate-progress-bar {
+  width: 100%;
+  height: 10px;
+  background: #eef1f5;
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.autoupdate-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2d9c9c, #1b2a4e);
+  border-radius: 999px;
+  transition: width 0.15s ease-out;
+}
+
+.autoupdate-progress-txt {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1b2a4e;
+  display: flex;
+  justify-content: space-between;
+}
+
+.autoupdate-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.autoupdate-btn-primary {
+  height: 44px;
+  background: #1b2a4e;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(27, 42, 78, 0.15);
+  transition: background 0.15s, transform 0.1s;
+}
+
+.autoupdate-btn-primary:active {
+  transform: scale(0.98);
+}
+
+.autoupdate-btn-primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.autoupdate-btn-secondary {
+  height: 38px;
+  background: transparent;
+  color: #8a9ab5;
+  border: none;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.autoupdate-btn-secondary:hover {
+  color: #1b2a4e;
+}
+
+.autoupdate-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: autoupdateSpin 0.7s linear infinite;
+  display: inline-block;
+}
+
+@keyframes autoupdateSpin {
+  to { transform: rotate(360deg); }
+}

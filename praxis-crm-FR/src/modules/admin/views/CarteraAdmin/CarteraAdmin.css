@@ -1,31 +1,76 @@
 .cartera-admin-layout {
   display: grid;
-  grid-template-columns: 300px 1fr;
-  gap: 14px;
-  align-items: start;
+  grid-template-columns: 310px 1fr;
+  gap: 16px;
+  align-items: stretch;
+  height: calc(100vh - 120px);
+  min-height: 520px;
 }
 
+/* ============================================================
+   PANEL IZQUIERDO: VISITADORES (Aislado con scroll propio)
+   ============================================================ */
 .cartera-admin-list {
   background: #fff;
   border: 1px solid #e8ecf1;
   border-radius: 16px;
-  padding: 14px;
+  padding: 16px 10px 16px 14px;
   box-shadow: 0 4px 16px rgba(27, 42, 78, 0.04);
-  max-height: 70vh;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.cartera-admin-list-header {
+  padding-right: 4px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 .cartera-admin-subtitle {
-  margin: 0 0 10px;
-  font-size: 13px;
+  margin: 0;
+  font-size: 13.5px;
   font-weight: 800;
   color: #1b2a4e;
+  letter-spacing: -0.2px;
+}
+
+.cartera-admin-list-body {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+/* Scrollbar estilizado moderno */
+.cartera-admin-list-body::-webkit-scrollbar,
+.cartera-admin-detail-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cartera-admin-list-body::-webkit-scrollbar-track,
+.cartera-admin-detail-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.cartera-admin-list-body::-webkit-scrollbar-thumb,
+.cartera-admin-detail-body::-webkit-scrollbar-thumb {
+  background: #d4dbe5;
+  border-radius: 999px;
+  transition: background 0.2s ease;
+}
+
+.cartera-admin-list-body::-webkit-scrollbar-thumb:hover,
+.cartera-admin-detail-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .cartera-admin-status {
   font-size: 12.5px;
   color: #7e8aa6;
-  padding: 16px 8px;
+  padding: 24px 12px;
   text-align: center;
   margin: 0;
 }
@@ -49,12 +94,13 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px;
+  padding: 8px 10px;
   border: 1px solid transparent;
   border-radius: 12px;
   background: transparent;
   cursor: pointer;
   text-align: left;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .cartera-admin-item:hover {
@@ -102,22 +148,37 @@
   color: #6b7a99;
 }
 
+/* ============================================================
+   PANEL DERECHO: MÉDICOS (Aislado con scroll propio)
+   ============================================================ */
 .cartera-admin-detail {
   background: #fff;
   border: 1px solid #e8ecf1;
   border-radius: 16px;
-  padding: 18px;
+  padding: 16px 10px 16px 18px;
   box-shadow: 0 4px 16px rgba(27, 42, 78, 0.04);
-  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.cartera-admin-detail-empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
 }
 
 .cartera-admin-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
+  padding-bottom: 14px;
+  padding-right: 8px;
+  border-bottom: 1px solid #f1f4f8;
+  margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 .cartera-admin-title {
@@ -125,25 +186,27 @@
   font-size: 16px;
   font-weight: 800;
   color: #1b2a4e;
+  letter-spacing: -0.2px;
 }
 
 .cartera-admin-sub {
   margin: 2px 0 0;
-  font-size: 12.5px;
+  font-size: 12px;
   color: #6b7a99;
 }
 
 .cartera-admin-search {
-  height: 40px;
-  min-width: 220px;
+  height: 38px;
+  min-width: 230px;
   border: 1px solid #e2e6ed;
   border-radius: 10px;
   padding: 0 12px;
-  font-size: 13px;
+  font-size: 12.5px;
   color: #1b2a4e;
   background: #fff;
   color-scheme: light;
   outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .cartera-admin-search:focus {
@@ -151,32 +214,60 @@
   box-shadow: 0 0 0 3px rgba(45, 156, 156, 0.12);
 }
 
+.cartera-admin-detail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
 .cartera-admin-medicos {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 2px 2px 10px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
 }
 
 .cartera-admin-medico {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px;
+  padding: 10px 12px;
   border: 1px solid #eef1f5;
   border-radius: 12px;
   background: #fcfcfd;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cartera-admin-medico:hover {
+  border-color: #dbe4ee;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(27, 42, 78, 0.05);
+}
+
+.cartera-admin-detail-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  margin-top: 10px;
+  border-top: 1px solid #f1f4f8;
 }
 
 @media (max-width: 900px) {
   .cartera-admin-layout {
     grid-template-columns: 1fr;
+    height: auto;
   }
 
   .cartera-admin-list {
-    max-height: none;
+    height: 350px;
+  }
+
+  .cartera-admin-detail {
+    height: 500px;
   }
 
   .cartera-admin-medicos {

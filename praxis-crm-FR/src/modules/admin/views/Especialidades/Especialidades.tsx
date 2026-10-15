@@ -2,12 +2,15 @@ import { useState, useMemo, useEffect } from 'react'
 import { AdminLayout } from '../../components/AdminLayout/AdminLayout'
 import type { AdminView } from '../../components/AdminSidebar/AdminSidebar'
 import { especialidadService, type Especialidad } from '../../../core/services/especialidad.service'
+import { Paginador } from '../../../core/components/Paginador/Paginador'
 import './Especialidades.css'
 import '../Visitadores/Visitadores.css'
 
 export const EspecialidadesView: React.FC<{ currentView: AdminView; onNavigate: (v: AdminView) => void; onLogout: () => void }> = ({ currentView, onNavigate, onLogout }) => {
   const [especialidades, setEspecialidades] = useState<Especialidad[]>([])
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 10
   const [viewing, setViewing] = useState<Especialidad | null>(null)
   const [editing, setEditing] = useState<Especialidad | null>(null)
   const [editForm, setEditForm] = useState<Especialidad | null>(null)
@@ -45,6 +48,17 @@ export const EspecialidadesView: React.FC<{ currentView: AdminView; onNavigate: 
     if (!q) return especialidades
     return especialidades.filter(e => e.nombre.toLowerCase().includes(q) || e.codigo.toLowerCase().includes(q))
   }, [especialidades, search])
+
+  useEffect(() => {
+    setPage(1)
+  }, [search])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+
+  const pagedEspecialidades = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE
+    return filtered.slice(start, start + PAGE_SIZE)
+  }, [filtered, page])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -106,7 +120,7 @@ export const EspecialidadesView: React.FC<{ currentView: AdminView; onNavigate: 
               </tr>
             </thead>
             <tbody>
-              {filtered.map(es => (
+              {pagedEspecialidades.map(es => (
                 <tr key={es.id}>
                   <td style={{ fontWeight: 600, fontSize: 12 }}>{es.nombre}</td>
                   <td><span className="pruebas-codigo">{es.codigo}</span></td>
@@ -123,6 +137,12 @@ export const EspecialidadesView: React.FC<{ currentView: AdminView; onNavigate: 
               {filtered.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', padding: 24, color: '#7e8aa6' }}>{especialidades.length === 0 ? 'Sin especialidades registradas' : 'Sin resultados.'}</td></tr>}
             </tbody>
           </table>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderTop: '1px solid #e8ecf1' }}>
+          <span style={{ fontSize: 11, color: '#6b7a99', fontWeight: 600 }}>
+            {filtered.length} {filtered.length === 1 ? 'especialidad' : 'especialidades'}
+          </span>
+          <Paginador page={page} totalPages={totalPages} onPage={setPage} />
         </div>
       </div>
 

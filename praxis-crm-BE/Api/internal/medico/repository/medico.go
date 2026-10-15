@@ -66,6 +66,47 @@ func (r *MedicoRepository) GetByID(ctx context.Context, personaID int) (*models.
 	return m, nil
 }
 
+// GetByVisitadorID devuelve todos los médicos asignados a un visitador con sus
+// datos personales y especialidad ya resueltos en una única consulta.
+func (r *MedicoRepository) GetByVisitadorID(ctx context.Context, visitadorID int) ([]models.Medico, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT m.persona_id, m.codigo, m.matricula, m.especialidad_id, m.visitador_id, m.es_particular,
+		        COALESCE(m.direccion, '{}'::jsonb), COALESCE(m.clasificacion, 0), COALESCE(m.frecuencia_visita, ''),
+		        COALESCE(m.notas, '{}'::jsonb), m.status, m.creado_por, m.modificado_por, m.fecha_creacion, m.ultima_modificacion,
+		        COALESCE(p.nombre, ''), COALESCE(p.primer_apellido, ''), p.segundo_apellido,
+		        COALESCE(e.nombre, '')
+		 FROM medico m
+		 JOIN persona p ON p.id = m.persona_id
+		 LEFT JOIN especialidad e ON e.id = m.especialidad_id
+		 WHERE m.visitador_id = $1
+		 ORDER BY p.nombre, p.primer_apellido`, visitadorID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var medicos []models.Medico
+	for rows.Next() {
+		var m models.Medico
+		var nombre, primerApellido, esp string
+		var segundoApellido *string
+		err := rows.Scan(&m.PersonaID, &m.Codigo, &m.Matricula, &m.EspecialidadID, &m.VisitadorID, &m.EsParticular,
+			&m.Direccion, &m.Clasificacion, &m.FrecuenciaVisita, &m.Notas, &m.Status,
+			&m.CreadoPor, &m.ModificadoPor, &m.FechaCreacion, &m.UltimaModificacion,
+			&nombre, &primerApellido, &segundoApellido, &esp)
+		if err != nil {
+			return nil, err
+		}
+		m.Nombre = &nombre
+		m.PrimerApellido = &primerApellido
+		m.SegundoApellido = segundoApellido
+		m.Especialidad = &esp
+		medicos = append(medicos, m)
+	}
+	return medicos, nil
+}
+
 // GetPage devuelve una página de médicos con el total real de filas (para no
 // cargar todos los registros en el frontend). El filtro q busca por nombre,
 // apellidos, matrícula, código y nombre de especialidad. Los resultados salen

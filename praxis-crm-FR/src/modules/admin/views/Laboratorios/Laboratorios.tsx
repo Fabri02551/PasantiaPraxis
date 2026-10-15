@@ -3,6 +3,7 @@ import { AdminLayout } from '../../components/AdminLayout/AdminLayout'
 import type { AdminView } from '../../components/AdminSidebar/AdminSidebar'
 import { laboratorioService, type LaboratorioBE, type CostoCiudad } from '../../../core/services/laboratorio.service'
 import { ENV } from '../../../core/config/env'
+import { Paginador } from '../../../core/components/Paginador/Paginador'
 import './Laboratorios.css'
 import '../Visitadores/Visitadores.css'
 
@@ -47,6 +48,8 @@ export const LaboratoriosView: React.FC<{ currentView: AdminView; onNavigate: (v
   const [pruebas, setPruebas] = useState<Prueba[]>(INITIAL)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 15
   const [apiStatus, setApiStatus] = useState<string>(`API: ${ENV.API_URL}`)
   const [viewing, setViewing] = useState<Prueba | null>(null)
   const [editing, setEditing] = useState<Prueba | null>(null)
@@ -89,6 +92,17 @@ export const LaboratoriosView: React.FC<{ currentView: AdminView; onNavigate: (v
         p.departamento.toLowerCase().includes(q),
     )
   }, [pruebas, search])
+
+  useEffect(() => {
+    setPage(1)
+  }, [search])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+
+  const pagedPruebas = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE
+    return filtered.slice(start, start + PAGE_SIZE)
+  }, [filtered, page])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -173,7 +187,7 @@ export const LaboratoriosView: React.FC<{ currentView: AdminView; onNavigate: (v
               </tr>
             </thead>
             <tbody>
-              {filtered.map(p => (
+              {pagedPruebas.map(p => (
                 <tr key={p.id}>
                   <td><span className="pruebas-codigo">{p.codigo}</span></td>
                   <td>{p.clave ? <span className="pruebas-codigo">{p.clave}</span> : <span style={{ color: '#8a9ab5' }}>—</span>}</td>
@@ -193,6 +207,12 @@ export const LaboratoriosView: React.FC<{ currentView: AdminView; onNavigate: (v
               {filtered.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: '#7e8aa6' }}>{loading ? 'Cargando...' : pruebas.length === 0 ? 'Sin pruebas - sin datos en BD' : 'Sin resultados.'}</td></tr>}
             </tbody>
           </table>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderTop: '1px solid #e8ecf1' }}>
+          <span style={{ fontSize: 11, color: '#6b7a99', fontWeight: 600 }}>
+            {filtered.length} {filtered.length === 1 ? 'estudio' : 'estudios'}
+          </span>
+          <Paginador page={page} totalPages={totalPages} onPage={setPage} />
         </div>
       </div>
 

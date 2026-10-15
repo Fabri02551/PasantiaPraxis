@@ -27,6 +27,7 @@ type Visitador struct {
 	ModificadoPor      *int      `json:"modificado_por,omitempty"`
 	FechaCreacion      time.Time `json:"fecha_creacion"`
 	UltimaModificacion time.Time `json:"ultima_modificacion"`
+	TotalMedicos       int       `json:"total_medicos"`
 }
 
 type CreateVisitadorRequest struct {

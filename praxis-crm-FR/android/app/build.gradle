@@ -14,6 +14,9 @@ if (keystorePropsFile.exists()) {
     keystoreProps.load(new FileInputStream(keystorePropsFile))
 }
 
+def appVersionCode = project.hasProperty('versionCode') ? project.property('versionCode').toInteger() : 1
+def appVersionName = project.hasProperty('versionName') ? project.property('versionName').toString() : "1.0.0"
+
 android {
     namespace = "com.laboratoriopraxis.crm"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -21,8 +24,8 @@ android {
         applicationId "com.laboratoriopraxis.crm"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

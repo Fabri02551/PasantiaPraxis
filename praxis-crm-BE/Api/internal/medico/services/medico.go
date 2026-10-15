@@ -23,6 +23,10 @@ func (s *MedicoService) GetByID(ctx context.Context, personaID int) (*models.Med
 	return s.repo.GetByID(ctx, personaID)
 }
 
+func (s *MedicoService) GetByVisitadorID(ctx context.Context, visitadorID int) ([]models.Medico, error) {
+	return s.repo.GetByVisitadorID(ctx, visitadorID)
+}
+
 func (s *MedicoService) GetPage(ctx context.Context, page, limit int, q string) (int, []models.Medico, error) {
 	return s.repo.GetPage(ctx, page, limit, q)
 }

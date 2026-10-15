@@ -19,6 +19,11 @@ export type MedicoBE = {
   modificado_por?: number | null
   fecha_creacion?: string
   ultima_modificacion?: string
+  nombre?: string
+  primer_apellido?: string
+  segundo_apellido?: string | null
+  especialidad?: string
+  sexo?: string
 }
 
 // `direccion` y `notas` son columnas JSONB: hay que mandar el objeto/array
@@ -71,6 +76,8 @@ export type MedicoPage = { total: number; page: number; limit: number; items: Me
 // El BE usa persona_id + matricula + especialidad_id + direccion JSONB
 export const medicoService = {
   list: () => apiClient.get<MedicoBE[]>('/api/medicos', { auth: false }),
+  listByVisitador: (visitadorId: number) =>
+    apiClient.get<MedicoBE[]>(`/api/medicos?visitador_id=${visitadorId}`, { auth: false }),
   page: (query: { page: number; limit: number; q?: string }) => {
     const p = new URLSearchParams({ page: String(query.page), limit: String(query.limit) })
     if (query.q) p.set('q', query.q)

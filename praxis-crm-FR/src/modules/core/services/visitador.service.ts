@@ -14,6 +14,7 @@ export type VisitadorBE = {
   longitud?: number | null
   activo: boolean
   created_at: string
+  total_medicos?: number
   /**
    * Contraseña generada por el backend. Aparece SOLO cuando no se pudo
    * enviar el correo (sin SMTP o fallo del servidor): es la única copia

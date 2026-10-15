@@ -53,19 +53,21 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
 
-      # 5. Compilar el archivo APK con Gradle
-      - name: Compilar APK (Debug)
-        working-directory: praxis-crm-FR/android
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
-
-      # 6. Generar el Tag de versión dinámico
+      # 5. Generar el Tag y Nombre de Versión dinámico
       - name: Generar Tag y Nombre de Versión
         id: vars
         run: |
           TAG_NAME="v1.0.${{ github.run_number }}"
+          VERSION_NAME="1.0.${{ github.run_number }}"
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION_NAME" >> $GITHUB_OUTPUT
+
+      # 6. Compilar el archivo APK con Gradle
+      - name: Compilar APK (Debug)
+        working-directory: praxis-crm-FR/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug -PversionCode=${{ github.run_number }} -PversionName=${{ steps.vars.outputs.version }}
 
       # 7. Crear el Release en GitHub y adjuntar el APK
       - name: Publicar en GitHub Releases

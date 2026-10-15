@@ -21,6 +21,12 @@ type Medico struct {
 	ModificadoPor      *int            `json:"modificado_por,omitempty"`
 	FechaCreacion      time.Time       `json:"fecha_creacion"`
 	UltimaModificacion time.Time       `json:"ultima_modificacion"`
+
+	// Campos hidratados opcionales
+	Nombre          *string `json:"nombre,omitempty"`
+	PrimerApellido  *string `json:"primer_apellido,omitempty"`
+	SegundoApellido *string `json:"segundo_apellido,omitempty"`
+	Especialidad    *string `json:"especialidad,omitempty"`
 }
 
 // PersonaInput son los datos de la persona base del médico. Se usa cuando el
