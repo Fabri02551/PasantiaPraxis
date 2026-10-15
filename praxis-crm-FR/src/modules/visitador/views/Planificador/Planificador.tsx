@@ -11,7 +11,7 @@ import { UbicacionMapa } from '../../../core/components/UbicacionMapa/UbicacionM
 import { InfoModal, type InfoVariant, type InfoDetail } from '../../components/InfoModal/InfoModal'
 import './Planificador.css'
 
-type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
+type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'cartera-temporal' | 'completar-visita'
 
 interface Props {
   onNavigate: (view: View) => void

@@ -186,6 +186,21 @@ func (r *MedicoRepository) Update(ctx context.Context, userID *int, personaID in
 	return m, nil
 }
 
+// MatriculaExists informa si ya existe un médico (distinto del indicado) con
+// esa matrícula. Sirve para generar matrículas de duplicado sin chocar con el
+// UNIQUE de la columna.
+func (r *MedicoRepository) MatriculaExists(ctx context.Context, matricula string, exceptPersonaID int) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM medico WHERE matricula = $1 AND persona_id <> $2)`,
+		matricula, exceptPersonaID,
+	).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
 func (r *MedicoRepository) Delete(ctx context.Context, userID *int, personaID int) error {
 	tag, err := r.pool.Exec(ctx,
 		"UPDATE medico SET status = false, modificado_por = $2, ultima_modificacion = NOW() WHERE persona_id = $1",

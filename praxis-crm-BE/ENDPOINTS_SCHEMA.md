@@ -133,7 +133,7 @@ personaService.update(1, {telefono:"+591 70000000", status:true})
 
 **Modelo:** `Medico:8` `{persona_id int PK/FK persona.id, codigo? string UNIQUE, matricula string UNIQUE NOT NULL, especialidad_id int NOT NULL FK especialidad.id, visitador_id? int FK visitador.persona_id, es_particular bool, direccion json.RawMessage, clasificacion int 0-5, frecuencia_visita string, notas json.RawMessage, status bool, creado_por? int, modificado_por? int, fecha_creacion, ultima_modificacion}`  
 **Create:** `CreateMedicoRequest:26` `{persona_id*, matricula*, especialidad_id*, codigo?, visitador_id?, es_particular?, direccion?, clasificacion?, frecuencia_visita?, notas?}`  
-**Update:** `UpdateMedicoRequest:39` `{matricula?, especialidad_id?, codigo?, visitador_id?, es_particular?, direccion?, clasificacion?, frecuencia_visita?, notas?, status?}`  
+**Update:** `UpdateMedicoRequest:39` `{matricula?, especialidad_id?, codigo?, visitador_id?, es_particular?, direccion?, clasificacion?, frecuencia_visita?, notas?, status?, marcar_duplicado?}`  
 **Tabla:** `docker/init.sql:96` `medico (persona_id PK/FK persona, matricula UNIQUE NOT NULL, especialidad_id NOT NULL FK especialidad RESTRICT, direccion JSONB, notas JSONB)`
 
 **No existe columna `institucion` ni `created_at`** en la tabla `medico`. El nombre, apellidos, sexo, teléfono, correo y CI del médico viven en `persona`, hay que pedirlos a `/api/personas/{id}`.
@@ -143,8 +143,16 @@ personaService.update(1, {telefono:"+591 70000000", status:true})
 | `GET` | `/api/medicos` | NO | lista todos |
 | `GET` | `/api/medicos/{persona_id}` | NO | `r.PathValue("persona_id")` |
 | `POST` | `/api/medicos` | SI admin o visitador | `201`. Ver abajo |
-| `PUT` | `/api/medicos/{persona_id}` | SI admin | |
+| `PUT` | `/api/medicos/{persona_id}` | SI admin o visitador | visitador: solo médicos de SU cartera y solo campos `matricula`/`direccion` (si no → `403`); ver "funciones temporales" |
 | `DELETE` | `/api/medicos/{persona_id}` | SI admin | soft delete (`status=false`), mensaje `médico eliminado` |
+
+### Funciones temporales del visitador (editar cartera)
+
+El `PUT` acepta `visitador`, pero el servicio (`medico/services.Update`) lo restringe:
+
+- **Ownership:** si `role == "visitador"` exige `medico.visitador_id == token.persona_id`; si no, `403` `este médico no pertenece a tu cartera`.
+- **Campos permitidos para visitador:** únicamente `matricula` y `direccion` (el resto se descarta en el servidor: `especialidad_id`, `codigo`, `clasificacion`, `notas`, `status`, `visitador_id`, etc. se ignoran).
+- **`marcar_duplicado: true`:** baja lógica (`status=false`) y pisa `matricula` con una generada en el servidor con forma `DUP-YYMMDD-xxxxxx` que se verifica contra la base (`MatriculaExists`, hasta 10 intentos). La respuesta devuelve el médico con la matrícula nueva. Vale para admin y visitador.
 
 ### Alta atómica (persona + médico en una transacción)
 

@@ -44,7 +44,7 @@ const markerColors = ['#F9B233', '#2D9C9C', '#E94E6B', '#4A7CF7', '#7B5CFF']
 // sirve de nada para una visita dentro de la ciudad.
 const ZOOM_MIN_RUTA = 12
 
-type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
+type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'cartera-temporal' | 'completar-visita'
 
 interface HomeProps {
   onNavigate: (view: View) => void

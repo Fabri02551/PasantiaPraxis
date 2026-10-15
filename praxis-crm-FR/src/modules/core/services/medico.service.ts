@@ -63,6 +63,9 @@ export type UpdateMedicoPayload = {
   frecuencia_visita?: string
   notas?: unknown
   status?: boolean
+  // Funciones temporales del visitador: baja lógica (status=false) + matrícula
+  // nueva generada en el servidor (DUP-YYMMDD-xxxxxx, verificada contra la DB).
+  marcar_duplicado?: boolean
 }
 
 export type MedicoPage = { total: number; page: number; limit: number; items: MedicoBE[] }

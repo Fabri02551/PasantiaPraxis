@@ -15,6 +15,8 @@ func Register(mux *http.ServeMux, h *handlers.MedicoHandler, authSecret string) 
 	mux.Handle("GET /api/medicos", http.HandlerFunc(h.GetAll))
 	mux.Handle("GET /api/medicos/{persona_id}", http.HandlerFunc(h.GetByID))
 	mux.Handle("POST /api/medicos", auth(medicoWrite(http.HandlerFunc(h.Create))))
-	mux.Handle("PUT /api/medicos/{persona_id}", auth(adminOnly(http.HandlerFunc(h.Update))))
+	// El visitador puede editar, pero el servicio lo restringe a los médicos
+	// de SU cartera y a los campos matricula/direccion (funciones temporales).
+	mux.Handle("PUT /api/medicos/{persona_id}", auth(medicoWrite(http.HandlerFunc(h.Update))))
 	mux.Handle("DELETE /api/medicos/{persona_id}", auth(adminOnly(http.HandlerFunc(h.Delete))))
 }

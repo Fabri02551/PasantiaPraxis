@@ -55,8 +55,13 @@ type CreateMedicoRequest struct {
 }
 
 type UpdateMedicoRequest struct {
-	Codigo           *string         `json:"codigo,omitempty"`
-	Matricula        *string         `json:"matricula,omitempty"`
+	Codigo    *string `json:"codigo,omitempty"`
+	Matricula *string `json:"matricula,omitempty"`
+	// MarcarDuplicado baja el médico a status=false (borrado lógico) y le
+	// pisa la matrícula con una generada que no exista en la base. Es la
+	// acción "marcar como duplicado" de las funciones temporales del
+	// visitador: el registro queda inactivo pero trazable.
+	MarcarDuplicado  *bool           `json:"marcar_duplicado,omitempty"`
 	EspecialidadID   *int            `json:"especialidad_id,omitempty"`
 	VisitadorID      *int            `json:"visitador_id,omitempty"`
 	EsParticular     *bool           `json:"es_particular"`

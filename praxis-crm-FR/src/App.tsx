@@ -27,6 +27,7 @@ import { VisitadorComentariosView } from './modules/visitador/views/Comentarios/
 import { PlanificadorView } from './modules/visitador/views/Planificador/Planificador'
 import { HistorialView } from './modules/visitador/views/Historial/Historial'
 import { CarteraView } from './modules/visitador/views/Cartera/Cartera'
+import { CarteraTemporalView } from './modules/visitador/views/CarteraTemporal/CarteraTemporal'
 import { CompletarVisitaView, type VisitaACompletar } from './modules/visitador/views/CompletarVisita/CompletarVisita'
 import type { AdminView } from './modules/admin/components/AdminSidebar/AdminSidebar'
 
@@ -45,6 +46,7 @@ type View =
   | 'comentarios'
   | 'historial'
   | 'cartera'
+  | 'cartera-temporal'
   | 'completar-visita'
   | AdminView
 
@@ -158,6 +160,8 @@ function App() {
     content = <HistorialView onNavigate={handleNavigate} currentView={view} onLogout={handleLogout} />
   } else if (view === 'cartera') {
     content = <CarteraView onNavigate={handleNavigate} currentView={view} onLogout={handleLogout} />
+  } else if (view === 'cartera-temporal') {
+    content = <CarteraTemporalView onNavigate={handleNavigate} currentView={view} onLogout={handleLogout} />
   } else if (view === 'completar-visita') {
     content = <CompletarVisitaView onNavigate={handleNavigate} currentView={view} onLogout={handleLogout} visita={pendingVisita} />
   } else if (view === 'planificador') {

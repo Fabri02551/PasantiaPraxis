@@ -4,7 +4,7 @@ import { useMisVisitas, type VisitaResuelta } from '../../hooks/useMisVisitas'
 import { cuentaVencidas } from '../../hooks/useNotificaciones'
 import './Historial.css'
 
-type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
+type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'cartera-temporal' | 'completar-visita'
 
 interface Props {
   onNavigate: (view: View) => void

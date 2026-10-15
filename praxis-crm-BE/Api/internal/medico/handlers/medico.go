@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -163,10 +164,14 @@ func (h *MedicoHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	medico, err := h.svc.Update(r.Context(), middleware.UserPersonaID(r.Context()), personaID, req)
+	medico, err := h.svc.Update(r.Context(), middleware.UserPersonaID(r.Context()), middleware.UserRole(r.Context()), personaID, req)
 	if err != nil {
 		if isDuplicateKey(err) {
 			response.Error(w, http.StatusConflict, "matricula, código o persona ya registrados")
+			return
+		}
+		if errors.Is(err, services.ErrForbidden) {
+			response.Error(w, http.StatusForbidden, err.Error())
 			return
 		}
 		response.Error(w, http.StatusNotFound, err.Error())
