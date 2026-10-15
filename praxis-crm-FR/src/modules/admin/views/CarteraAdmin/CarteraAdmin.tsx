@@ -11,7 +11,6 @@ import { MapPicker } from '../../components/MapPicker/MapPicker'
 import { Toast } from '../../../core/components/Toast/Toast'
 import { getInitials, avatarStyle } from '../../../core/utils/avatar'
 import { normalizeUbicaciones, type UbicacionMedico } from '../../../core/utils/medicoDireccion'
-import { Paginador } from '../../../core/components/Paginador/Paginador'
 import './CarteraAdmin.css'
 import '../Visitadores/Visitadores.css'
 
@@ -64,8 +63,6 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
   const [loadingCartera, setLoadingCartera] = useState(false)
   const [errorVisitadores, setErrorVisitadores] = useState<string | null>(null)
   const [errorCartera, setErrorCartera] = useState<string | null>(null)
-  const [pageMedicos, setPageMedicos] = useState(1)
-  const PAGE_SIZE_MEDICOS = 12
 
   // Edición de médico
   const [editing, setEditing] = useState(false)
@@ -164,7 +161,6 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
   useEffect(() => {
     if (seleccionado != null) {
       cargarCartera(seleccionado)
-      setPageMedicos(1)
     }
   }, [seleccionado, cargarCartera])
 
@@ -188,16 +184,6 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
         f.especialidad.toLowerCase().includes(q)
     )
   }, [carterasCache, seleccionado, busqueda])
-
-  useEffect(() => {
-    setPageMedicos(1)
-  }, [busqueda])
-
-  const totalPagesMedicos = Math.max(1, Math.ceil(filasActuales.length / PAGE_SIZE_MEDICOS))
-  const pagedMedicos = useMemo(() => {
-    const start = (pageMedicos - 1) * PAGE_SIZE_MEDICOS
-    return filasActuales.slice(start, start + PAGE_SIZE_MEDICOS)
-  }, [filasActuales, pageMedicos])
 
   const handleStartEdit = async (f: MedicoFila) => {
     const pid = f.persona_id
@@ -407,7 +393,7 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
                 ) : (
                   <>
                     <ul className="cartera-admin-medicos">
-                      {pagedMedicos.map((f) => (
+                      {filasActuales.map((f) => (
                         <li
                           key={f.persona_id}
                           className="cartera-admin-medico"
@@ -442,11 +428,6 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
                         </li>
                       ))}
                     </ul>
-                    {totalPagesMedicos > 1 && (
-                      <div className="cartera-admin-detail-footer">
-                        <Paginador page={pageMedicos} totalPages={totalPagesMedicos} onPage={setPageMedicos} />
-                      </div>
-                    )}
                   </>
                 )}
               </div>
