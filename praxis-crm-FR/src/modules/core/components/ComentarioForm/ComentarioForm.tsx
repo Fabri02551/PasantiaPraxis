@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import './ComentarioForm.css'
 
-export type CategoriaComentario = 'Sugerencia' | 'Cambio'
+export type CategoriaComentario = 'Sugerencia' | 'Cambio' | 'Queja' | 'Otro'
+
+export type DestinatarioComentario = 'Administrador' | 'Soporte TI'
+
+// Solo Soporte TI tiene envío activo por ahora. La opción Administrador no
+// hace nada todavía (se deja el dropdown listo para cablearla después).
+const CORREO_SOPORTE_TI = 'ambeta.labs@gmail.com'
 
 interface Props {
   roleLabel?: string // "Administrador" | "Visitador" para mostrar en el asunto
@@ -11,6 +17,7 @@ export const ComentarioForm: React.FC<Props> = ({ roleLabel = 'Usuario' }) => {
   const [nombre, setNombre] = useState('')
   const [detalles, setDetalles] = useState('')
   const [categoria, setCategoria] = useState<CategoriaComentario>('Sugerencia')
+  const [destinatario, setDestinatario] = useState<DestinatarioComentario>('Soporte TI')
   const [enviado, setEnviado] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [ultimoEnvio, setUltimoEnvio] = useState<{ fecha: string; fechaISO: string } | null>(null)
@@ -25,6 +32,12 @@ export const ComentarioForm: React.FC<Props> = ({ roleLabel = 'Usuario' }) => {
       return
     }
 
+    // La opción Administrador todavía no hace nada: se avisa y no se envía.
+    if (destinatario !== 'Soporte TI') {
+      setError('La opción Administrador aún no está habilitada.')
+      return
+    }
+
     const ahora = new Date()
     const fecha = ahora.toLocaleString('es-BO', {
       dateStyle: 'full',
@@ -32,7 +45,7 @@ export const ComentarioForm: React.FC<Props> = ({ roleLabel = 'Usuario' }) => {
     })
     const fechaISO = ahora.toISOString()
 
-    const destinatario = 'danicamposdalence@gmail.com'
+    const correoDestino = CORREO_SOPORTE_TI
     const subject = `[Praxis CRM] ${categoria} - ${nombre.trim()} (${roleLabel})`
 
     const payload = {
@@ -43,6 +56,7 @@ export const ComentarioForm: React.FC<Props> = ({ roleLabel = 'Usuario' }) => {
       fechaISO,
       role: roleLabel,
       destinatario,
+      correoDestino,
       subject,
     }
     console.log('[Comentario] payload', payload)
@@ -50,7 +64,7 @@ export const ComentarioForm: React.FC<Props> = ({ roleLabel = 'Usuario' }) => {
     setEnviando(true)
     try {
       // Envío directo sin abrir ventana/cliente de correo — vía FormSubmit AJAX
-      const response = await fetch('https://formsubmit.co/ajax/danicamposdalence@gmail.com', {
+      const response = await fetch(`https://formsubmit.co/ajax/${correoDestino}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -59,6 +73,7 @@ export const ComentarioForm: React.FC<Props> = ({ roleLabel = 'Usuario' }) => {
         body: JSON.stringify({
           Nombre: payload.nombre,
           Categoría: payload.categoria,
+          Destinatario: payload.destinatario,
           Rol: payload.role,
           Fecha: `${payload.fecha} (${payload.fechaISO})`,
           Detalles: payload.detalles,
@@ -107,10 +122,20 @@ export const ComentarioForm: React.FC<Props> = ({ roleLabel = 'Usuario' }) => {
         </div>
 
         <div className="comentario-field">
+          <label htmlFor="c-destinatario">Destinatario</label>
+          <select id="c-destinatario" value={destinatario} onChange={(e) => setDestinatario(e.target.value as DestinatarioComentario)}>
+            <option value="Administrador">Administrador</option>
+            <option value="Soporte TI">Soporte TI</option>
+          </select>
+        </div>
+
+        <div className="comentario-field">
           <label htmlFor="c-categoria">Categoría</label>
           <select id="c-categoria" value={categoria} onChange={(e) => setCategoria(e.target.value as CategoriaComentario)}>
             <option value="Sugerencia">Sugerencia</option>
             <option value="Cambio">Cambio</option>
+            <option value="Queja">Queja</option>
+            <option value="Otro">Otro</option>
           </select>
         </div>
 
@@ -118,19 +143,19 @@ export const ComentarioForm: React.FC<Props> = ({ roleLabel = 'Usuario' }) => {
           <label htmlFor="c-detalles">Detalles</label>
           <textarea
             id="c-detalles"
-            placeholder="Describe tu sugerencia o cambio propuesto..."
+            placeholder="Describe tu sugerencia, cambio, queja u otro comentario..."
             value={detalles}
             onChange={(e) => setDetalles(e.target.value)}
             required
             rows={5}
           />
-          <span className="comentario-hint">Se enviará a danicamposdalence@gmail.com con fecha automática.</span>
+          <span className="comentario-hint">Se enviará a {CORREO_SOPORTE_TI} con fecha automática.</span>
         </div>
 
         {error && <p className="comentario-error">{error}</p>}
         {enviado && ultimoEnvio && (
           <div className="comentario-success">
-            <strong>¡Comentario enviado!</strong> Se envió directamente a danicamposdalence@gmail.com sin abrir otra ventana.
+            <strong>¡Comentario enviado!</strong> Se envió directamente a {CORREO_SOPORTE_TI} sin abrir otra ventana.
             <br />
             <small>
               Fecha: {ultimoEnvio.fecha} ({ultimoEnvio.fechaISO})
