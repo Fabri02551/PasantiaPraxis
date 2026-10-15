@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useMemo } from 'react'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
 import { authService } from '../../../auth/services/auth.service'
 import { medicoService } from '../../../core/services/medico.service'
@@ -10,6 +10,7 @@ import { laboratorioService, type LaboratorioPrecioBE } from '../../../core/serv
 import { normalizeUbicaciones, firstDireccionTexto } from '../../../core/utils/medicoDireccion'
 import { useGeolocation, distanciaMetros, formatearDistancia } from '../../../core/hooks/useGeolocation'
 import { UbicacionMapa } from '../../../core/components/UbicacionMapa/UbicacionMapa'
+import { storage } from '../../../core/lib/storage'
 import './VisitRegistration.css'
 
 type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
@@ -64,6 +65,19 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
   const [busqueda, setBusqueda] = useState('')
 
   const gps = useGeolocation()
+  // Callbacks estables del hook: se usan en el efecto de apertura.
+  const pedirGps = gps.pedir
+  const limpiarGps = gps.limpiar
+
+  // Al abrir la ventana siempre se toma la ubicación actual del visitador.
+  useEffect(() => {
+    limpiarGps()
+    pedirGps()
+  }, [limpiarGps, pedirGps])
+
+  // Ubicación guardada en la sesión (App la toma al entrar al home): sirve
+  // para pintar el mapa al instante mientras llega el GPS fresco.
+  const ubicacionGuardada = useMemo(() => storage.getUbicacion(), [])
 
   // Setup canvas for HiDPI
   useEffect(() => {
@@ -238,6 +252,15 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
 
   const posicionGps = gps.resultado.estado === 'ok' ? gps.resultado.posicion : null
   const destinoCoords = ubicElegida?.coords ?? null
+  // Excepción igual que en completar visita: si el destino tiene ubicación se
+  // muestra su pin; si no tiene, el mapa muestra la ubicación actual del
+  // visitador (GPS fresco, o la guardada en sesión mientras este llega).
+  // Por detrás solo viajan latitud/longitud (más la precisión) al registrar.
+  const gpsPendiente = gps.resultado.estado === 'pidiendo' || gps.resultado.estado === 'inactivo'
+  const posicionVisitador = posicionGps ?? (gpsPendiente ? ubicacionGuardada : null)
+  const visitadorCoords: [number, number] | null = posicionVisitador
+    ? [posicionVisitador.latitud, posicionVisitador.longitud]
+    : null
   const distanciaM =
     posicionGps && destinoCoords
       ? distanciaMetros(
@@ -464,13 +487,23 @@ export const VisitRegistrationView: React.FC<Props> = ({ onNavigate, currentView
                 <div style={{ marginTop: 8 }}>
                   <UbicacionMapa
                     destino={destinoCoords}
-                    visitador={posicionGps ? [posicionGps.latitud, posicionGps.longitud] : null}
-                    precisionM={posicionGps?.precisionM ?? null}
+                    visitador={visitadorCoords}
+                    precisionM={posicionVisitador?.precisionM ?? null}
                     etiquetaDestino={selected.nombre}
                     distanciaM={distanciaM}
                     altura="200px"
                   />
                 </div>
+                {!destinoCoords && visitadorCoords && (
+                  <div style={{ fontSize: 12, color: '#92400e', marginTop: 8 }}>
+                    Este destino no tiene coordenadas: se muestra <strong>tu ubicación actual</strong>.
+                  </div>
+                )}
+                {!destinoCoords && !visitadorCoords && gps.resultado.estado === 'pidiendo' && (
+                  <div style={{ fontSize: 12, color: '#7e8aa6', marginTop: 8 }}>
+                    Obteniendo tu ubicación actual…
+                  </div>
+                )}
                 {gps.resultado.estado === 'ok' && posicionGps && (
                   <div style={{ fontSize: 12, color: '#0e502e', marginTop: 8, fontWeight: 600 }}>
                     Ubicación tomada · precisión {posicionGps.precisionM != null ? `${Math.round(posicionGps.precisionM)} m` : 'no informada'}

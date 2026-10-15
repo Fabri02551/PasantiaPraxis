@@ -9,6 +9,7 @@ import { ClasificacionPicker, MiniClasificacion } from '../../../core/components
 import { MapPicker } from '../../../admin/components/MapPicker/MapPicker'
 import { displayMedico } from '../../../core/utils/medicoPrefix'
 import { normalizeUbicaciones, hospitalFromDireccion, type UbicacionMedico } from '../../../core/utils/medicoDireccion'
+import { storage } from '../../../core/lib/storage'
 import { Toast } from '../../../core/components/Toast/Toast'
 import './Medicos.css'
 import '../../../admin/views/Visitadores/Visitadores.css'
@@ -41,6 +42,13 @@ export const MEDICOS: Medico[] = []
 
 const reqStyle: React.CSSProperties = { color: '#8a9ab5', fontWeight: 400, fontSize: 10, opacity: 0.85, marginLeft: 4, textTransform: 'lowercase' }
 const optStyle: React.CSSProperties = { color: '#8a9ab5', fontWeight: 400, fontSize: 10, opacity: 0.75, marginLeft: 4, textTransform: 'lowercase' }
+
+// La ubicación nueva de un médico nace "cerca de quien la está creando": la
+// ubicación actual guardada en la sesión (se toma al entrar al home).
+const coordsCercaDeMi = (): [number, number] | null => {
+  const u = storage.getUbicacion()
+  return u && Number.isFinite(u.latitud) && Number.isFinite(u.longitud) ? [u.latitud, u.longitud] : null
+}
 
 export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -136,7 +144,7 @@ export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout
     nombre: '', primerApellido: '', segundoApellido: '', sexo: '', matricula: '',
     especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '',
     ciudad: '', esParticular: true, clasificacion: 1,
-    ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: [-0.1807, -78.4678] as [number, number] }],
+    ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: coordsCercaDeMi() }],
   })
 
   useEffect(() => {
@@ -148,6 +156,19 @@ export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout
   }, [])
 
   const nombreCompleto = (m: Medico) => `${m.nombre} ${m.primerApellido || ''}${m.segundoApellido ? ' ' + m.segundoApellido : ''}`.trim()
+
+  // Al abrir el alta, los pines todavía sin dirección se siembran con la
+  // ubicación actual guardada en la sesión (se toma al entrar al home).
+  const abrirCrear = () => {
+    const ahora = coordsCercaDeMi()
+    setForm((prev) => ({
+      ...prev,
+      ubicaciones: prev.ubicaciones.map((u) =>
+        !u.direccion.trim() && !u.detalle.trim() ? { ...u, coords: ahora } : u,
+      ),
+    }))
+    setShowCreate(true)
+  }
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -210,7 +231,7 @@ export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout
       setCommittedQ('')
       load(1, '')
       showToast(`Médico registrado ✓ ${row.nombre} ${row.primerApellido} · ${matricula}`, 'success')
-      setForm({ nombre: '', primerApellido: '', segundoApellido: '', sexo: '', matricula: '', especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '', ciudad: '', esParticular: true, clasificacion: 1, ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: [-0.1807, -78.4678] }] })
+      setForm({ nombre: '', primerApellido: '', segundoApellido: '', sexo: '', matricula: '', especialidad: '', hospital: '', telefono: '', email: '', ci: '', descripcion: '', ciudad: '', esParticular: true, clasificacion: 1, ubicaciones: [{ id: 'u0', direccion: '', detalle: '', coords: coordsCercaDeMi() }] })
       setShowCreate(false)
     } catch (err) {
       console.warn('[Medicos] create error', err)
@@ -261,7 +282,7 @@ export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout
           <span className="medicos-subtitle">Todos los médicos registrados</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span className="medicos-count">{total} resultados</span>
-            <button className="vt-btn vt-btn--ver" style={{ height: 28, borderRadius: 8, fontSize: 11, fontWeight: 700 }} onClick={() => setShowCreate(true)}>+ Nuevo Médico</button>
+            <button className="vt-btn vt-btn--ver" style={{ height: 28, borderRadius: 8, fontSize: 11, fontWeight: 700 }} onClick={abrirCrear}>+ Nuevo Médico</button>
           </div>
         </div>
 
@@ -365,7 +386,7 @@ export const MedicosView: React.FC<Props> = ({ onNavigate, currentView, onLogout
                       <MapPicker coords={u.coords} onChange={c => setForm({ ...form, ubicaciones: form.ubicaciones.map((x, i) => i === idx ? { ...x, coords: c } : x) })} height={140} />
                     </div>
                   ))}
-                  <button type="button" className="vt-btn vt-btn--ver" onClick={() => setForm({ ...form, ubicaciones: [...form.ubicaciones, { id: `u${Date.now()}`, direccion: '', detalle: '', coords: [-0.1807, -78.4678] }] })} style={{ alignSelf: 'flex-start' }}>+ Agregar ubicación</button>
+                  <button type="button" className="vt-btn vt-btn--ver" onClick={() => setForm({ ...form, ubicaciones: [...form.ubicaciones, { id: `u${Date.now()}`, direccion: '', detalle: '', coords: coordsCercaDeMi() }] })} style={{ alignSelf: 'flex-start' }}>+ Agregar ubicación</button>
                 </div>
                 <div className="vt-form-actions"><button type="button" className="vt-btn-cancel" onClick={() => setShowCreate(false)} disabled={saving}>Cancelar</button><button type="submit" className="vt-btn-submit" disabled={saving}>{saving ? 'Guardando…' : 'Registrar'}</button></div>
               </form>

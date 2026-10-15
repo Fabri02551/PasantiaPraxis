@@ -9,6 +9,7 @@ import { ciudadService, type Ciudad } from '../../../core/services/ciudad.servic
 import { useGeolocation, distanciaMetros, formatearDistancia } from '../../../core/hooks/useGeolocation'
 import { UbicacionMapa } from '../../../core/components/UbicacionMapa/UbicacionMapa'
 import { normalizeUbicaciones } from '../../../core/utils/medicoDireccion'
+import { storage } from '../../../core/lib/storage'
 import './CompletarVisita.css'
 
 type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
@@ -71,8 +72,16 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
   const [ciudades, setCiudades] = useState<Ciudad[]>([])
 
   const gps = useGeolocation()
+  // Callbacks estables del hook: se usan en el efecto de apertura.
+  const pedirGps = gps.pedir
+  const limpiarGps = gps.limpiar
 
   const videoId = visita?.visitaId
+
+  // Ubicación guardada en la sesión (App la toma al entrar al home): sirve
+  // para pintar el mapa al instante mientras llega el GPS fresco de esta
+  // ventana. Se relee cada vez que se abre una visita.
+  const ubicacionGuardada = useMemo(() => storage.getUbicacion(), [videoId])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -212,11 +221,13 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
     setRows([])
     setDisponibles([])
     setBusqueda('')
-    gps.limpiar()
+    // Al abrir la ventana siempre se toma la ubicación actual del visitador.
+    limpiarGps()
+    pedirGps()
     return () => {
       muerto = true
     }
-  }, [videoId])
+  }, [videoId, limpiarGps, pedirGps])
 
   const filtereds = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
@@ -329,6 +340,16 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
   }
 
   const posicionGps = gps.resultado.estado === 'ok' ? gps.resultado.posicion : null
+
+  // Excepción al abrir: si el médico/institución tiene ubicación se muestra
+  // su pin; si no tiene, el mapa muestra la ubicación actual del visitador
+  // (GPS fresco tomado al abrir, o la guardada en sesión mientras este llega).
+  // La auditoría sigue usando solo el GPS fresco (posicionGps).
+  const gpsPendiente = gps.resultado.estado === 'pidiendo' || gps.resultado.estado === 'inactivo'
+  const posicionVisitador = posicionGps ?? (gpsPendiente ? ubicacionGuardada : null)
+  const visitadorCoords: [number, number] | null = posicionVisitador
+    ? [posicionVisitador.latitud, posicionVisitador.longitud]
+    : null
 
   // La distancia se calcula aquí solo para mostrar; el servidor la vuelve a
   // calcular con haversine y es esa la que queda guardada. Lo que se manda es
@@ -450,8 +471,8 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
 
               <UbicacionMapa
                 destino={destinoCoords}
-                visitador={posicionGps ? [posicionGps.latitud, posicionGps.longitud] : null}
-                precisionM={posicionGps?.precisionM ?? null}
+                visitador={visitadorCoords}
+                precisionM={posicionVisitador?.precisionM ?? null}
                 etiquetaDestino={destino.nombre || 'Destino'}
                 distanciaM={distanciaM}
                 altura="220px"
@@ -464,6 +485,14 @@ export const CompletarVisitaView: React.FC<Props> = ({ onNavigate, currentView, 
                     <span> · {destinoCoords[0].toFixed(4)}, {destinoCoords[1].toFixed(4)}</span>
                   )}
                   {distanciaM != null && <span> · <strong>{formatearDistancia(distanciaM)}</strong> del pin</span>}
+                </p>
+              ) : visitadorCoords ? (
+                <p style={{ fontSize: 12, color: '#92400e', margin: '8px 0 0' }}>
+                  Este destino no tiene coordenadas: se muestra <strong>tu ubicación actual</strong>.
+                </p>
+              ) : gps.resultado.estado === 'pidiendo' ? (
+                <p style={{ fontSize: 12, color: '#7e8aa6', margin: '8px 0 0' }}>
+                  Obteniendo tu ubicación actual…
                 </p>
               ) : (
                 <p style={{ fontSize: 12, color: '#b91c1c', margin: '8px 0 0' }}>
