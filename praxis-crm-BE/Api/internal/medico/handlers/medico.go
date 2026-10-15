@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/middleware"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/pkg/response"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/medico/models"
+	"gitlab.com/labpraxis/praxis-crm-be/api/internal/medico/repository"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/medico/services"
 )
 
@@ -204,9 +206,14 @@ func (h *MedicoHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.Delete(r.Context(), middleware.UserPersonaID(r.Context()), personaID); err != nil {
+	matricula, err := h.svc.Delete(r.Context(), middleware.UserPersonaID(r.Context()), middleware.UserRole(r.Context()), personaID)
+	if err != nil {
+		if errors.Is(err, repository.ErrSinPermiso) {
+			response.Error(w, http.StatusForbidden, err.Error())
+			return
+		}
 		response.Error(w, http.StatusNotFound, err.Error())
 		return
 	}
-	response.JSON(w, http.StatusOK, map[string]string{"message": "médico eliminado"})
+	response.JSON(w, http.StatusOK, map[string]string{"message": "médico eliminado", "matricula": matricula})
 }

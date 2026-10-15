@@ -3,7 +3,10 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -11,6 +14,12 @@ import (
 
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/medico/models"
 )
+
+// ErrSinPermiso se devuelve cuando un visitador intenta eliminar un médico
+// que no está en su propia cartera.
+var ErrSinPermiso = errors.New("sin permiso: el médico no pertenece a su cartera")
+
+var matriculaEliminadoRe = regexp.MustCompile(`^E-(\d+)$`)
 
 type MedicoRepository struct {
 	pool *pgxpool.Pool
@@ -78,7 +87,7 @@ func (r *MedicoRepository) GetByVisitadorID(ctx context.Context, visitadorID int
 		 FROM medico m
 		 JOIN persona p ON p.id = m.persona_id
 		 LEFT JOIN especialidad e ON e.id = m.especialidad_id
-		 WHERE m.visitador_id = $1
+		 WHERE m.visitador_id = $1 AND m.status = true
 		 ORDER BY p.nombre, p.primer_apellido`, visitadorID,
 	)
 	if err != nil {
@@ -227,17 +236,76 @@ func (r *MedicoRepository) Update(ctx context.Context, userID *int, personaID in
 	return m, nil
 }
 
-func (r *MedicoRepository) Delete(ctx context.Context, userID *int, personaID int) error {
-	tag, err := r.pool.Exec(ctx,
-		"UPDATE medico SET status = false, modificado_por = $2, ultima_modificacion = NOW() WHERE persona_id = $1",
-		personaID, userID)
+func (r *MedicoRepository) Delete(ctx context.Context, userID *int, role string, personaID int) (string, error) {
+	// Trae el dueño actual para validar que el visitador solo elimine
+	// médicos de su propia cartera.
+	var visitadorID *int
+	var activo bool
+	err := r.pool.QueryRow(ctx,
+		`SELECT visitador_id, status FROM medico WHERE persona_id = $1`, personaID,
+	).Scan(&visitadorID, &activo)
 	if err != nil {
-		return err
+		return "", fmt.Errorf("médico no encontrado")
 	}
-	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("médico no encontrado")
+	if !activo {
+		return "", fmt.Errorf("médico ya eliminado")
 	}
-	return nil
+	if role == "visitador" {
+		if userID == nil || visitadorID == nil || *visitadorID != *userID {
+			return "", ErrSinPermiso
+		}
+	}
+
+	// Baja lógica: status=false y matrícula reciclada a E-0001, E-0002, ...
+	// Solo los eliminados llevan E-; la matrícula original se libera para
+	// poder reutilizarse en altas futuras (la columna es UNIQUE).
+	for intento := 0; intento < 5; intento++ {
+		nueva, err := r.siguienteMatriculaEliminado(ctx)
+		if err != nil {
+			return "", err
+		}
+		tag, err := r.pool.Exec(ctx,
+			`UPDATE medico SET status = false, matricula = $2, modificado_por = $3, ultima_modificacion = NOW()
+			 WHERE persona_id = $1 AND status = true`,
+			personaID, nueva, userID)
+		if err != nil {
+			if strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
+				continue // carrera con otra baja: regenera el siguiente número
+			}
+			return "", err
+		}
+		if tag.RowsAffected() == 0 {
+			return "", fmt.Errorf("médico ya eliminado")
+		}
+		return nueva, nil
+	}
+	return "", fmt.Errorf("no se pudo generar la matrícula de baja, intente de nuevo")
+}
+
+// siguienteMatriculaEliminado calcula el próximo E-NNNN (E-0001, E-0002, ...)
+// a partir del máximo existente.
+func (r *MedicoRepository) siguienteMatriculaEliminado(ctx context.Context) (string, error) {
+	rows, err := r.pool.Query(ctx, `SELECT matricula FROM medico WHERE matricula LIKE 'E-%'`)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	max := 0
+	for rows.Next() {
+		var m string
+		if err := rows.Scan(&m); err != nil {
+			return "", err
+		}
+		if sub := matriculaEliminadoRe.FindStringSubmatch(strings.TrimSpace(m)); sub != nil {
+			if n, err := strconv.Atoi(sub[1]); err == nil && n > max {
+				max = n
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("E-%04d", max+1), nil
 }
 
 // GetPersonaSexo devuelve el sexo de la persona del médico; si no existe la

@@ -70,6 +70,9 @@ export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout
   const [loadingEdit, setLoadingEdit] = useState(false)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
+  // Baja lógica de médico (solo cartera propia): pide confirmación en modal.
+  const [deleting, setDeleting] = useState<EntradaCartera | null>(null)
+  const [deletingBusy, setDeletingBusy] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
 
   const showToast = useCallback((msg: string, type: 'success' | 'error' | 'info') => {
@@ -281,6 +284,27 @@ export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout
     }
   }
 
+  const handleConfirmDelete = async () => {
+    if (!deleting || deletingBusy) return
+    const pid = Number(deleting.id)
+    if (deleting.tipo !== 'medico' || !Number.isFinite(pid)) return
+    setDeletingBusy(true)
+    try {
+      const res = await medicoService.remove(pid)
+      setEntradas(prev => prev.filter(item => !(item.tipo === 'medico' && item.id === deleting.id)))
+      setConteos(prev => ({ ...prev, medicos: Math.max(0, prev.medicos - 1) }))
+      if (selected?.id === deleting.id && selected?.tipo === 'medico') setSelected(null)
+      const mat = res?.matricula ? ` · nueva matrícula ${res.matricula}` : ''
+      showToast(`Médico eliminado ✓ ${deleting.nombre}${mat}`, 'success')
+      setDeleting(null)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      showToast(`No se eliminó ✗ ${msg}`, 'error')
+    } finally {
+      setDeletingBusy(false)
+    }
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return entradas
@@ -365,6 +389,21 @@ export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout
                     Editar
                   </button>
                 )}
+                {e.tipo === 'medico' && (
+                  <button
+                    type="button"
+                    className="vt-btn vt-btn--eliminar"
+                    style={{ height: 28, fontSize: 11, padding: '0 10px', borderRadius: 8, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                    onClick={(ev) => {
+                      ev.stopPropagation()
+                      setDeleting(e)
+                    }}
+                    title="Eliminar médico de mi cartera"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                    Eliminar
+                  </button>
+                )}
                 <span className="cartera-chevron">›</span>
               </div>
             </li>
@@ -401,8 +440,60 @@ export const CarteraView: React.FC<Props> = ({ onNavigate, currentView, onLogout
                     Editar Médico
                   </button>
                 )}
+                {selected.tipo === 'medico' && (
+                  <button
+                    type="button"
+                    className="vt-btn vt-btn--eliminar"
+                    style={{ flex: 1, height: 40, borderRadius: 10, fontSize: 13, fontWeight: 700 }}
+                    onClick={() => { setSelected(null); setDeleting(selected) }}
+                  >
+                    Eliminar
+                  </button>
+                )}
                 <button className="cartera-modal-primary" style={{ flex: 1, height: 40 }} onClick={() => setSelected(null)}>
                   Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {deleting && (
+          <div className="cartera-overlay" onClick={() => { if (!deletingBusy) setDeleting(null) }}>
+            <div className="cartera-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Confirmar eliminación">
+              <div className="cartera-modal-header">
+                <h3>Eliminar médico</h3>
+                <button className="cartera-modal-close" onClick={() => { if (!deletingBusy) setDeleting(null) }} aria-label="Cerrar" disabled={deletingBusy}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 12px' }} aria-hidden>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <path d="M12 9v4M12 17h.01" />
+                </svg>
+              </div>
+              <p className="cartera-modal-esp" style={{ textAlign: 'center' }}>
+                Seguro quieres eliminar a este medico: <strong style={{ color: '#1B2A4E' }}>{resumenAsignado(deleting)}</strong>
+              </p>
+              <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="vt-btn-cancel"
+                  style={{ flex: 1, height: 40, borderRadius: 10, fontSize: 13, fontWeight: 700 }}
+                  onClick={() => setDeleting(null)}
+                  disabled={deletingBusy}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="vt-btn vt-btn--eliminar"
+                  style={{ flex: 1, height: 40, borderRadius: 10, fontSize: 13, fontWeight: 700, opacity: deletingBusy ? 0.6 : 1 }}
+                  onClick={handleConfirmDelete}
+                  disabled={deletingBusy}
+                >
+                  {deletingBusy ? 'Eliminando…' : 'Sí, eliminar'}
                 </button>
               </div>
             </div>

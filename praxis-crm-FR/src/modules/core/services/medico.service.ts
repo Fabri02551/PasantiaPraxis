@@ -86,5 +86,5 @@ export const medicoService = {
   getById: (personaId: number) => apiClient.get<MedicoBE>(`/api/medicos/${personaId}`, { auth: false }),
   create: (data: CreateMedicoPayload) => apiClient.post<MedicoBE>('/api/medicos', data),
   update: (personaId: number, data: UpdateMedicoPayload) => apiClient.put<MedicoBE>(`/api/medicos/${personaId}`, data),
-  remove: (personaId: number) => apiClient.del<{ message: string }>(`/api/medicos/${personaId}`),
+  remove: (personaId: number) => apiClient.del<{ message: string; matricula?: string }>(`/api/medicos/${personaId}`),
 }

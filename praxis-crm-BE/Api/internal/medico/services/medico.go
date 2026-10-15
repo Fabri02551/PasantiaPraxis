@@ -62,8 +62,8 @@ func (s *MedicoService) Update(ctx context.Context, userID *int, personaID int, 
 	return s.repo.Update(ctx, userID, personaID, req)
 }
 
-func (s *MedicoService) Delete(ctx context.Context, userID *int, personaID int) error {
-	return s.repo.Delete(ctx, userID, personaID)
+func (s *MedicoService) Delete(ctx context.Context, userID *int, role string, personaID int) (string, error) {
+	return s.repo.Delete(ctx, userID, role, personaID)
 }
 
 func (s *MedicoService) GetPersonaSexo(ctx context.Context, personaID int) (string, error) {
