@@ -25,7 +25,17 @@ export const ForgotPasswordView: React.FC<Props> = ({ onBack }) => {
     }
     try {
       const { ENV } = await import('../../../core/config/env')
-      const appUrl = ENV.APP_URL || window.location.origin
+      const win = typeof window !== 'undefined' ? (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }) : undefined
+      const isNative =
+        Boolean(win?.Capacitor?.isNativePlatform?.()) ||
+        (typeof window !== 'undefined' &&
+          (window.location.origin.startsWith('capacitor://') ||
+            window.location.origin.startsWith('file://') ||
+            window.location.origin === 'https://localhost' ||
+            window.location.origin === 'http://localhost'))
+
+      const appUrl =
+        ENV.APP_URL || (isNative ? 'https://crm.laboratoriopraxis.com' : window.location.origin)
       await import('../../services/auth.service').then((m) => m.authService.forgotPassword(v, appUrl))
     } catch (err) {
       // No revelamos si existe o no; mostramos mensaje genérico

@@ -37,10 +37,30 @@ func (s *PasswordResetService) ForgotPassword(ctx context.Context, req models.Fo
 	if err != nil {
 		return err
 	}
+
+	appURL := strings.TrimRight(strings.TrimSpace(req.AppURL), "/")
+	fallbackURL := s.cfg.AppURL
+	if fallbackURL == "" {
+		fallbackURL = "https://crm.laboratoriopraxis.com"
+	}
+
+	// Si no vino AppURL, es localhost (ej. la APK de Android donde window.location.origin es https://localhost),
+	// o es un esquema nativo (capacitor://), usamos la AppURL configurada en el servidor.
+	if appURL == "" ||
+		strings.HasPrefix(appURL, "capacitor://") ||
+		strings.HasPrefix(appURL, "file://") ||
+		appURL == "https://localhost" ||
+		appURL == "http://localhost" {
+		appURL = fallbackURL
+	} else if s.cfg.Env != "development" && (strings.Contains(appURL, "localhost") || strings.Contains(appURL, "127.0.0.1")) {
+		// En producción no permitimos links con localhost
+		appURL = fallbackURL
+	}
+
 	_ = s.emailSvc.SendResetPassword(email.SendResetPasswordInput{
 		To:        emailAddr,
 		Token:     token.Token,
-		AppURL:    req.AppURL,
+		AppURL:    appURL,
 		ExpiresIn: "30 minutos",
 	})
 	return nil

@@ -103,7 +103,11 @@ func buildResetTemplate(input SendResetPasswordInput) (string, error) {
 </body></html>`
 	t := template.Must(template.New("reset").Parse(tmpl))
 	var out bytes.Buffer
-	link := strings.TrimRight(input.AppURL, "/") + "/reset-password?token=" + input.Token
+	appURL := strings.TrimRight(strings.TrimSpace(input.AppURL), "/")
+	if appURL == "" || strings.HasPrefix(appURL, "capacitor://") || appURL == "https://localhost" || appURL == "http://localhost" {
+		appURL = "https://crm.laboratoriopraxis.com"
+	}
+	link := appURL + "/reset-password?token=" + input.Token
 	_ = t.Execute(&out, map[string]string{"Link": link, "ExpiresIn": input.ExpiresIn})
 	return out.String(), nil
 }
