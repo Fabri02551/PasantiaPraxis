@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
+import { authService, type CurrentUser } from '../../../auth/services/auth.service'
+import { getInitials, avatarStyle } from '../../../core/utils/avatar'
 import './Profile.css'
 
-type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos'
+type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
 
 interface Props {
   onNavigate: (view: View) => void
@@ -10,66 +12,215 @@ interface Props {
   onLogout: () => void
 }
 
-type ProfileData = {
+type ProfileForm = {
   nombre: string
-  rol: string
-  email: string
+  primer_apellido: string
+  segundo_apellido: string
+  sexo: string
   telefono: string
-  cargo: string
-  empresa: string
-  avatar: string
+  nacimiento: string
+  ci: string
 }
 
-const INITIAL: ProfileData = {
-  nombre: 'Carlos Mendoza',
-  rol: 'Ejecutivo de Cuentas Senior',
-  email: 'c.mendoza@fieldcrm.com',
-  telefono: '+54 9 11 5829-1030',
-  cargo: 'Supervisor de Visitas Técnicas',
-  empresa: 'SaaS Solutions Latam',
-  avatar: 'https://i.pravatar.cc/200?img=12',
+const EMPTY_FORM: ProfileForm = {
+  nombre: '',
+  primer_apellido: '',
+  segundo_apellido: '',
+  sexo: '',
+  telefono: '',
+  nacimiento: '',
+  ci: '',
 }
+
+const ROLE_LABEL: Record<string, string> = {
+  visitador: 'Visitador',
+  admin: 'Administrador',
+}
+
+const SEXO_LABEL: Record<string, string> = {
+  masculino: 'Masculino',
+  femenino: 'Femenino',
+  otro: 'Otro',
+  m: 'Masculino',
+  f: 'Femenino',
+  o: 'Otro',
+}
+
+const fullName = (u: CurrentUser) =>
+  [u.nombre, u.primer_apellido, u.segundo_apellido].filter(Boolean).join(' ').trim()
+
+const roleLabel = (role: string) => ROLE_LABEL[role] ?? role ?? '—'
+
+const sexoLabel = (sexo: string) => SEXO_LABEL[sexo.toLowerCase()] ?? sexo
+
+// persona.nacimiento es DATE: el backend lo devuelve como RFC3339 y el
+// <input type="date"> necesita yyyy-mm-dd.
+const toDateInput = (value: string | null) => (value ? value.slice(0, 10) : '')
+
+const formatDate = (value: string | null) => {
+  if (!value) return '—'
+  const iso = toDateInput(value)
+  const [y, m, d] = iso.split('-')
+  return y && m && d ? `${d}/${m}/${y}` : iso
+}
+
+const toForm = (u: CurrentUser): ProfileForm => ({
+  nombre: u.nombre ?? '',
+  primer_apellido: u.primer_apellido ?? '',
+  segundo_apellido: u.segundo_apellido ?? '',
+  sexo: u.sexo ?? '',
+  telefono: u.telefono ?? '',
+  nacimiento: toDateInput(u.nacimiento),
+  ci: u.ci ?? '',
+})
 
 export const ProfileView: React.FC<Props> = ({ onNavigate, currentView, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false)
-  const [profile, setProfile] = useState<ProfileData>(INITIAL)
+  const [profile, setProfile] = useState<CurrentUser | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
   const [editOpen, setEditOpen] = useState(false)
-  const [form, setForm] = useState<ProfileData>(INITIAL)
-  const [errors, setErrors] = useState<Partial<Record<keyof ProfileData, string>>>({})
+  const [form, setForm] = useState<ProfileForm>(EMPTY_FORM)
+  const [errors, setErrors] = useState<Partial<Record<keyof ProfileForm, string>>>({})
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
+  // Cambio de contraseña: modal aparte del de editar el perfil, para no
+  // mandar la contraseña actual junto con los datos personales.
+  const [passOpen, setPassOpen] = useState(false)
+  const [passForm, setPassForm] = useState({ actual: '', nueva: '', confirmacion: '' })
+  const [passVisible, setPassVisible] = useState(false)
+  const [passErrors, setPassErrors] = useState<{ actual?: string; nueva?: string; confirmacion?: string }>({})
+  const [passSaving, setPassSaving] = useState(false)
+  const [passError, setPassError] = useState<string | null>(null)
+  const [passSaved, setPassSaved] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setLoadError(null)
+    try {
+      setProfile(await authService.getMe())
+    } catch (err) {
+      setProfile(null)
+      setLoadError(err instanceof Error ? err.message : 'No se pudo cargar el perfil')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
   const openEdit = () => {
-    setForm(profile)
+    if (!profile) return
+    setForm(toForm(profile))
     setErrors({})
+    setSaveError(null)
     setSaved(false)
     setEditOpen(true)
   }
 
-  const closeEdit = () => setEditOpen(false)
+  const closeEdit = () => {
+    if (saving) return
+    setEditOpen(false)
+  }
 
   const validate = (): boolean => {
-    const e: Partial<Record<keyof ProfileData, string>> = {}
+    const e: Partial<Record<keyof ProfileForm, string>> = {}
     if (!form.nombre.trim()) e.nombre = 'Requerido'
-    if (!form.rol.trim()) e.rol = 'Requerido'
-    if (!form.email.trim()) e.email = 'Requerido'
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Email inválido'
-    if (!form.telefono.trim()) e.telefono = 'Requerido'
-    else if (form.telefono.trim().length < 8) e.telefono = 'Muy corto'
-    if (!form.cargo.trim()) e.cargo = 'Requerido'
-    if (!form.empresa.trim()) e.empresa = 'Requerido'
+    if (!form.primer_apellido.trim()) e.primer_apellido = 'Requerido'
+    if (form.telefono.trim() && form.telefono.trim().length < 8) e.telefono = 'Muy corto'
+    if (form.nacimiento && !/^\d{4}-\d{2}-\d{2}$/.test(form.nacimiento)) e.nacimiento = 'Fecha inválida'
     setErrors(e)
     return Object.keys(e).length === 0
   }
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!validate()) return
-    setProfile(form)
-    setSaved(true)
-    setTimeout(() => {
-      setEditOpen(false)
-      setSaved(false)
-    }, 600)
+    if (!validate() || saving) return
+
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const updated = await authService.updateMe({
+        nombre: form.nombre.trim(),
+        primer_apellido: form.primer_apellido.trim(),
+        segundo_apellido: form.segundo_apellido.trim() || null,
+        sexo: form.sexo,
+        telefono: form.telefono.trim(),
+        // yyyy-mm-dd: la columna es DATE y no debe recibir un timestamptz.
+        nacimiento: form.nacimiento || null,
+        ci: form.ci.trim(),
+      })
+      setProfile(updated)
+      setSaved(true)
+      setTimeout(() => {
+        setEditOpen(false)
+        setSaved(false)
+      }, 700)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'No se pudo guardar el perfil')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const openPass = () => {
+    setPassForm({ actual: '', nueva: '', confirmacion: '' })
+    setPassErrors({})
+    setPassError(null)
+    setPassSaved(false)
+    setPassVisible(false)
+    setPassOpen(true)
+  }
+
+  const closePass = () => {
+    if (passSaving) return
+    setPassOpen(false)
+  }
+
+  // Mismo mínimo que el backend (services.LongitudMinoPassword): si el
+  // frontend deja pasar menos de 8, el server responde 400 y el usuario
+  // pierde el Typed.
+  const MIN_PASSWORD = 8
+
+  const validatePass = (): boolean => {
+    const e: { actual?: string; nueva?: string; confirmacion?: string } = {}
+    if (!passForm.actual) e.actual = 'Requerido'
+    if (!passForm.nueva) e.nueva = 'Requerido'
+    else if (passForm.nueva.length < MIN_PASSWORD) e.nueva = `Mínimo ${MIN_PASSWORD} caracteres`
+    else if (passForm.nueva === passForm.actual) e.nueva = 'No puede ser igual a la actual'
+    if (!passForm.confirmacion) e.confirmacion = 'Requerido'
+    else if (passForm.confirmacion !== passForm.nueva) e.confirmacion = 'No coincide con la nueva'
+    setPassErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!validatePass() || passSaving) return
+
+    setPassSaving(true)
+    setPassError(null)
+    try {
+      await authService.changePassword({
+        password_actual: passForm.actual,
+        password_nuevo: passForm.nueva,
+      })
+      setPassForm({ actual: '', nueva: '', confirmacion: '' })
+      setPassSaved(true)
+      setTimeout(() => {
+        setPassOpen(false)
+        setPassSaved(false)
+      }, 1200)
+    } catch (err) {
+      setPassError(err instanceof Error ? err.message : 'No se pudo cambiar la contraseña')
+    } finally {
+      setPassSaving(false)
+    }
   }
 
   return (
@@ -86,45 +237,83 @@ export const ProfileView: React.FC<Props> = ({ onNavigate, currentView, onLogout
             <path d="M6 8a6 6 0 0 1 12 0c0 7-6 11-6 11s-6-4-6-11" />
             <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
           </svg>
-          <span className="notification-dot" />
         </button>
       </header>
 
       <SidebarMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={onNavigate as any} currentView={currentView as any} onLogout={onLogout} />
 
       <div className="profile-content">
-        <section className="profile-card">
-          <img src={profile.avatar} alt={profile.nombre} className="profile-avatar" />
-          <h2 className="profile-name">{profile.nombre}</h2>
-          <p className="profile-role">{profile.rol}</p>
-        </section>
+        {loading ? (
+          <p className="profile-status">Cargando tus datos…</p>
+        ) : loadError || !profile ? (
+          <div className="profile-error">
+            <p className="profile-status profile-status-error">{loadError ?? 'No se encontró el perfil'}</p>
+            <button className="btn-retry" onClick={() => void load()}>
+              Reintentar
+            </button>
+          </div>
+        ) : (
+          <>
+            <section className="profile-card">
+              <span
+                className="profile-avatar profile-avatar--initials"
+                style={avatarStyle(fullName(profile))}
+                aria-label={fullName(profile) || 'Perfil'}
+                role="img"
+              >
+                {getInitials(profile.nombre, profile.primer_apellido, profile.segundo_apellido)}
+              </span>
+              <h2 className="profile-name">{fullName(profile) || 'Sin nombre'}</h2>
+              <p className="profile-role">{roleLabel(profile.role)}</p>
+            </section>
 
-        <section className="profile-fields">
-          <div className="field-group">
-            <label className="field-label">CORREO ELECTRÓNICO</label>
-            <div className="field-box">{profile.email}</div>
-          </div>
-          <div className="field-group">
-            <label className="field-label">TELÉFONO</label>
-            <div className="field-box">{profile.telefono}</div>
-          </div>
-          <div className="field-group">
-            <label className="field-label">CARGO</label>
-            <div className="field-box">{profile.cargo}</div>
-          </div>
-          <div className="field-group">
-            <label className="field-label">EMPRESA</label>
-            <div className="field-box">{profile.empresa}</div>
-          </div>
-        </section>
+            <section className="profile-fields">
+              <div className="field-group">
+                <label className="field-label">CORREO ELECTRÓNICO</label>
+                <div className="field-box">{profile.email || '—'}</div>
+              </div>
+              <div className="field-group">
+                <label className="field-label">TELÉFONO</label>
+                <div className="field-box">{profile.telefono || '—'}</div>
+              </div>
+              <div className="field-group">
+                <label className="field-label">CÉDULA</label>
+                <div className="field-box">{profile.ci || '—'}</div>
+              </div>
+              <div className="field-group">
+                <label className="field-label">SEXO</label>
+                <div className="field-box">{profile.sexo ? sexoLabel(profile.sexo) : '—'}</div>
+              </div>
+              <div className="field-group">
+                <label className="field-label">FECHA DE NACIMIENTO</label>
+                <div className="field-box">{formatDate(profile.nacimiento)}</div>
+              </div>
+              <div className="field-group">
+                <label className="field-label">ROL</label>
+                <div className="field-box">{roleLabel(profile.role)}</div>
+              </div>
+            </section>
+          </>
+        )}
 
-        <button className="btn-edit" onClick={openEdit}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-            <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-          </svg>
-          Editar Perfil
-        </button>
+        {profile && !loading && (
+          <>
+            <button className="btn-edit" onClick={openEdit}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              Editar Perfil
+            </button>
+            <button className="btn-edit" onClick={openPass}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <rect x="3" y="10" width="18" height="11" rx="2" />
+                <path d="M7 10V7a5 5 0 0 1 10 0v3" />
+              </svg>
+              Cambiar Contraseña
+            </button>
+          </>
+        )}
 
         <button className="btn-logout" onClick={onLogout}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
@@ -136,7 +325,79 @@ export const ProfileView: React.FC<Props> = ({ onNavigate, currentView, onLogout
         </button>
       </div>
 
-      {editOpen && (
+      {passOpen && (
+        <div className="profile-modal-overlay" onClick={closePass}>
+          <div className="profile-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal>
+            <div className="profile-modal-header">
+              <h3>Cambiar Contraseña</h3>
+              <button className="modal-close" onClick={closePass} aria-label="Cerrar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <form className="profile-modal-form" onSubmit={handleChangePassword}>
+              <div className="form-group">
+                <label className="form-label">Contraseña actual</label>
+                <input
+                  type={passVisible ? 'text' : 'password'}
+                  className={`form-input ${passErrors.actual ? 'input-error' : ''}`}
+                  value={passForm.actual}
+                  autoComplete="current-password"
+                  onChange={(e) => setPassForm({ ...passForm, actual: e.target.value })}
+                />
+                {passErrors.actual && <span className="field-error">{passErrors.actual}</span>}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Contraseña nueva</label>
+                <input
+                  type={passVisible ? 'text' : 'password'}
+                  className={`form-input ${passErrors.nueva ? 'input-error' : ''}`}
+                  value={passForm.nueva}
+                  autoComplete="new-password"
+                  onChange={(e) => setPassForm({ ...passForm, nueva: e.target.value })}
+                />
+                {passErrors.nueva ? (
+                  <span className="field-error">{passErrors.nueva}</span>
+                ) : (
+                  <span className="form-hint">Mínimo {MIN_PASSWORD} caracteres.</span>
+                )}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Confirmar contraseña nueva</label>
+                <input
+                  type={passVisible ? 'text' : 'password'}
+                  className={`form-input ${passErrors.confirmacion ? 'input-error' : ''}`}
+                  value={passForm.confirmacion}
+                  autoComplete="new-password"
+                  onChange={(e) => setPassForm({ ...passForm, confirmacion: e.target.value })}
+                />
+                {passErrors.confirmacion && <span className="field-error">{passErrors.confirmacion}</span>}
+              </div>
+
+              <label className="pass-ver">
+                <input type="checkbox" checked={passVisible} onChange={(e) => setPassVisible(e.target.checked)} />
+                Mostrar contraseñas
+              </label>
+
+              {passError && <p className="profile-save-error">{passError}</p>}
+              {passSaved && <p className="profile-save-success">¡Contraseña actualizada!</p>}
+
+              <div className="modal-actions">
+                <button type="button" className="btn-cancel" onClick={closePass} disabled={passSaving}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn-save" disabled={passSaving}>
+                  {passSaving ? 'Guardando…' : 'Guardar Contraseña'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editOpen && profile && (
         <div className="profile-modal-overlay" onClick={closeEdit}>
           <div className="profile-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal>
             <div className="profile-modal-header">
@@ -150,19 +411,32 @@ export const ProfileView: React.FC<Props> = ({ onNavigate, currentView, onLogout
 
             <form className="profile-modal-form" onSubmit={handleSave}>
               <div className="form-group">
+                <label className="form-label">Correo electrónico</label>
+                <input className="form-input" value={profile.email} disabled />
+                <span className="form-hint">Es tu usuario de acceso y no se puede cambiar aquí.</span>
+              </div>
+              <div className="form-group">
                 <label className="form-label">Nombre</label>
                 <input className={`form-input ${errors.nombre ? 'input-error' : ''}`} value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
                 {errors.nombre && <span className="field-error">{errors.nombre}</span>}
               </div>
               <div className="form-group">
-                <label className="form-label">Rol / Título</label>
-                <input className={`form-input ${errors.rol ? 'input-error' : ''}`} value={form.rol} onChange={(e) => setForm({ ...form, rol: e.target.value })} />
-                {errors.rol && <span className="field-error">{errors.rol}</span>}
+                <label className="form-label">Primer apellido</label>
+                <input className={`form-input ${errors.primer_apellido ? 'input-error' : ''}`} value={form.primer_apellido} onChange={(e) => setForm({ ...form, primer_apellido: e.target.value })} />
+                {errors.primer_apellido && <span className="field-error">{errors.primer_apellido}</span>}
               </div>
               <div className="form-group">
-                <label className="form-label">Correo Electrónico</label>
-                <input type="email" className={`form-input ${errors.email ? 'input-error' : ''}`} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-                {errors.email && <span className="field-error">{errors.email}</span>}
+                <label className="form-label">Segundo apellido</label>
+                <input className="form-input" value={form.segundo_apellido} onChange={(e) => setForm({ ...form, segundo_apellido: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Sexo</label>
+                <select className="form-input" value={form.sexo} onChange={(e) => setForm({ ...form, sexo: e.target.value })}>
+                  <option value="">Sin especificar</option>
+                  <option value="masculino">Masculino</option>
+                  <option value="femenino">Femenino</option>
+                  <option value="otro">Otro</option>
+                </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Teléfono</label>
@@ -170,28 +444,24 @@ export const ProfileView: React.FC<Props> = ({ onNavigate, currentView, onLogout
                 {errors.telefono && <span className="field-error">{errors.telefono}</span>}
               </div>
               <div className="form-group">
-                <label className="form-label">Cargo</label>
-                <input className={`form-input ${errors.cargo ? 'input-error' : ''}`} value={form.cargo} onChange={(e) => setForm({ ...form, cargo: e.target.value })} />
-                {errors.cargo && <span className="field-error">{errors.cargo}</span>}
+                <label className="form-label">Cédula</label>
+                <input className="form-input" value={form.ci} onChange={(e) => setForm({ ...form, ci: e.target.value })} />
               </div>
               <div className="form-group">
-                <label className="form-label">Empresa</label>
-                <input className={`form-input ${errors.empresa ? 'input-error' : ''}`} value={form.empresa} onChange={(e) => setForm({ ...form, empresa: e.target.value })} />
-                {errors.empresa && <span className="field-error">{errors.empresa}</span>}
-              </div>
-              <div className="form-group">
-                <label className="form-label">Avatar URL</label>
-                <input className="form-input" value={form.avatar} onChange={(e) => setForm({ ...form, avatar: e.target.value })} placeholder="https://..." />
+                <label className="form-label">Fecha de nacimiento</label>
+                <input type="date" className={`form-input ${errors.nacimiento ? 'input-error' : ''}`} value={form.nacimiento} onChange={(e) => setForm({ ...form, nacimiento: e.target.value })} />
+                {errors.nacimiento && <span className="field-error">{errors.nacimiento}</span>}
               </div>
 
+              {saveError && <p className="profile-save-error">{saveError}</p>}
               {saved && <p className="profile-save-success">¡Perfil actualizado!</p>}
 
               <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={closeEdit}>
+                <button type="button" className="btn-cancel" onClick={closeEdit} disabled={saving}>
                   Cancelar
                 </button>
-                <button type="submit" className="btn-save">
-                  Guardar Cambios
+                <button type="submit" className="btn-save" disabled={saving}>
+                  {saving ? 'Guardando…' : 'Guardar Cambios'}
                 </button>
               </div>
             </form>

@@ -24,11 +24,20 @@ import (
 	ciudadsvc "gitlab.com/labpraxis/praxis-crm-be/api/internal/ciudad/services"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/config"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/database"
+	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/email"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/middleware"
 	especialidadhandlers "gitlab.com/labpraxis/praxis-crm-be/api/internal/especialidad/handlers"
 	especialidadrepo "gitlab.com/labpraxis/praxis-crm-be/api/internal/especialidad/repository"
 	especialidadroutes "gitlab.com/labpraxis/praxis-crm-be/api/internal/especialidad/routes"
 	especialidadsvc "gitlab.com/labpraxis/praxis-crm-be/api/internal/especialidad/services"
+	institucionhandlers "gitlab.com/labpraxis/praxis-crm-be/api/internal/institucion/handlers"
+	institucionrepo "gitlab.com/labpraxis/praxis-crm-be/api/internal/institucion/repository"
+	institucionroutes "gitlab.com/labpraxis/praxis-crm-be/api/internal/institucion/routes"
+	institucionsvc "gitlab.com/labpraxis/praxis-crm-be/api/internal/institucion/services"
+	laboratoriohandlers "gitlab.com/labpraxis/praxis-crm-be/api/internal/laboratorio/handlers"
+	laboratoriorepo "gitlab.com/labpraxis/praxis-crm-be/api/internal/laboratorio/repository"
+	laboratorioroutes "gitlab.com/labpraxis/praxis-crm-be/api/internal/laboratorio/routes"
+	laboratoriosvc "gitlab.com/labpraxis/praxis-crm-be/api/internal/laboratorio/services"
 	medicohandlers "gitlab.com/labpraxis/praxis-crm-be/api/internal/medico/handlers"
 	medicorepo "gitlab.com/labpraxis/praxis-crm-be/api/internal/medico/repository"
 	medicoroutes "gitlab.com/labpraxis/praxis-crm-be/api/internal/medico/routes"
@@ -41,6 +50,10 @@ import (
 	vrepo "gitlab.com/labpraxis/praxis-crm-be/api/internal/visitador/repository"
 	vroutes "gitlab.com/labpraxis/praxis-crm-be/api/internal/visitador/routes"
 	vsvc "gitlab.com/labpraxis/praxis-crm-be/api/internal/visitador/services"
+	visitalhandlers "gitlab.com/labpraxis/praxis-crm-be/api/internal/visita/handlers"
+	visitalrepo "gitlab.com/labpraxis/praxis-crm-be/api/internal/visita/repository"
+	visitaroutes "gitlab.com/labpraxis/praxis-crm-be/api/internal/visita/routes"
+	visitasvc "gitlab.com/labpraxis/praxis-crm-be/api/internal/visita/services"
 )
 
 func main() {
@@ -68,7 +81,13 @@ func main() {
 	authRepo := repository.NewAuthRepository(pool)
 	authSvc := authsvc.NewAuthService(authRepo, cfg)
 	authHandler := handlers.NewAuthHandler(authSvc)
-	routes.Register(mux, authHandler, cfg.JWTSecret)
+	// Password reset (olvido/repuesto de contraseña): manda los correos con
+	// core/email usando el mismo SMTP que el resto de la app.
+	resetRepo := repository.NewPasswordResetRepository(pool)
+	emailSvc := email.New(cfg)
+	resetSvc := authsvc.NewPasswordResetService(resetRepo, authRepo, emailSvc, cfg)
+	resetHandler := handlers.NewPasswordResetHandler(resetSvc)
+	routes.Register(mux, authHandler, resetHandler, cfg.JWTSecret)
 
 	// Ciudad module
 	ciudadRepo := ciudadrepo.NewCiudadRepository(pool)
@@ -100,11 +119,29 @@ func main() {
 	accionHandler := accionhandlers.NewAccionHandler(accionSvc)
 	accionroutes.Register(mux, accionHandler, cfg.JWTSecret)
 
+	// Laboratorio module
+	laboratorioRepo := laboratoriorepo.NewLaboratorioRepository(pool)
+	laboratorioSvc := laboratoriosvc.NewLaboratorioService(laboratorioRepo)
+	laboratorioHandler := laboratoriohandlers.NewLaboratorioHandler(laboratorioSvc)
+	laboratorioroutes.Register(mux, laboratorioHandler, cfg.JWTSecret)
+
+	// Institucion module
+	institucionRepo := institucionrepo.NewInstitucionRepository(pool)
+	institucionSvc := institucionsvc.NewInstitucionService(institucionRepo)
+	institucionHandler := institucionhandlers.NewInstitucionHandler(institucionSvc)
+	institucionroutes.Register(mux, institucionHandler, cfg.JWTSecret)
+
 	// Visitador module
 	visitadorRepo := vrepo.NewVisitadorRepository(pool)
-	visitadorSvc := vsvc.NewVisitadorService(visitadorRepo)
+	visitadorSvc := vsvc.NewVisitadorService(visitadorRepo, cfg)
 	visitadorHandler := vhandlers.NewVisitadorHandler(visitadorSvc)
 	vroutes.Register(mux, visitadorHandler, cfg.JWTSecret)
+
+	// Visita module
+	visitaRepo := visitalrepo.NewVisitaRepository(pool)
+	visitaSvc := visitasvc.NewVisitaService(visitaRepo)
+	visitaHandler := visitalhandlers.NewVisitaHandler(visitaSvc)
+	visitaroutes.Register(mux, visitaHandler, cfg.JWTSecret)
 
 	handler := middleware.CORS(mux)
 

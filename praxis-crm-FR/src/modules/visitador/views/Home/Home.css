@@ -109,11 +109,92 @@
 .map-wrapper {
   height: 220px;
   width: 100%;
+  position: relative;
 }
 
 .osm-map {
   height: 100%;
   width: 100%;
+}
+
+.map-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.map-control-btn {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  border: 1px solid #e8ecf1;
+  background: #fff;
+  color: #1b2a4e;
+  box-shadow: 0 2px 8px rgba(27, 42, 78, 0.18);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.map-control-btn:hover {
+  background: #eef7f7;
+  color: #2d9c9c;
+}
+
+.map-control-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.map-control-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: #1b2a4e;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 1.5px #fff;
+}
+
+.home-mapa-vacio {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  color: #64748b;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 16px;
+}
+
+.home-mapa-vacio span {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.home-mapa-vacio small {
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 36ch;
 }
 
 .action-row {
@@ -196,7 +277,7 @@
 
 .visit-item {
   display: grid;
-  grid-template-columns: 72px 1fr 16px;
+  grid-template-columns: 72px 1fr auto;
   align-items: center;
   border: 1px solid #e8ecf1;
   border-radius: 10px;
@@ -209,6 +290,22 @@
 .visit-item:hover {
   box-shadow: 0 2px 8px rgba(27, 42, 78, 0.08);
 }
+
+.visit-status-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 12px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.visit-status-badge.status-programada { background: #fef6e7; color: #b45309; border-color: #fde68a; }
+.visit-status-badge.status-confirmada { background: #e6f7ed; color: #0e502e; border-color: #a7f3d0; }
+.visit-status-badge.status-en-curso { background: #eef2ff; color: #4338ca; border-color: #c7d2fe; }
+.visit-status-badge.status-pendiente { background: #fef6e7; color: #b45309; border-color: #fde68a; }
+.visit-status-badge.status-visitado { background: #e6f7ed; color: #0e502e; border-color: #a7f3d0; }
+.visit-status-badge.status-propuesta { background: #e0f2fe; color: #0c4a6e; border-color: #bae6fd; }
 
 .visit-date {
   display: flex;

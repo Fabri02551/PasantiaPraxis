@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
+import { useNotificaciones, type Notificacion } from '../../hooks/useNotificaciones'
 import './Notifications.css'
 
-type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos'
+type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
 
 interface Props {
   onNavigate: (view: View) => void
@@ -10,75 +11,7 @@ interface Props {
   onLogout: () => void
 }
 
-type NotificationItem = {
-  id: string
-  title: string
-  desc: string
-  time: string
-  variant: 'info' | 'clock' | 'alert'
-  isNew: boolean
-}
-
-const NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: '1',
-    title: 'Nueva visita asignada',
-    desc: 'Se te ha asignado una inspección preventiva en TecnoCorp S.A. programada para hoy.',
-    time: 'Hace 5 min',
-    variant: 'info',
-    isNew: true,
-  },
-  {
-    id: '2',
-    title: 'Recordatorio de visita',
-    desc: 'Mañana a las 09:00 tienes una reunión agendada con Logística Central.',
-    time: 'Hace 1h',
-    variant: 'clock',
-    isNew: true,
-  },
-  {
-    id: '3',
-    title: 'Urgente: Re-programación',
-    desc: 'La cita con Constructora Andes se ha adelantado a las 14:30 de hoy.',
-    time: 'Hace 2h',
-    variant: 'alert',
-    isNew: true,
-  },
-  {
-    id: '4',
-    title: 'Reporte de visita aprobado',
-    desc: 'El supervisor aprobó tu último reporte de visita a Retail Plaza.',
-    time: 'Ayer',
-    variant: 'info',
-    isNew: false,
-  },
-  {
-    id: '5',
-    title: 'Alerta de retraso',
-    desc: 'Aún no registras la visita programada en Clínica San José.',
-    time: 'Ayer',
-    variant: 'alert',
-    isNew: false,
-  },
-  {
-    id: '6',
-    title: 'Instrucciones de visita actualizadas',
-    desc: 'Se agregaron nuevos planos y requerimientos para la visita de Constructora Andes.',
-    time: '23 Oct',
-    variant: 'info',
-    isNew: false,
-  },
-  {
-    id: '7',
-    title: 'Recordatorio mensual',
-    desc: 'Recuerda enviar tu firma digital de asistencia antes del fin de mes.',
-    time: '20 Oct',
-    variant: 'clock',
-    isNew: false,
-  },
-]
-
-function Icon({ variant }: { variant: NotificationItem['variant'] }) {
+function Icon({ variant }: { variant: Notificacion['variant'] }) {
   if (variant === 'info') {
     return (
       <div className="notif-icon notif-icon--info">
@@ -111,7 +44,25 @@ function Icon({ variant }: { variant: NotificationItem['variant'] }) {
 
 export const NotificationsView: React.FC<Props> = ({ onNavigate, currentView, onLogout }) => {
   const [menuOpen, setMenuOpen] = useState(false)
-  const newCount = NOTIFICATIONS.filter((n) => n.isNew).length
+  const [vistasEnSesion, setVistasEnSesion] = useState<string[]>([])
+  const { notificaciones, loading, nuevas, alertas, marcarTodasVistas } = useNotificaciones()
+
+  // Abrir la bandeja cuenta como leer las notificaciones: el punto rojo del
+  // encabezado volvería a encenderse en cada navegación si no.
+  useEffect(() => {
+    if (loading || nuevas === 0) return
+    marcarTodasVistas()
+  }, [loading, nuevas, marcarTodasVistas])
+
+  const esNueva = (n: Notificacion) => !vistasEnSesion.includes(n.id)
+
+  const abrirVisita = (visitaId: number) => {
+    // Desde la bandeja no se completa la visita (falta el formulario con
+    // cotización y firma): se manda al calendario, que es donde el visitador
+    // la abre.
+    void visitaId
+    onNavigate('calendario')
+  }
 
   return (
     <div className="notifications-page">
@@ -127,7 +78,7 @@ export const NotificationsView: React.FC<Props> = ({ onNavigate, currentView, on
             <path d="M6 8a6 6 0 0 1 12 0c0 7-6 11-6 11s-6-4-6-11" />
             <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
           </svg>
-          <span className="notification-dot" />
+          {alertas > 0 && <span className="notification-dot" />}
         </button>
       </header>
 
@@ -136,23 +87,48 @@ export const NotificationsView: React.FC<Props> = ({ onNavigate, currentView, on
       <div className="notifications-content">
         <div className="inbox-head">
           <h2 className="inbox-title">Bandeja de Entrada</h2>
-          <span className="badge-new">{newCount} Nuevas</span>
+          {nuevas > 0 ? (
+            <span className="badge-new">{nuevas} Nuevas</span>
+          ) : (
+            <span className="badge-new badge-new--ok">{alertas > 0 ? `${alertas} pendientes` : 'Al día'}</span>
+          )}
         </div>
 
-        <ul className="notif-list">
-          {NOTIFICATIONS.map((n) => (
-            <li key={n.id} className={`notif-card ${n.isNew ? 'notif-card--new' : ''}`}>
-              <Icon variant={n.variant} />
-              <div className="notif-text">
-                <div className="notif-top">
-                  <span className="notif-title">{n.title}</span>
-                  <span className="notif-time">{n.time}</span>
+        {loading ? (
+          <p style={{ fontSize: 12, color: '#7e8aa6', padding: 16, textAlign: 'center' }}>Cargando…</p>
+        ) : notificaciones.length === 0 ? (
+          <p style={{ fontSize: 12, color: '#7e8aa6', padding: 16, textAlign: 'center' }}>
+            No hay nada por avisar. Cuando tengas visitas programadas aparecen aquí.
+          </p>
+        ) : (
+          <ul className="notif-list">
+            {notificaciones.map((n) => (
+              <li
+                key={n.id}
+                className={`notif-card ${esNueva(n) ? 'notif-card--new' : ''}`}
+                onClick={() => {
+                  setVistasEnSesion((prev) => [...prev, n.id])
+                  if (n.visitaId != null) abrirVisita(n.visitaId)
+                }}
+                style={n.visitaId != null ? { cursor: 'pointer' } : undefined}
+              >
+                <Icon variant={n.variant} />
+                <div className="notif-text">
+                  <div className="notif-top">
+                    <span className="notif-title">{n.title}</span>
+                    <span className="notif-time">{n.time}</span>
+                  </div>
+                  <p className="notif-desc">{n.desc}</p>
                 </div>
-                <p className="notif-desc">{n.desc}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <p className="notif-foot">
+          Las visitas vencidas se detectan solas al pasar la hora: no hace falta registrarlas antes para
+          que aparezcan aquí.
+        </p>
       </div>
     </div>
   )

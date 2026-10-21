@@ -13,16 +13,18 @@ type User struct {
 }
 
 type Persona struct {
-	ID         int        `json:"id"`
-	Nombres    string     `json:"nombres"`
-	Apellidos  string     `json:"apellidos"`
-	Sexo       string     `json:"sexo"`
-	Correo     string     `json:"correo"`
-	Telefono   string     `json:"telefono"`
-	Nacimiento *time.Time `json:"nacimiento,omitempty"`
-	CI         string     `json:"ci"`
-	CiudadID   *int       `json:"ciudad_id,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
+	ID              int        `json:"id"`
+	Nombre          string     `json:"nombre"`
+	PrimerApellido  string     `json:"primer_apellido"`
+	SegundoApellido *string    `json:"segundo_apellido,omitempty"`
+	Sexo            string     `json:"sexo"`
+	Correo          string     `json:"correo"`
+	Telefono        string     `json:"telefono"`
+	Nacimiento      *time.Time `json:"nacimiento,omitempty"`
+	CI              string     `json:"ci"`
+	CiudadID        *int       `json:"ciudad_id,omitempty"`
+	Status          bool       `json:"status"`
+	CreatedAt       time.Time  `json:"created_at"`
 }
 
 type UserWithPersona struct {
@@ -30,20 +32,83 @@ type UserWithPersona struct {
 	Persona
 }
 
+// ProfileResponse aplana User + Persona para GET/PUT /api/auth/me.
+// No se puede serializar UserWithPersona directamente: al embeber Persona,
+// User.ID y Persona.ID quedan al mismo nivel y encoding/json descarta los
+// dos campos, así que `id` y `created_at` desaparecen de la respuesta.
+type ProfileResponse struct {
+	ID              string     `json:"id"`
+	PersonaID       *int       `json:"persona_id"`
+	Email           string     `json:"email"`
+	Role            string     `json:"role"`
+	Nombre          string     `json:"nombre"`
+	PrimerApellido  string     `json:"primer_apellido"`
+	SegundoApellido *string    `json:"segundo_apellido"`
+	Sexo            string     `json:"sexo"`
+	Correo          string     `json:"correo"`
+	Telefono        string     `json:"telefono"`
+	Nacimiento      *time.Time `json:"nacimiento"`
+	CI              string     `json:"ci"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+func (u *UserWithPersona) ToProfile() *ProfileResponse {
+	return &ProfileResponse{
+		ID:              u.User.ID,
+		PersonaID:       u.User.PersonaID,
+		Email:           u.User.Email,
+		Role:            u.User.Role,
+		Nombre:          u.Persona.Nombre,
+		PrimerApellido:  u.Persona.PrimerApellido,
+		SegundoApellido: u.Persona.SegundoApellido,
+		Sexo:            u.Persona.Sexo,
+		Correo:          u.Persona.Correo,
+		Telefono:        u.Persona.Telefono,
+		Nacimiento:      u.Persona.Nacimiento,
+		CI:              u.Persona.CI,
+		CreatedAt:       u.User.CreatedAt,
+	}
+}
+
+// UpdateProfileRequest solo incluye campos de persona que el usuario puede
+// editar desde "Mi Perfil". No lleva email: users.email es la credencial de
+// login y no se modifica desde el perfil para no desincronizar la sesión.
+// Nacimiento es *string (yyyy-mm-dd) y no *time.Time porque la columna es
+// DATE: mandar un timestamptz dejaría el día corrido según el TimeZone de
+// la sesión de Postgres.
+type UpdateProfileRequest struct {
+	Nombre          string  `json:"nombre"`
+	PrimerApellido  string  `json:"primer_apellido"`
+	SegundoApellido *string `json:"segundo_apellido"`
+	Sexo            string  `json:"sexo"`
+	Telefono        string  `json:"telefono"`
+	Nacimiento      *string `json:"nacimiento"`
+	CI              string  `json:"ci"`
+}
+
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
+// ChangePasswordRequest es el cambio de contraseña del usuario autenticado.
+// La confirmación la hace el frontend; el backend solo necesita la actual
+// (para comprobar que quien llama es el dueño) y la nueva.
+type ChangePasswordRequest struct {
+	PasswordActual string `json:"password_actual"`
+	PasswordNuevo  string `json:"password_nuevo"`
+}
+
 type RegisterRequest struct {
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	Role      string `json:"role"`
-	Nombres   string `json:"nombres"`
-	Apellidos string `json:"apellidos"`
-	Sexo      string `json:"sexo"`
-	Telefono  string `json:"telefono"`
-	CI        string `json:"ci"`
+	Email           string `json:"email"`
+	Password        string `json:"password"`
+	Role            string `json:"role"`
+	Nombre          string `json:"nombre"`
+	PrimerApellido  string `json:"primer_apellido"`
+	SegundoApellido string `json:"segundo_apellido"`
+	Sexo            string `json:"sexo"`
+	Telefono        string `json:"telefono"`
+	CI              string `json:"ci"`
 }
 
 type TokenResponse struct {
@@ -51,4 +116,92 @@ type TokenResponse struct {
 	TokenType string `json:"token_type"`
 	ExpiresIn int64  `json:"expires_in"`
 	Role      string `json:"role"`
+}
+
+// AdminItem es un administrador para el CRUD de administradores:
+// perfil aplanado + status (true=1 activo, false=0 eliminado lógico)
+// + ciudad para el formulario del frontend.
+type AdminItem struct {
+	ID              string     `json:"id"`
+	PersonaID       *int       `json:"persona_id"`
+	Email           string     `json:"email"`
+	Role            string     `json:"role"`
+	Nombre          string     `json:"nombre"`
+	PrimerApellido  string     `json:"primer_apellido"`
+	SegundoApellido *string    `json:"segundo_apellido"`
+	Sexo            string     `json:"sexo"`
+	Correo          string     `json:"correo"`
+	Telefono        string     `json:"telefono"`
+	Nacimiento      *time.Time `json:"nacimiento"`
+	CI              string     `json:"ci"`
+	CiudadID        *int       `json:"ciudad_id,omitempty"`
+	Status          bool       `json:"status"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+func (u *UserWithPersona) ToAdmin() *AdminItem {
+	return &AdminItem{
+		ID:              u.User.ID,
+		PersonaID:       u.User.PersonaID,
+		Email:           u.User.Email,
+		Role:            u.User.Role,
+		Nombre:          u.Persona.Nombre,
+		PrimerApellido:  u.Persona.PrimerApellido,
+		SegundoApellido: u.Persona.SegundoApellido,
+		Sexo:            u.Persona.Sexo,
+		Correo:          u.Persona.Correo,
+		Telefono:        u.Persona.Telefono,
+		Nacimiento:      u.Persona.Nacimiento,
+		CI:              u.Persona.CI,
+		CiudadID:        u.Persona.CiudadID,
+		Status:          u.Persona.Status,
+		CreatedAt:       u.User.CreatedAt,
+	}
+}
+
+// CreateAdminRequest crea un administrador: inserta persona + users en UNA
+// transacción (si algo falla no queda persona huérfana).
+//
+// Password es opcional: el panel ya no lo pide. Cuando viene vacío la API
+// genera la contraseña y la manda por correo al Email del request.
+type CreateAdminRequest struct {
+	Email           string  `json:"email"`
+	Password        string  `json:"password"`
+	Nombre          string  `json:"nombre"`
+	PrimerApellido  string  `json:"primer_apellido"`
+	SegundoApellido *string `json:"segundo_apellido"`
+	Sexo            string  `json:"sexo"`
+	Telefono        string  `json:"telefono"`
+	CI              string  `json:"ci"`
+	CiudadID        *int    `json:"ciudad_id"`
+	Nacimiento      *string `json:"nacimiento"`
+}
+
+// AdminCreado es la respuesta del alta de administrador.
+//
+// PasswordGenerado solo tiene valor cuando NO se pudo enviar el correo (sin
+// SMTP o fallo del servidor): es la única copia en claro de la contraseña
+// que sale de la API, para que el administrador pueda repartirla a mano. Si
+// el correo salió bien, no aparece en la respuesta.
+type AdminCreado struct {
+	*AdminItem
+	PasswordGenerado string `json:"password_generado,omitempty"`
+}
+
+// UpdateAdminRequest edita persona + credencial del administrador en UNA
+// transacción. Status nil = no cambia; Password vacío = no cambia.
+// Correo se sincroniza con Email si viene vacío.
+type UpdateAdminRequest struct {
+	Nombre          string  `json:"nombre"`
+	PrimerApellido  string  `json:"primer_apellido"`
+	SegundoApellido *string `json:"segundo_apellido"`
+	Sexo            string  `json:"sexo"`
+	Telefono        string  `json:"telefono"`
+	CI              string  `json:"ci"`
+	CiudadID        *int    `json:"ciudad_id"`
+	Nacimiento      *string `json:"nacimiento"`
+	Correo          string  `json:"correo"`
+	Email           string  `json:"email"`
+	Password        string  `json:"password"`
+	Status          *bool   `json:"status"`
 }

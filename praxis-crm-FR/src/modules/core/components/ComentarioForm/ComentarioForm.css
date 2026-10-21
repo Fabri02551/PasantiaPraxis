@@ -1,0 +1,132 @@
+.comentario-form-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.comentario-form {
+  background: #fff;
+  border: 1px solid #e8ecf1;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.comentario-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.comentario-field label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #1B2A4E;
+  letter-spacing: 0.2px;
+}
+
+.comentario-field input,
+.comentario-field select,
+.comentario-field textarea {
+  border: 1px solid #e2e6ed;
+  border-radius: 8px;
+  background: #fff;
+  color: #1B2A4E;
+  font-size: 12.5px;
+  outline: none;
+  font-family: inherit;
+  color-scheme: light;
+}
+
+.comentario-field input,
+.comentario-field select {
+  height: 38px;
+  padding: 0 12px;
+}
+
+.comentario-field textarea {
+  padding: 10px 12px;
+  resize: vertical;
+  min-height: 90px;
+}
+
+.comentario-field input:focus,
+.comentario-field select:focus,
+.comentario-field textarea:focus {
+  border-color: #2d9c9c;
+  box-shadow: 0 0 0 3px rgba(45, 156, 156, 0.12);
+}
+
+.comentario-hint {
+  font-size: 11px;
+  color: #7e8aa6;
+}
+
+.comentario-error {
+  background: #fdecea;
+  border: 1px solid #fecaca;
+  color: #e35d5d;
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  margin: 0;
+}
+
+.comentario-success {
+  background: #e6f7ed;
+  border: 1px solid #b6e7c9;
+  color: #0e502e;
+  font-size: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  line-height: 1.4;
+}
+
+.comentario-mailto-link {
+  color: #2d9c9c;
+  font-weight: 700;
+  text-decoration: underline;
+  font-size: 11.5px;
+}
+
+.comentario-submit {
+  height: 42px;
+  border: none;
+  border-radius: 8px;
+  background: #1B2A4E;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.comentario-submit:hover {
+  background: #16213a;
+}
+
+.comentario-preview {
+  background: #f8f9fb;
+  border: 1px solid #eef1f5;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.comentario-preview h4 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #1B2A4E;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.comentario-preview pre {
+  margin: 0;
+  font-size: 11px;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, monospace;
+}

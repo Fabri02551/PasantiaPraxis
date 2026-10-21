@@ -174,3 +174,16 @@
     padding: 16px 24px 24px;
   }
 }
+
+.badge-new--ok {
+  background: #e8f6f6;
+  color: #2d9c9c;
+}
+
+.notif-foot {
+  font-size: 11px;
+  color: #8a9ab5;
+  text-align: center;
+  margin: 16px 0 0;
+  line-height: 1.4;
+}

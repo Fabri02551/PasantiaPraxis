@@ -25,50 +25,9 @@ type Visit = {
   coords: [number, number]
 }
 
-const VISITS: Visit[] = [
-  {
-    id: '1',
-    dateLabel: 'Hoy',
-    time: '10:00',
-    company: 'TecnoCorp S.A.',
-    detail: 'Mantenimiento Preventivo Servidores',
-    coords: [-0.1807, -78.478],
-  },
-  {
-    id: '2',
-    dateLabel: 'Hoy',
-    time: '14:30',
-    company: 'Constructora Andes',
-    detail: 'Inspección de Obra y Firma de Avance',
-    coords: [-0.184, -78.465],
-  },
-  {
-    id: '3',
-    dateLabel: 'Mañ',
-    time: '09:00',
-    company: 'Logística Central',
-    detail: 'Reunión de Renovación de Contrato',
-    coords: [-0.195, -78.486],
-  },
-  {
-    id: '4',
-    dateLabel: '24 Oct',
-    time: '11:00',
-    company: 'Retail Plaza',
-    detail: 'Instalación de Terminales POS',
-    coords: [-0.172, -78.472],
-  },
-  {
-    id: '5',
-    dateLabel: '25 Oct',
-    time: '16:00',
-    company: 'Clínica San José',
-    detail: 'Demo técnica de Software Médico',
-    coords: [-0.189, -78.455],
-  },
-]
+const VISITS: Visit[] = []
 
-const route: [number, number][] = VISITS.slice(0, 4).map((v) => v.coords)
+const route: [number, number][] = []
 
 function createColorIcon(color: string) {
   return L.divIcon({

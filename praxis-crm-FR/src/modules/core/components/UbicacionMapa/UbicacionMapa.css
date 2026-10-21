@@ -1,0 +1,54 @@
+.ubicacion-mapa-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+
+.ubicacion-mapa {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+
+.ubicacion-mapa-vacio {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 20px;
+  text-align: center;
+  color: #64748b;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.ubicacion-mapa-vacio span {
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.ubicacion-mapa-vacio small {
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 34ch;
+}
+
+.ubicacion-mapa-distancia {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #334155;
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+}
+
+.ubicacion-mapa-distancia strong {
+  font-variant-numeric: tabular-nums;
+}

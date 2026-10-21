@@ -2,13 +2,29 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/middleware"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/core/pkg/response"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/medico/models"
+	"gitlab.com/labpraxis/praxis-crm-be/api/internal/medico/repository"
 	"gitlab.com/labpraxis/praxis-crm-be/api/internal/medico/services"
 )
+
+func isDuplicateKey(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "duplicate key")
+}
+
+func isForeignKeyViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "foreign key") || strings.Contains(msg, "violates foreign key constraint")
+}
 
 type MedicoHandler struct {
 	svc *services.MedicoService
@@ -19,6 +35,46 @@ func NewMedicoHandler(svc *services.MedicoService) *MedicoHandler {
 }
 
 func (h *MedicoHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+	if vIDStr := r.URL.Query().Get("visitador_id"); vIDStr != "" {
+		vID, err := strconv.Atoi(vIDStr)
+		if err != nil {
+			response.Error(w, http.StatusBadRequest, "visitador_id inválido")
+			return
+		}
+		medicos, err := h.svc.GetByVisitadorID(r.Context(), vID)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if medicos == nil {
+			medicos = []models.Medico{}
+		}
+		response.JSON(w, http.StatusOK, medicos)
+		return
+	}
+
+	// Paginación opcional: ?page=&limit=&q=. Sin page/limit se devuelve la
+	// lista completa, como siempre, para no romper a los consumidores actuales.
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if page >= 1 || limit >= 1 {
+		if page < 1 {
+			page = 1
+		}
+		if limit < 1 || limit > 200 {
+			limit = 20
+		}
+		total, items, err := h.svc.GetPage(r.Context(), page, limit, r.URL.Query().Get("q"))
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		response.JSON(w, http.StatusOK, map[string]any{
+			"total": total, "page": page, "limit": limit, "items": items,
+		})
+		return
+	}
+
 	medicos, err := h.svc.GetAll(r.Context())
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
@@ -49,13 +105,65 @@ func (h *MedicoHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Codigo == "" {
-		response.Error(w, http.StatusBadRequest, "código es requerido")
+	// Todas las validaciones ocurren ANTES de tocar la base de datos, para no
+	// dejar registros a medias cuando el alta viene anidada en una transacción.
+	if req.Matricula == "" {
+		response.Error(w, http.StatusBadRequest, "matricula es requerida")
+		return
+	}
+	if req.EspecialidadID == 0 {
+		response.Error(w, http.StatusBadRequest, "especialidad_id es requerido")
 		return
 	}
 
-	medico, err := h.svc.Create(r.Context(), req)
+	// Camino atómico: la persona viene anidada, se inserta junto al médico.
+	if req.Persona != nil {
+		p := req.Persona
+		if p.Nombre == "" || p.PrimerApellido == "" {
+			response.Error(w, http.StatusBadRequest, "nombre y primer_apellido son requeridos")
+			return
+		}
+		if p.Sexo == "" {
+			response.Error(w, http.StatusBadRequest, "sexo es requerido")
+			return
+		}
+		medico, err := h.svc.CreateCompleto(r.Context(), middleware.UserPersonaID(r.Context()), middleware.UserRole(r.Context()), *p, req)
+		if err != nil {
+			if isDuplicateKey(err) {
+				response.Error(w, http.StatusConflict, "matricula, código o persona ya registrados")
+				return
+			}
+			if isForeignKeyViolation(err) {
+				response.Error(w, http.StatusBadRequest, "la especialidad indicada no existe")
+				return
+			}
+			response.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		response.JSON(w, http.StatusCreated, medico)
+		return
+	}
+
+	sexo, err := h.svc.GetPersonaSexo(r.Context(), req.PersonaID)
 	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if sexo == "" {
+		response.Error(w, http.StatusBadRequest, "la persona del médico debe tener sexo definido")
+		return
+	}
+
+	medico, err := h.svc.Create(r.Context(), middleware.UserPersonaID(r.Context()), middleware.UserRole(r.Context()), req)
+	if err != nil {
+		if isDuplicateKey(err) {
+			response.Error(w, http.StatusConflict, "matricula, código o persona ya registrados")
+			return
+		}
+		if isForeignKeyViolation(err) {
+			response.Error(w, http.StatusBadRequest, "la especialidad indicada no existe")
+			return
+		}
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -75,8 +183,16 @@ func (h *MedicoHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	medico, err := h.svc.Update(r.Context(), personaID, req)
+	if middleware.UserRole(r.Context()) == "visitador" {
+		req.VisitadorID = nil
+	}
+
+	medico, err := h.svc.Update(r.Context(), middleware.UserPersonaID(r.Context()), personaID, req)
 	if err != nil {
+		if isDuplicateKey(err) {
+			response.Error(w, http.StatusConflict, "matricula, código o persona ya registrados")
+			return
+		}
 		response.Error(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -90,9 +206,14 @@ func (h *MedicoHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.Delete(r.Context(), personaID); err != nil {
+	matricula, err := h.svc.Delete(r.Context(), middleware.UserPersonaID(r.Context()), middleware.UserRole(r.Context()), personaID)
+	if err != nil {
+		if errors.Is(err, repository.ErrSinPermiso) {
+			response.Error(w, http.StatusForbidden, err.Error())
+			return
+		}
 		response.Error(w, http.StatusNotFound, err.Error())
 		return
 	}
-	response.JSON(w, http.StatusOK, map[string]string{"message": "médico eliminado"})
+	response.JSON(w, http.StatusOK, map[string]string{"message": "médico eliminado", "matricula": matricula})
 }

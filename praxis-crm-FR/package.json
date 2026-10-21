@@ -6,23 +6,40 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:android": "tsc -b && vite build --mode android",
+    "android:sync": "npm run build:android && cap sync android",
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug",
+    "capgo:upload": "npm run build:android && npx @capgo/cli@latest bundle upload --channel=production",
     "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.3",
+    "@capgo/capacitor-updater": "^8.52.1",
     "leaflet": "^1.9.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-leaflet": "^5.0.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.3",
+    "@playwright/test": "^1.63.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "@types/leaflet": "^1.9.22",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
+    "jsdom": "^30.1.1",
     "oxlint": "^1.79.0",
     "typescript": "~6.0.2",
     "vite": "^8.2.2"
+  },
+  "allowScripts": {
+    "sharp@0.32.6": true
   }
 }

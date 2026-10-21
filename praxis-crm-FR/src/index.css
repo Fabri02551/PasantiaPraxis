@@ -60,6 +60,21 @@
   box-sizing: border-box;
 }
 
+/* El panel admin usa width:100% + padding en tarjetas: sin esto,
+   cualquier width:100% con padding desborda la página (content-box). */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
 body {
   margin: 0;
 }

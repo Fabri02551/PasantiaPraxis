@@ -19,9 +19,10 @@ CREATE TABLE ciudad (
 -- ============================================================
 CREATE TABLE persona (
     id SERIAL PRIMARY KEY,
-    nombres VARCHAR(255) NOT NULL,
-    apellidos VARCHAR(255) NOT NULL,
-    sexo VARCHAR(20) DEFAULT '',
+    nombre VARCHAR(255) NOT NULL,
+    primer_apellido VARCHAR(255) NOT NULL,
+    segundo_apellido VARCHAR(255),
+    sexo VARCHAR(20) NOT NULL DEFAULT '',
     correo VARCHAR(255),
     telefono VARCHAR(50),
     nacimiento DATE,
@@ -46,19 +47,72 @@ CREATE TABLE especialidad (
 );
 
 -- ============================================================
+-- Laboratorio (pruebas de laboratorio / estudios)
+-- ============================================================
+CREATE TABLE laboratorio (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(255) NOT NULL,
+    area VARCHAR(150) NOT NULL,
+    -- Clave/código del estudio (editable solo al crear; opcional).
+    clave VARCHAR(50),
+    precio NUMERIC(10,2) NOT NULL DEFAULT 0,
+    comision_extra NUMERIC(5,2) NOT NULL DEFAULT 0,
+    status BOOLEAN DEFAULT true,
+    creado_por INTEGER REFERENCES persona(id) ON DELETE SET NULL,
+    modificado_por INTEGER REFERENCES persona(id) ON DELETE SET NULL,
+    fecha_creacion TIMESTAMPTZ DEFAULT NOW(),
+    ultima_modificacion TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_laboratorio_area ON laboratorio(area);
+
+-- ============================================================
+-- costo por ciudad (intersección laboratorio <-> ciudad)
+-- 0 = no disponible en esa ciudad
+-- ============================================================
+CREATE TABLE laboratorio_ciudad (
+    laboratorio_id INTEGER NOT NULL REFERENCES laboratorio(id) ON DELETE CASCADE,
+    ciudad_id INTEGER NOT NULL REFERENCES ciudad(id) ON DELETE CASCADE,
+    costo NUMERIC(10,2) NOT NULL DEFAULT 0,
+    PRIMARY KEY (laboratorio_id, ciudad_id)
+);
+
+CREATE INDEX idx_lab_ciudad_ciudad ON laboratorio_ciudad(ciudad_id);
+
+-- ============================================================
+-- Visitador (extiende Persona) - debe existir antes que medico
+-- ============================================================
+CREATE TABLE visitador (
+    persona_id INTEGER PRIMARY KEY REFERENCES persona(id) ON DELETE CASCADE,
+    activo BOOLEAN DEFAULT true,
+    latitud NUMERIC(10,7),
+    longitud NUMERIC(10,7),
+    creado_por INTEGER REFERENCES persona(id) ON DELETE SET NULL,
+    modificado_por INTEGER REFERENCES persona(id) ON DELETE SET NULL,
+    fecha_creacion TIMESTAMPTZ DEFAULT NOW(),
+    ultima_modificacion TIMESTAMPTZ DEFAULT NOW(),
+    status BOOLEAN DEFAULT true
+);
+
+-- ============================================================
 -- Medico (extiende Persona)
 -- ============================================================
 CREATE TABLE medico (
     persona_id INTEGER PRIMARY KEY REFERENCES persona(id) ON DELETE CASCADE,
-    codigo VARCHAR(50) UNIQUE NOT NULL,
-    especialidad_id INTEGER REFERENCES especialidad(id) ON DELETE SET NULL,
-    institucion VARCHAR(255),
+    codigo VARCHAR(50) UNIQUE,
+    matricula VARCHAR(50) UNIQUE NOT NULL,
+    especialidad_id INTEGER NOT NULL REFERENCES especialidad(id) ON DELETE RESTRICT,
+    visitador_id INTEGER REFERENCES visitador(persona_id) ON DELETE SET NULL,
+    es_particular BOOLEAN NOT NULL DEFAULT false,
     direccion JSONB DEFAULT '{}',
     clasificacion SMALLINT DEFAULT 0 CHECK (clasificacion BETWEEN 0 AND 5),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
     frecuencia_visita VARCHAR(100),
     notas JSONB DEFAULT '{}',
-    status BOOLEAN DEFAULT true
+    status BOOLEAN DEFAULT true,
+    creado_por INTEGER REFERENCES persona(id) ON DELETE SET NULL,
+    modificado_por INTEGER REFERENCES persona(id) ON DELETE SET NULL,
+    fecha_creacion TIMESTAMPTZ DEFAULT NOW(),
+    ultima_modificacion TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_medico_especialidad ON medico(especialidad_id);
@@ -78,33 +132,76 @@ CREATE TABLE accion (
 );
 
 -- ============================================================
--- Visitador (extiende Persona)
+-- Institucion (clínicas/hospitales que visita la fuerza de ventas)
+-- Entidad independiente de medico. Debe existir antes que visita.
 -- ============================================================
-CREATE TABLE visitador (
-    persona_id INTEGER PRIMARY KEY REFERENCES persona(id) ON DELETE CASCADE,
-    activo BOOLEAN DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    status BOOLEAN DEFAULT true
+CREATE TABLE institucion (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(255) NOT NULL,
+    razon_social VARCHAR(255) DEFAULT '',
+    direccion JSONB DEFAULT '{}',
+    telefono VARCHAR(50) DEFAULT '',
+    correo VARCHAR(255) DEFAULT '',
+    tipo_contrato VARCHAR(100) DEFAULT '',
+    nit VARCHAR(50) DEFAULT '',
+    visitador_id INTEGER REFERENCES persona(id) ON DELETE SET NULL,
+    ciudad_id INTEGER REFERENCES ciudad(id) ON DELETE SET NULL,
+    es_particular BOOLEAN NOT NULL DEFAULT false,
+    clasificacion SMALLINT DEFAULT 0 CHECK (clasificacion BETWEEN 0 AND 5),
+    status BOOLEAN DEFAULT true,
+    creado_por INTEGER REFERENCES persona(id) ON DELETE SET NULL,
+    modificado_por INTEGER REFERENCES persona(id) ON DELETE SET NULL,
+    fecha_creacion TIMESTAMPTZ DEFAULT NOW(),
+    ultima_modificacion TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE INDEX idx_institucion_ciudad ON institucion(ciudad_id);
+CREATE INDEX idx_institucion_visitador ON institucion(visitador_id);
+-- NIT único para instituciones registradas; se ignora el vacío de los registros
+-- legacy (el alta por API exige NIT). NULL/'' se guardan como NULL vía NULLIF.
+CREATE UNIQUE INDEX institucion_nit_uniq ON institucion (nit) WHERE nit IS NOT NULL AND nit <> '';
+
 -- ============================================================
--- VisitadorMedico (tabla de relación visitas)
+-- Visita (visita programada por admin y registrada por visitador)
+-- id_medico opcional: si la visita es a un médico concreto.
+-- institucion_id opcional: si la visita es a una institución.
 -- ============================================================
-CREATE TABLE visitador_medico (
+CREATE TABLE visita (
+    id SERIAL PRIMARY KEY,
     id_visitador INTEGER NOT NULL REFERENCES persona(id) ON DELETE CASCADE,
-    id_medico INTEGER NOT NULL REFERENCES medico(persona_id) ON DELETE CASCADE,
-    fecha_visita TIMESTAMPTZ DEFAULT NOW(),
+    id_medico INTEGER REFERENCES medico(persona_id) ON DELETE CASCADE,
+    institucion_id INTEGER REFERENCES institucion(id) ON DELETE SET NULL,
+    fecha_visita TIMESTAMPTZ,
+    fecha_visita_tentativa TIMESTAMPTZ,
+    -- GPS del VISITADOR al completar la visita (auditoría). NULL si no se capturó.
+    -- La ubicación del destino va aparte, en destino_* (snapshot inmutable).
+    latitud NUMERIC(10,7),
+    longitud NUMERIC(10,7),
+    -- Qué ubicación del destino se visitó (id dentro de direccion[]) y su snapshot.
+    ubicacion_destino_id VARCHAR(50),
+    destino_direccion TEXT,
+    destino_latitud NUMERIC(10,7),
+    destino_longitud NUMERIC(10,7),
+    gps_precision_m NUMERIC(8,1),
+    -- Metros entre el GPS del visitador y el pin del destino (calculado en el servidor).
+    distancia_destino_m NUMERIC(10,1),
+    sin_evidencia_ubicacion BOOLEAN NOT NULL DEFAULT false,
+    -- Visita extraordinaria: se registra en campo, sin fecha tentativa.
+    extraordinaria BOOLEAN NOT NULL DEFAULT false,
+    firma TEXT DEFAULT '',
     observacion JSONB DEFAULT '{}',
     satisfaccion SMALLINT DEFAULT 0 CHECK (satisfaccion BETWEEN 0 AND 5),
     duracion SMALLINT DEFAULT 0,
     ingreso DECIMAL(10,2) DEFAULT 0,
-    papeleta INTEGER DEFAULT 0,
-    PRIMARY KEY (id_visitador, id_medico, fecha_visita)
+    registrada BOOLEAN DEFAULT false,
+    estado VARCHAR(20) NOT NULL DEFAULT 'por_visitar'
 );
 
-CREATE INDEX idx_vm_visitador ON visitador_medico(id_visitador);
-CREATE INDEX idx_vm_medico ON visitador_medico(id_medico);
-CREATE INDEX idx_vm_fecha ON visitador_medico(fecha_visita);
+CREATE INDEX idx_vm_visitador ON visita(id_visitador);
+CREATE INDEX idx_vm_medico ON visita(id_medico);
+CREATE INDEX idx_vm_institucion ON visita(institucion_id);
+CREATE INDEX idx_vm_fecha ON visita(fecha_visita);
+CREATE INDEX idx_vm_fecha_tentativa ON visita(fecha_visita_tentativa);
 
 -- ============================================================
 -- Users (auth JWT) - hereda datos de persona
@@ -122,3 +219,32 @@ CREATE TABLE users (
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_role ON users(role);
 CREATE INDEX idx_users_persona ON users(persona_id);
+
+-- ============================================================
+-- VisitaLaboratorio (intersección visita <-> estudios solicitados)
+-- costo: precio cobrado en la visita (según la ciudad del médico o de la
+-- institución y comisión si es particular), calculado al agregar el estudio.
+-- ============================================================
+CREATE TABLE visita_laboratorio (
+    visita_id INTEGER NOT NULL REFERENCES visita(id) ON DELETE CASCADE,
+    laboratorio_id INTEGER NOT NULL REFERENCES laboratorio(id) ON DELETE CASCADE,
+    costo NUMERIC(10,2) NOT NULL DEFAULT 0,
+    cantidad INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (visita_id, laboratorio_id)
+);
+
+CREATE INDEX idx_vl_laboratorio ON visita_laboratorio(laboratorio_id);
+
+-- Tokens para restablecer contraseña
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) NOT NULL,
+  token VARCHAR(255) NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token ON password_reset_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_email ON password_reset_tokens(email);

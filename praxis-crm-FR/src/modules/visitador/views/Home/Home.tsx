@@ -1,9 +1,13 @@
-import { useState } from 'react'
-import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { MapContainer, TileLayer, Marker, Polyline, Popup, CircleMarker } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { SidebarMenu } from '../../components/SidebarMenu/SidebarMenu'
-import { VisitDetailExpanded, type ExpandedVisit } from '../../components/VisitDetailExpanded'
+import { storage } from '../../../core/lib/storage'
+import { centroCiudad, centroide } from '../../../core/utils/ciudadCentro'
+import { useMisVisitas, visitaToACompletar, type VisitaResuelta, type DestinoInfo } from '../../hooks/useMisVisitas'
+import { cuentaVencidas } from '../../hooks/useNotificaciones'
+import type { VisitaACompletar } from '../CompletarVisita/CompletarVisita'
 import './Home.css'
 
 // Fix default icon issue in Vite
@@ -19,95 +23,11 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 })
 
-type Visit = {
-  id: string
-  dateLabel: string
-  time: string
-  company: string
-  detail: string
-  coords: [number, number]
-  addr: string
-  contact: string
-  phone: string
-  status: string
-  description: string
-  medico: { nombre: string; especialidad: string; hospital: string; phone: string }
+const pad = (n: number) => String(n).padStart(2, '0')
+const hoyKey = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
-
-const VISITS: Visit[] = [
-  {
-    id: '1',
-    dateLabel: 'Hoy',
-    time: '10:00',
-    company: 'TecnoCorp S.A.',
-    detail: 'Mantenimiento Preventivo Servidores',
-    coords: [-0.1807, -78.478],
-    addr: 'Torre Central, Piso 8 - Av. Amazonas',
-    contact: 'Carlos Ruiz',
-    phone: '+507 6123-9988',
-    status: 'Programada',
-    description: 'Mantenimiento preventivo de servidores. Coordinar acceso con seguridad y llevar checklist de verificación.',
-    medico: { nombre: 'Dr. Roberto García', especialidad: 'Cardiólogo', hospital: 'Hospital Ángeles Metropolitana', phone: '+507 6123-4455' },
-  },
-  {
-    id: '2',
-    dateLabel: 'Hoy',
-    time: '14:30',
-    company: 'Constructora Andes',
-    detail: 'Inspección de Obra y Firma de Avance',
-    coords: [-0.184, -78.465],
-    addr: 'Obra Vía Interoceánica, Galpón B',
-    contact: 'Ing. Valeria Mora',
-    phone: '+507 6345-1120',
-    status: 'Confirmada',
-    description: 'Inspección de avance de obra y firma de acta. Requiere casco y credencial.',
-    medico: { nombre: 'Dra. María López', especialidad: 'Pediatra', hospital: 'Clínica Infantil San José', phone: '+507 6345-7788' },
-  },
-  {
-    id: '3',
-    dateLabel: 'Mañ',
-    time: '09:00',
-    company: 'Logística Central',
-    detail: 'Reunión de Renovación de Contrato',
-    coords: [-0.195, -78.486],
-    addr: 'Km 7 Vía Tocumen, Oficina 201',
-    contact: 'Lic. Jorge Pineda',
-    phone: '+507 6770-3344',
-    status: 'Programada',
-    description: 'Reunión para renovación de contrato anual. Llevar propuesta comercial actualizada.',
-    medico: { nombre: 'Dr. Carlos Mendoza', especialidad: 'Traumatólogo', hospital: 'Centro Médico ABC', phone: '+507 6770-9900' },
-  },
-  {
-    id: '4',
-    dateLabel: '24 Oct',
-    time: '11:00',
-    company: 'Retail Plaza',
-    detail: 'Instalación de Terminales POS',
-    coords: [-0.172, -78.472],
-    addr: 'Local 105, Vía España',
-    contact: 'Ana Jiménez',
-    phone: '+507 6550-1100',
-    status: 'En curso',
-    description: 'Instalación y prueba de 3 terminales POS. Capacitar a cajeros y dejar manual.',
-    medico: { nombre: 'Dra. Ana Sofía Ruiz', especialidad: 'Ginecóloga', hospital: 'Hospital Delta Especialidades', phone: '+507 6550-3366' },
-  },
-  {
-    id: '5',
-    dateLabel: '25 Oct',
-    time: '16:00',
-    company: 'Clínica San José',
-    detail: 'Demo técnica de Software Médico',
-    coords: [-0.189, -78.455],
-    addr: 'Auditorio Principal - Clínica San José',
-    contact: 'Dra. Sofía Hernández',
-    phone: '+507 6777-2233',
-    status: 'Programada',
-    description: 'Demo de software médico Praxis v2.4. Llevar proyector y muestras impresas.',
-    medico: { nombre: 'Dra. Sofía Hernández', especialidad: 'Medicina General', hospital: 'Clínica San José', phone: '+507 6777-2233' },
-  },
-]
-
-const route: [number, number][] = VISITS.slice(0, 4).map((v) => v.coords)
 
 function createColorIcon(color: string) {
   return L.divIcon({
@@ -120,36 +40,105 @@ function createColorIcon(color: string) {
 
 const markerColors = ['#F9B233', '#2D9C9C', '#E94E6B', '#4A7CF7', '#7B5CFF']
 
-type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos'
+// Zoom mínimo del mapa de la ruta. Más abajo se ve el país entero, que no
+// sirve de nada para una visita dentro de la ciudad.
+const ZOOM_MIN_RUTA = 12
+
+type View = 'home' | 'registro' | 'calendario' | 'planificador' | 'perfil' | 'notificaciones' | 'medicos' | 'instituciones' | 'comentarios' | 'historial' | 'cartera' | 'completar-visita'
 
 interface HomeProps {
   onNavigate: (view: View) => void
   currentView: View
   onLogout: () => void
+  onCompletar?: (visita: VisitaACompletar) => void
 }
 
-function toExpanded(v: Visit): ExpandedVisit {
-  return {
-    id: v.id,
-    time: v.time,
-    dateLabel: v.dateLabel,
-    company: v.company,
-    detail: v.detail,
-    addr: v.addr,
-    contact: v.contact,
-    phone: v.phone,
-    status: v.status,
-    description: v.description,
-    coords: v.coords,
-    medico: v.medico,
-  }
-}
-
-export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, onLogout }) => {
-  const center: [number, number] = [-0.1807, -78.4678]
+export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, onLogout, onCompletar }) => {
+  const { porVisitar, loading, miCiudad } = useMisVisitas()
+  // El punto rojo del encabezado solo se enciende si hay algo vencido de
+  // verdad: antes estaba siempre encendido, incluso con la ruta al día.
+  const vencidas = useMemo(() => cuentaVencidas(porVisitar), [porVisitar])
   const [menuOpen, setMenuOpen] = useState(false)
-  const [detail, setDetail] = useState<Visit | null>(null)
-  const [expanded, setExpanded] = useState<ExpandedVisit | null>(null)
+  const [detail, setDetail] = useState<VisitaResuelta | null>(null)
+  // Índice de la visita enfocada al recorrer la ruta con el control del mapa.
+  // -1 = ninguna enfocada; cada clic en "siguiente" avanza y envuelve.
+  const [foco, setFoco] = useState(-1)
+  const mapRef = useRef<L.Map | null>(null)
+
+  const hoy = hoyKey()
+  const pendientesHoy = useMemo(() => porVisitar.filter((v) => v.fecha === hoy), [porVisitar, hoy])
+  const pendientesHoySur = useMemo(
+    () => (pendientesHoy.length > 0 ? pendientesHoy : porVisitar.slice(0, 4)),
+    [pendientesHoy, porVisitar],
+  )
+
+  // Solo las visitas con pin se pueden dibujar. Una sin coordenadas no debería
+  // "aparecer" sobre Quito ni deformar la polyline de la ruta.
+  const conPin = useMemo(
+    () =>
+      pendientesHoySur.filter(
+        (v): v is VisitaResuelta & { destino: DestinoInfo & { coords: [number, number] } } =>
+          Array.isArray(v.destino.coords) && v.destino.coords.length === 2,
+      ),
+    [pendientesHoySur],
+  )
+  // Posición propia guardada al iniciar sesión (pin azul "usted está aquí").
+  // Va en useMemo para que el array no cambie de referencia en cada render:
+  // el efecto que centra el mapa depende de él.
+  const miPos = useMemo<[number, number] | null>(() => {
+    const u = storage.getUbicacion()
+    return u && Number.isFinite(u.latitud) && Number.isFinite(u.longitud) ? [u.latitud, u.longitud] : null
+  }, [])
+  // El mapa arranca en el centro de la ciudad del visitador, no en un pin
+  // suelto. Es lo único estable: el primer destino cambia según las visitas
+  // del día, y encuadrar la ruta entera aleja el mapa hasta mostrar el país.
+  const ciudadCentro = useMemo(
+    () => centroCiudad(miCiudad?.nombre) ?? centroide(conPin.map((v) => v.destino.coords)) ?? miPos,
+    [miCiudad?.nombre, conPin, miPos],
+  )
+  const center = ciudadCentro ?? conPin[0]?.destino.coords ?? miPos
+  // Zoom de ciudad: 13 entra el área urbana, 14 solo se usa si no se conoce la
+  // ciudad y hay que acercarse al menos a los destinos.
+  const ZOOM_CIUDAD = 13
+
+  // Visitas con pin ordenadas de la más próxima a la más lejana en el tiempo:
+  // es el orden que recorre el botón "siguiente visita".
+  const conPinOrdenado = useMemo(
+    () => [...conPin].sort((a, b) => a.hora.localeCompare(b.hora)),
+    [conPin],
+  )
+
+  const centrarEnMiUbicacion = () => {
+    if (!miPos) return
+    mapRef.current?.setView(miPos, 16)
+  }
+
+  // El mapa se centra en el centro de la ciudad cuando la carga termina.
+  // MapContainer solo lee `center` en el primer render, así que sin esto el
+  // mapa queda donde se montó (con los datos todavía vacíos) y nunca se
+  // corrige aunque después lleguen la ciudad y los destinos.
+  const centerKey = center ? center.join(',') : ''
+  useEffect(() => {
+    const mapa = mapRef.current
+    if (!mapa || !centerKey) return
+    mapa.setView(centerKey.split(',').map(Number) as [number, number], ZOOM_CIUDAD, { animate: false })
+  }, [centerKey])
+
+  // Al abrir el detalle de una visita el mapa va a ese destino.
+  const abrirDetalle = (v: VisitaResuelta) => {
+    setDetail(v)
+    const coords = v.destino.coords
+    if (Array.isArray(coords) && coords.length === 2) {
+      mapRef.current?.setView(coords, 16)
+    }
+  }
+
+  const siguienteVisita = () => {
+    if (conPinOrdenado.length === 0) return
+    const n = foco >= conPinOrdenado.length - 1 ? 0 : foco + 1
+    setFoco(n)
+    mapRef.current?.setView(conPinOrdenado[n].destino.coords, 15)
+  }
 
   return (
     <div className="visitador-page">
@@ -165,7 +154,7 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
             <path d="M6 8a6 6 0 0 1 12 0c0 7-6 11-6 11s-6-4-6-11" />
             <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
           </svg>
-          <span className="notification-dot" />
+          {vencidas > 0 && <span className="notification-dot" />}
         </button>
       </header>
       <SidebarMenu open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={onNavigate} currentView={currentView} onLogout={onLogout} />
@@ -174,31 +163,103 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
         <section className="map-card">
           <div className="map-badge">
             <span className="badge-dot" />
-            3 Visitas Pendientes
+            {loading ? 'Cargando…' : `${porVisitar.length} Visitas Pendientes`}
           </div>
           <div className="map-wrapper">
-            <MapContainer
+            {!center ? (
+              <div className="home-mapa-vacio">
+                <span>Sin coordenadas en la ruta</span>
+                <small>Ninguna visita pendiente tiene ubicación geocodificada. Se muestran igual en la lista.</small>
+              </div>
+            ) : (
+              <>
+              <MapContainer
+              ref={mapRef}
               center={center}
-              zoom={13}
+              zoom={ZOOM_CIUDAD}
+              minZoom={ZOOM_MIN_RUTA}
               scrollWheelZoom={false}
               className="osm-map"
               zoomControl={false}
             >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-              <Polyline positions={route} pathOptions={{ color: '#F9B233', weight: 4, opacity: 0.9 }} />
-              {VISITS.slice(0, 4).map((v, idx) => (
-                <Marker key={v.id} position={v.coords} icon={createColorIcon(markerColors[idx % markerColors.length])}>
-                  <Popup>
-                    <strong>{v.company}</strong>
-                    <br />
-                    {v.detail}
-                  </Popup>
-                </Marker>
-              ))}
-            </MapContainer>
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                {conPin.length > 1 && (
+                  <Polyline
+                    positions={conPin.map((v) => v.destino.coords)}
+                    pathOptions={{ color: '#F9B233', weight: 4, opacity: 0.9 }}
+                  />
+                )}
+                {conPin.slice(0, 4).map((v, idx) => (
+                  <Marker key={v.id} position={v.destino.coords} icon={createColorIcon(markerColors[idx % markerColors.length])}>
+                    <Popup>
+                      <strong>{v.destino.nombre}</strong>
+                      <br />
+                      {v.destino.subtitulo || 'Médico/Institución'}
+                    </Popup>
+                  </Marker>
+                ))}
+                {miPos && (
+                  <CircleMarker
+                    center={miPos}
+                    radius={9}
+                    pathOptions={{ color: '#2563EB', weight: 2, fillColor: '#2563EB', fillOpacity: 0.55 }}
+                  >
+                    <Popup>Tu ubicación actual</Popup>
+                  </CircleMarker>
+                )}
+                {foco >= 0 && conPinOrdenado[foco] && (
+                  <CircleMarker
+                    center={conPinOrdenado[foco].destino.coords}
+                    radius={17}
+                    pathOptions={{ color: '#1B2A4E', weight: 2, fillColor: '#F9B233', fillOpacity: 0.25 }}
+                  >
+                    <Popup>
+                      <strong>{conPinOrdenado[foco].destino.nombre}</strong>
+                      <br />
+                      {conPinOrdenado[foco].destino.subtitulo || 'Médico/Institución'}
+                    </Popup>
+                  </CircleMarker>
+                )}
+              </MapContainer>
+              <div className="map-controls">
+                <button
+                  type="button"
+                  className="map-control-btn"
+                  onClick={centrarEnMiUbicacion}
+                  aria-label="Centrar en tu ubicación"
+                  title="Centrar en tu ubicación"
+                  disabled={!miPos}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+                    <circle cx="12" cy="12" r="7" />
+                    <circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none" />
+                    <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="map-control-btn"
+                  onClick={siguienteVisita}
+                  aria-label="Siguiente visita de la ruta"
+                  title="Siguiente visita de la ruta"
+                  disabled={conPinOrdenado.length === 0}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 21s-7-6.1-7-11a7 7 0 1 1 14 0c0 4.9-7 11-7 11z" />
+                    <circle cx="12" cy="10" r="2.5" />
+                  </svg>
+                  {conPinOrdenado.length > 0 && (
+                    <span className="map-control-count">
+                      {foco < 0 ? 1 : foco + 1}/{conPinOrdenado.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+              </>
+            )}
           </div>
         </section>
 
@@ -207,7 +268,7 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
               <path d="M12 5v14M5 12h14" />
             </svg>
-            Registrar Visita
+            Visita Extraordinaria
           </button>
           <button className="btn-calendar" onClick={() => onNavigate('calendario')}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -220,94 +281,104 @@ export const VisitadorHome: React.FC<HomeProps> = ({ onNavigate, currentView, on
 
         <section className="visits-card">
           <div className="visits-header">
-            <h2>Próximas Visitas</h2>
-            <button className="view-all" onClick={() => onNavigate('calendario')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-              Ver todo
-            </button>
+            <h2>Visitas programadas</h2>
+            <span style={{ fontSize: 11, color: '#7e8aa6', fontWeight: 600 }}>{pendientesHoy.length} hoy</span>
           </div>
 
-          <ul className="visits-list">
-            {VISITS.map((v) => (
-              <li key={v.id} className="visit-item">
-                <div className="visit-date">
-                  <span className="visit-date-label">{v.dateLabel}</span>
-                  <span className="visit-time">{v.time}</span>
-                </div>
-                <div className="visit-info">
-                  <span className="visit-company">{v.company}</span>
-                  <span className="visit-detail">{v.detail}</span>
-                </div>
-                <button className="visit-chevron" aria-label={`Ver detalle de ${v.company}`} onClick={() => setDetail(v)}>
-                  ›
-                </button>
-              </li>
-            ))}
-          </ul>
+          {pendientesHoy.length === 0 ? (
+            <p style={{ fontSize: 12, color: '#7e8aa6', padding: '12px 0', textAlign: 'center' }}>
+              {loading ? 'Cargando…' : 'No hay visitas programadas para hoy'}
+            </p>
+          ) : (
+            <ul className="visits-list">
+              {pendientesHoy.map((v) => (
+                <li key={v.id} className="visit-item" onClick={() => abrirDetalle(v)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && abrirDetalle(v)} style={{ cursor: 'pointer' }}>
+                  <div className="visit-date">
+                    <span className="visit-date-label">{v.fecha === hoy ? 'Hoy' : v.fecha ?? '—'}</span>
+                    <span className="visit-time">{v.hora}</span>
+                  </div>
+                  <div className="visit-info">
+                    <span className="visit-company">{v.destino.nombre}</span>
+                    <span className="visit-detail">{v.destino.subtitulo || (v.tipo === 'institucion' ? 'Institución' : 'Médico')}</span>
+                  </div>
+                  <span className="visit-status-badge status-pendiente">{v.tipo === 'institucion' ? 'Institución' : 'Médico'}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <button className="view-all" onClick={() => onNavigate('calendario')} style={{ background: 'none', border: 'none', cursor: 'pointer', marginTop: 8, fontSize: 12, color: '#2d9c9c', fontWeight: 600, textAlign: 'left', padding: 0 }}>
+            ver más visitas en el calendario →
+          </button>
         </section>
       </div>
 
       {detail && (
         <div className="visit-detail-overlay" onClick={() => setDetail(null)}>
-          <div className="visit-detail-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Detalle de ${detail.company}`}>
+          <div className="visit-detail-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={`Detalle de ${detail.destino.nombre}`}>
             <div className="visit-detail-header">
-              <span className="visit-detail-badge">{detail.time} · {detail.dateLabel}</span>
-              <span className={`visit-detail-status status-${detail.status.toLowerCase().replace(' ', '-')}`}>{detail.status}</span>
-              <button
-                className="visit-detail-expand"
-                onClick={() => {
-                  setExpanded(toExpanded(detail))
-                }}
-                aria-label="Ver detalle completo"
-                title="Ver detalle completo con mapa y médico"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M15 3h6v6" />
-                  <path d="M9 21H3v-6" />
-                  <path d="M21 3l-7 7" />
-                  <path d="M3 21l7-7" />
-                </svg>
-              </button>
+              <span className="visit-detail-badge">{detail.hora} · {detail.fecha ?? 'Sin fecha'}</span>
+              <span className="visit-detail-status">{detail.tipo === 'institucion' ? 'Institución' : 'Médico'}</span>
               <button className="visit-detail-close" onClick={() => setDetail(null)} aria-label="Cerrar">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <h3 className="visit-detail-title">{detail.company}</h3>
+            <h3 className="visit-detail-title">{detail.destino.nombre}</h3>
+            <p className="visit-detail-subtitle">{detail.destino.subtitulo || (detail.tipo === 'institucion' ? 'Institución de salud' : 'Médico')}</p>
             <p className="visit-detail-addr">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7a99" strokeWidth="1.8">
                 <path d="M12 21s-6-4.5-6-10a6 6 0 0 1 12 0c0 5.5-6 10-6 10z" />
                 <circle cx="12" cy="11" r="2" />
               </svg>
-              {detail.addr}
+              {detail.destino.direccion}
             </p>
-            <p className="visit-detail-subtitle">{detail.detail}</p>
             <div className="visit-detail-grid">
               <div className="visit-detail-field">
-                <span className="visit-detail-label">CONTACTO</span>
-                <span className="visit-detail-value">{detail.contact}</span>
+                <span className="visit-detail-label">TIPO</span>
+                <span className="visit-detail-value">{detail.tipo === 'institucion' ? 'Institución' : 'Médico'}</span>
               </div>
               <div className="visit-detail-field">
-                <span className="visit-detail-label">TELÉFONO</span>
-                <span className="visit-detail-value">{detail.phone}</span>
+                <span className="visit-detail-label">MODALIDAD</span>
+                <span className="visit-detail-value">{detail.destino.particular ? 'Particular' : 'Programada'}</span>
               </div>
             </div>
             <div className="visit-detail-field">
-              <span className="visit-detail-label">DESCRIPCIÓN</span>
-              <p className="visit-detail-desc">{detail.description}</p>
+              <span className="visit-detail-label">DESTINO</span>
+              <p className="visit-detail-desc">{detail.destino.nombre} · {detail.destino.subtitulo}</p>
+            </div>
+            <div style={{ marginTop: 12, background: '#f8f9fb', border: '1px solid #eef1f5', borderRadius: 10, padding: 12, display: 'flex', gap: 12, alignItems: 'center' }}>
+              <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg,#1B2A4E,#2d9c9c)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
+                {detail.destino.nombre.split(' ').filter((w) => w.length > 2).slice(0, 2).map((w) => w[0]).join('').slice(0, 2)}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1B2A4E' }}>{detail.destino.nombre}</div>
+                <div style={{ fontSize: 11, color: '#2d9c9c' }}>{detail.destino.subtitulo || 'Médico/Institución'}</div>
+                <div style={{ fontSize: 11, color: '#6b7a99' }}>{detail.destino.direccion}</div>
+              </div>
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <button className="visit-detail-primary" style={{ flex: 1 }} onClick={() => setExpanded(toExpanded(detail))}>
-                Ver Detalle Completo
-              </button>
-              <button className="visit-detail-primary" style={{ flex: 1, background: '#fff', color: '#1b2a4e', border: '1px solid #e8ecf1' }} onClick={() => setDetail(null)}>
-                Cerrar
+              <button
+                className="visit-detail-primary"
+                style={{ flex: 1, background: '#F9B233', color: '#fff', border: 'none' }}
+                onClick={() => {
+                  const v = detail
+                  setDetail(null)
+                  if (onCompletar) {
+                    onCompletar(visitaToACompletar(v))
+                  } else {
+                    onNavigate('registro')
+                  }
+                }}
+              >
+                Completar visita
               </button>
             </div>
           </div>
         </div>
       )}
-      {expanded && <VisitDetailExpanded visit={expanded} onClose={() => setExpanded(null)} />}
     </div>
   )
 }
+
+export default VisitadorHome

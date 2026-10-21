@@ -49,8 +49,8 @@ func (h *PersonaHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Nombres == "" || req.Apellidos == "" {
-		response.Error(w, http.StatusBadRequest, "nombres y apellidos son requeridos")
+	if req.Nombre == "" || req.PrimerApellido == "" {
+		response.Error(w, http.StatusBadRequest, "nombre y primer apellido son requeridos")
 		return
 	}
 

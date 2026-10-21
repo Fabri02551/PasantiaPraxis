@@ -25,7 +25,7 @@ func (r *AccionRepository) GetAll(ctx context.Context) ([]models.Accion, error) 
 	}
 	defer rows.Close()
 
-	var acciones []models.Accion
+	var acciones []models.Accion = []models.Accion{}
 	for rows.Next() {
 		var a models.Accion
 		if err := rows.Scan(&a.ID, &a.NombreAccion, &a.Ciudad, &a.Detalle,
