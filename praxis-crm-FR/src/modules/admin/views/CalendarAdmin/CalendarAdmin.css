@@ -170,7 +170,7 @@
   backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
-  z-index: 120;
+  z-index: 2000;
   padding: 16px;
 }
 
@@ -230,7 +230,7 @@
 .cal-visit-medico-name { font-size: 12px; font-weight: 700; color: #1B2A4E; }
 .cal-visit-medico-spec { font-size: 11px; color: #2d9c9c; }
 .cal-visit-medico-hosp { font-size: 11px; color: #7e8aa6; }
-.cal-visit-map-wrap { border-radius: 8px; overflow: hidden; border: 1px solid #e8ecf1; }
+.cal-visit-map-wrap { border-radius: 8px; overflow: hidden; border: 1px solid #e8ecf1; position: relative; isolation: isolate; }
 .cal-visit-map-link { font-size: 11px; font-weight: 600; color: #2d9c9c; text-decoration: none; }
 .cal-visit-map-link:hover { text-decoration: underline; }
 .cal-visit-footer { padding: 12px 16px; border-top: 1px solid #e8ecf1; display: flex; justify-content: flex-end; }

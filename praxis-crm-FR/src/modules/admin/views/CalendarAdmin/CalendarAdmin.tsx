@@ -284,7 +284,7 @@ export const CalendarAdminView: React.FC<{ currentView: AdminView; onNavigate: (
                   <p style={{ fontSize: 11, fontWeight: 700, color: '#1B2A4E', margin: '0 0 6px' }}>Ubicación del médico</p>
                   <p style={{ fontSize: 11.5, color: '#6b7a99', margin: '0 0 6px' }}>📍 {medicoUbi.texto || '—'}</p>
                   <div className="cal-visit-map-wrap">
-                    <MapContainer center={medicoUbi.coords ?? COCHABAMBA_COORDS} zoom={13} scrollWheelZoom={false} style={{ height: 150, width: '100%' }}>
+                    <MapContainer key={`medico-${medicoUbi.coords ? medicoUbi.coords.join(',') : 'sin-coords'}`} center={medicoUbi.coords ?? COCHABAMBA_COORDS} zoom={13} scrollWheelZoom={false} style={{ height: 150, width: '100%' }}>
                       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="© OSM" />
                       <Marker position={medicoUbi.coords ?? COCHABAMBA_COORDS} />
                     </MapContainer>
@@ -296,7 +296,7 @@ export const CalendarAdminView: React.FC<{ currentView: AdminView; onNavigate: (
                     {reporteCoords ? `📍 ${reporteCoords[0].toFixed(5)}, ${reporteCoords[1].toFixed(5)}` : 'Sin coordenadas de reporte'}
                   </p>
                   <div className="cal-visit-map-wrap">
-                    <MapContainer center={reporteCoords ?? COCHABAMBA_COORDS} zoom={13} scrollWheelZoom={false} style={{ height: 150, width: '100%' }}>
+                    <MapContainer key={`reporte-${reporteCoords ? reporteCoords.join(',') : 'sin-coords'}`} center={reporteCoords ?? COCHABAMBA_COORDS} zoom={13} scrollWheelZoom={false} style={{ height: 150, width: '100%' }}>
                       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="© OSM" />
                       <Marker position={reporteCoords ?? COCHABAMBA_COORDS} />
                     </MapContainer>
@@ -411,6 +411,7 @@ export const CalendarAdminView: React.FC<{ currentView: AdminView; onNavigate: (
               <p style={{ fontSize: 11, fontWeight: 700, color: '#1B2A4E', margin: '4px 0 0' }}>Ubicación del reporte</p>
               <div className="cal-visit-map-wrap">
                 <MapContainer
+                  key={`visita-${activeVisit.id ?? 'x'}-${activeVisit.latitud ?? 'x'}-${activeVisit.longitud ?? 'x'}`}
                   center={activeVisit.latitud != null && activeVisit.longitud != null ? [activeVisit.latitud, activeVisit.longitud] : COCHABAMBA_COORDS}
                   zoom={13}
                   scrollWheelZoom={false}
