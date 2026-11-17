@@ -36,6 +36,7 @@ interface EditMedicoForm {
   sexo: string
   matricula: string
   especialidad: string
+  visitadorId: string
   telefono: string
   email: string
   ci: string
@@ -72,6 +73,14 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
   const savingRef = useRef(false)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null)
 
+  // Transferencia de cartera (individual por modal y múltiple en lista)
+  const [transferMedico, setTransferMedico] = useState<MedicoFila | null>(null)
+  const [transferDestinoId, setTransferDestinoId] = useState<string>('')
+  const [modoSeleccion, setModoSeleccion] = useState(false)
+  const [seleccionadosIds, setSeleccionadosIds] = useState<number[]>([])
+  const [bulkDestinoId, setBulkDestinoId] = useState<string>('')
+  const [transferring, setTransferring] = useState(false)
+
   const showToast = useCallback((msg: string, type: 'success' | 'error' | 'info') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 4000)
@@ -79,6 +88,42 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
 
   // Cache en memoria por visitador_id para que cambiar de visitador sea instantáneo
   const [carterasCache, setCarterasCache] = useState<Record<number, MedicoFila[]>>({})
+
+  const moverMedicosEnMemoria = useCallback(
+    (origenVid: number, destinoVid: number, medicosMovidos: MedicoFila[]) => {
+      if (origenVid === destinoVid || medicosMovidos.length === 0) return
+      const idsSet = new Set(medicosMovidos.map((m) => m.persona_id))
+      const cantidad = medicosMovidos.length
+
+      setCarterasCache((prev) => {
+        const next = { ...prev }
+        if (next[origenVid]) {
+          next[origenVid] = next[origenVid].filter((m) => !idsSet.has(m.persona_id))
+        }
+        if (next[destinoVid]) {
+          const existentes = new Set(next[destinoVid].map((m) => m.persona_id))
+          const nuevos = medicosMovidos.filter((m) => !existentes.has(m.persona_id))
+          next[destinoVid] = [...next[destinoVid], ...nuevos].sort((a, b) =>
+            a.nombre.localeCompare(b.nombre, 'es')
+          )
+        }
+        return next
+      })
+
+      setVisitadores((prev) =>
+        prev.map((v) => {
+          if (v.persona_id === origenVid) {
+            return { ...v, total_medicos: Math.max(0, (v.total_medicos ?? 0) - cantidad) }
+          }
+          if (v.persona_id === destinoVid) {
+            return { ...v, total_medicos: (v.total_medicos ?? 0) + cantidad }
+          }
+          return v
+        })
+      )
+    },
+    []
+  )
 
   // Carga inicial: visitadores, especialidades y ciudades
   useEffect(() => {
@@ -185,6 +230,100 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
     )
   }, [carterasCache, seleccionado, busqueda])
 
+  const visitadoresDestino = useMemo(() => {
+    return visitadoresOrdenados.filter((v) => v.persona_id !== seleccionado)
+  }, [visitadoresOrdenados, seleccionado])
+
+  const handleOpenTransfer = (f: MedicoFila) => {
+    setTransferMedico(f)
+    const firstOther = visitadoresDestino[0]?.persona_id
+    setTransferDestinoId(firstOther ? String(firstOther) : '')
+  }
+
+  const handleConfirmTransferSingle = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!transferMedico || !transferDestinoId || seleccionado == null || savingRef.current) return
+    const destinoVid = Number(transferDestinoId)
+    if (!destinoVid || destinoVid === seleccionado) {
+      showToast('Selecciona un visitador destino diferente al actual', 'error')
+      return
+    }
+
+    savingRef.current = true
+    setTransferring(true)
+    try {
+      await medicoService.update(transferMedico.persona_id, { visitador_id: destinoVid })
+      moverMedicosEnMemoria(seleccionado, destinoVid, [transferMedico])
+      const destObj = visitadores.find((v) => v.persona_id === destinoVid)
+      const destNombre = destObj ? nombreVisitador(destObj) : `ID ${destinoVid}`
+      showToast(`Médico transferido a la cartera de ${destNombre} ✓`, 'success')
+      setTransferMedico(null)
+      setTransferDestinoId('')
+    } catch (err) {
+      console.warn('[CarteraAdmin] Error al transferir médico', err)
+      const msg = err instanceof Error ? err.message : String(err)
+      showToast(`No se pudo transferir ✗ ${msg}`, 'error')
+    } finally {
+      savingRef.current = false
+      setTransferring(false)
+    }
+  }
+
+  const toggleSeleccionMedico = (personaId: number) => {
+    setSeleccionadosIds((prev) =>
+      prev.includes(personaId) ? prev.filter((id) => id !== personaId) : [...prev, personaId]
+    )
+  }
+
+  const toggleSeleccionarTodos = () => {
+    const visiblesIds = filasActuales.map((f) => f.persona_id)
+    const todosMarcados = visiblesIds.length > 0 && visiblesIds.every((id) => seleccionadosIds.includes(id))
+    if (todosMarcados) {
+      setSeleccionadosIds((prev) => prev.filter((id) => !visiblesIds.includes(id)))
+    } else {
+      setSeleccionadosIds((prev) => Array.from(new Set([...prev, ...visiblesIds])))
+    }
+  }
+
+  const handleConfirmTransferBulk = async () => {
+    if (seleccionado == null || seleccionadosIds.length === 0 || !bulkDestinoId || savingRef.current) return
+    const destinoVid = Number(bulkDestinoId)
+    if (!destinoVid || destinoVid === seleccionado) {
+      showToast('Selecciona un visitador destino válido', 'error')
+      return
+    }
+
+    const listaOrigen = carterasCache[seleccionado] || []
+    const medicosATransferir = listaOrigen.filter((m) => seleccionadosIds.includes(m.persona_id))
+    if (medicosATransferir.length === 0) return
+
+    savingRef.current = true
+    setTransferring(true)
+    try {
+      await Promise.all(
+        medicosATransferir.map((m) => medicoService.update(m.persona_id, { visitador_id: destinoVid }))
+      )
+      moverMedicosEnMemoria(seleccionado, destinoVid, medicosATransferir)
+      const destObj = visitadores.find((v) => v.persona_id === destinoVid)
+      const destNombre = destObj ? nombreVisitador(destObj) : `ID ${destinoVid}`
+      const n = medicosATransferir.length
+      showToast(
+        `${n === 1 ? '1 médico transferido' : `${n} médicos transferidos`} a la cartera de ${destNombre} ✓`,
+        'success'
+      )
+      setSeleccionadosIds([])
+      setModoSeleccion(false)
+      setBulkDestinoId('')
+    } catch (err) {
+      console.warn('[CarteraAdmin] Error en transferencia múltiple', err)
+      const msg = err instanceof Error ? err.message : String(err)
+      showToast(`Error al transferir médicos ✗ ${msg}`, 'error')
+    } finally {
+      savingRef.current = false
+      setTransferring(false)
+    }
+  }
+
   const handleStartEdit = async (f: MedicoFila) => {
     const pid = f.persona_id
     setLoadingEdit(true)
@@ -208,6 +347,7 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
         sexo: persona?.sexo || '',
         matricula: medico.matricula || f.matricula,
         especialidad: String(medico.especialidad_id || ''),
+        visitadorId: String(medico.visitador_id ?? seleccionado ?? ''),
         telefono: persona?.telefono || '',
         email: persona?.correo || '',
         ci: persona?.ci || '',
@@ -248,6 +388,7 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
 
     const pid = Number(editForm.id)
     const ubicacionesValidas = editForm.ubicaciones.filter(u => u.direccion.trim() || u.detalle.trim())
+    const nuevoVisitadorId = editForm.visitadorId ? Number(editForm.visitadorId) : null
 
     savingRef.current = true
     setSaving(true)
@@ -266,6 +407,7 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
       await medicoService.update(pid, {
         matricula: editForm.matricula.trim(),
         especialidad_id: Number(editForm.especialidad),
+        visitador_id: nuevoVisitadorId ?? undefined,
         es_particular: editForm.esParticular,
         clasificacion: editForm.clasificacion,
         direccion: ubicacionesValidas,
@@ -274,26 +416,36 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
 
       const espNombre = especialidadesLista.find(es => String(es.id) === editForm.especialidad)?.nombre || especialidadesMap[Number(editForm.especialidad)] || editForm.especialidad
       const nuevoNombre = `${editForm.nombre.trim()} ${editForm.primerApellido.trim()}${editForm.segundoApellido.trim() ? ' ' + editForm.segundoApellido.trim() : ''}`.trim()
+      const filaActualizada: MedicoFila = {
+        persona_id: pid,
+        nombre: nuevoNombre,
+        matricula: editForm.matricula.trim(),
+        especialidad: espNombre,
+      }
 
-      // Actualizar en el cache de carteras para que se refleje inmediatamente
-      setCarterasCache(prev => {
-        const next = { ...prev }
-        for (const k of Object.keys(next)) {
-          const numK = Number(k)
-          next[numK] = next[numK].map(m => {
-            if (m.persona_id === pid) {
-              return {
-                ...m,
-                nombre: nuevoNombre,
-                matricula: editForm.matricula.trim(),
-                especialidad: espNombre,
+      if (seleccionado != null && nuevoVisitadorId != null && nuevoVisitadorId !== seleccionado) {
+        moverMedicosEnMemoria(seleccionado, nuevoVisitadorId, [filaActualizada])
+      } else {
+        // Actualizar en el cache de carteras para que se refleje inmediatamente
+        setCarterasCache(prev => {
+          const next = { ...prev }
+          for (const k of Object.keys(next)) {
+            const numK = Number(k)
+            next[numK] = next[numK].map(m => {
+              if (m.persona_id === pid) {
+                return {
+                  ...m,
+                  nombre: nuevoNombre,
+                  matricula: editForm.matricula.trim(),
+                  especialidad: espNombre,
+                }
               }
-            }
-            return m
-          })
-        }
-        return next
-      })
+              return m
+            })
+          }
+          return next
+        })
+      }
 
       showToast(`Médico actualizado ✓ ${nuevoNombre}`, 'success')
       setEditing(false)
@@ -337,6 +489,8 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
                         onClick={() => {
                           setSeleccionado(v.persona_id)
                           setBusqueda('')
+                          setModoSeleccion(false)
+                          setSeleccionadosIds([])
                         }}
                       >
                         <span className="cartera-admin-avatar" style={avatarStyle(n)} aria-hidden>
@@ -373,13 +527,85 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
                       : `${filasActuales.length} médicos asignados`}
                   </p>
                 </div>
-                <input
-                  className="cartera-admin-search"
-                  placeholder="Buscar por nombre o matrícula…"
-                  value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
-                />
+                <div className="cartera-admin-head-actions">
+                  <input
+                    className="cartera-admin-search"
+                    placeholder="Buscar por nombre o matrícula…"
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                  />
+                  {(carterasCache[visitadorSel.persona_id]?.length ?? 0) > 0 && visitadoresDestino.length > 0 && (
+                    <button
+                      type="button"
+                      className={`cartera-admin-btn-mode ${modoSeleccion ? 'active' : ''}`}
+                      onClick={() => {
+                        if (modoSeleccion) {
+                          setModoSeleccion(false)
+                          setSeleccionadosIds([])
+                        } else {
+                          setModoSeleccion(true)
+                          setSeleccionadosIds([])
+                          setBulkDestinoId(String(visitadoresDestino[0]?.persona_id || ''))
+                        }
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <path d="M17 1l4 4-4 4" />
+                        <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                        <path d="M7 23l-4-4 4-4" />
+                        <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                      </svg>
+                      {modoSeleccion ? 'Cancelar selección' : 'Modificar cartera'}
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {modoSeleccion && (
+                <div className="cartera-admin-transfer-bar">
+                  <div className="cartera-admin-transfer-left">
+                    <label className="cartera-admin-check-all">
+                      <input
+                        type="checkbox"
+                        checked={
+                          filasActuales.length > 0 &&
+                          filasActuales.every((f) => seleccionadosIds.includes(f.persona_id))
+                        }
+                        onChange={toggleSeleccionarTodos}
+                      />
+                      <span>Seleccionar todos ({seleccionadosIds.length} seleccionados)</span>
+                    </label>
+                  </div>
+                  <div className="cartera-admin-transfer-right">
+                    <span className="cartera-admin-transfer-label">Transferir a:</span>
+                    <select
+                      className="cartera-admin-transfer-select"
+                      value={bulkDestinoId}
+                      onChange={(e) => setBulkDestinoId(e.target.value)}
+                    >
+                      <option value="">Seleccione visitador destino…</option>
+                      {visitadoresDestino.map((v) => {
+                        const c = carterasCache[v.persona_id]?.length ?? v.total_medicos ?? 0
+                        return (
+                          <option key={v.persona_id} value={String(v.persona_id)}>
+                            {nombreVisitador(v)} ({c} médicos)
+                          </option>
+                        )
+                      })}
+                    </select>
+                    <button
+                      type="button"
+                      className="cartera-admin-transfer-submit"
+                      disabled={seleccionadosIds.length === 0 || !bulkDestinoId || transferring}
+                      onClick={handleConfirmTransferBulk}
+                    >
+                      {transferring
+                        ? 'Transfiriendo…'
+                        : `Transferir (${seleccionadosIds.length})`}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="cartera-admin-detail-body">
                 {loadingCartera && !carterasCache[visitadorSel.persona_id] ? (
@@ -393,40 +619,86 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
                 ) : (
                   <>
                     <ul className="cartera-admin-medicos">
-                      {filasActuales.map((f) => (
-                        <li
-                          key={f.persona_id}
-                          className="cartera-admin-medico"
-                          onClick={() => handleStartEdit(f)}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e) => e.key === 'Enter' && handleStartEdit(f)}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          <span className="cartera-admin-avatar" style={avatarStyle(f.nombre)} aria-hidden>
-                            {getInitials(f.nombre)}
-                          </span>
-                          <span className="cartera-admin-medico-text">
-                            <span className="cartera-admin-medico-name">{f.nombre}</span>
-                            <span className="cartera-admin-medico-sub">
-                              {f.especialidad} · Mat. {f.matricula}
-                            </span>
-                          </span>
-                          <button
-                            type="button"
-                            className="vt-btn vt-btn--editar"
-                            style={{ height: 26, fontSize: 11, padding: '0 8px', borderRadius: 6, fontWeight: 700, marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                            onClick={(ev) => {
-                              ev.stopPropagation()
-                              handleStartEdit(f)
+                      {filasActuales.map((f) => {
+                        const isChecked = seleccionadosIds.includes(f.persona_id)
+                        return (
+                          <li
+                            key={f.persona_id}
+                            className={`cartera-admin-medico ${modoSeleccion && isChecked ? 'selected' : ''}`}
+                            onClick={() => {
+                              if (modoSeleccion) {
+                                toggleSeleccionMedico(f.persona_id)
+                              } else {
+                                handleStartEdit(f)
+                              }
                             }}
-                            title="Editar médico"
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                if (modoSeleccion) toggleSeleccionMedico(f.persona_id)
+                                else handleStartEdit(f)
+                              }
+                            }}
+                            style={{ cursor: 'pointer' }}
                           >
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            Editar
-                          </button>
-                        </li>
-                      ))}
+                            {modoSeleccion && (
+                              <input
+                                type="checkbox"
+                                className="cartera-admin-medico-check"
+                                checked={isChecked}
+                                onChange={() => toggleSeleccionMedico(f.persona_id)}
+                                onClick={(ev) => ev.stopPropagation()}
+                              />
+                            )}
+                            <span className="cartera-admin-avatar" style={avatarStyle(f.nombre)} aria-hidden>
+                              {getInitials(f.nombre)}
+                            </span>
+                            <span className="cartera-admin-medico-text">
+                              <span className="cartera-admin-medico-name">{f.nombre}</span>
+                              <span className="cartera-admin-medico-sub">
+                                {f.especialidad} · Mat. {f.matricula}
+                              </span>
+                            </span>
+                            {!modoSeleccion && (
+                              <div className="cartera-admin-medico-actions">
+                                {visitadoresDestino.length > 0 && (
+                                  <button
+                                    type="button"
+                                    className="vt-btn cartera-admin-btn-transfer"
+                                    onClick={(ev) => {
+                                      ev.stopPropagation()
+                                      handleOpenTransfer(f)
+                                    }}
+                                    title="Transferir a otra cartera"
+                                  >
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                      <path d="M17 1l4 4-4 4" />
+                                      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                                      <path d="M7 23l-4-4 4-4" />
+                                      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                                    </svg>
+                                    Transferir
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className="vt-btn vt-btn--editar"
+                                  style={{ height: 26, fontSize: 11, padding: '0 8px', borderRadius: 6, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                  onClick={(ev) => {
+                                    ev.stopPropagation()
+                                    handleStartEdit(f)
+                                  }}
+                                  title="Editar médico"
+                                >
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                  Editar
+                                </button>
+                              </div>
+                            )}
+                          </li>
+                        )
+                      })}
                     </ul>
                   </>
                 )}
@@ -434,6 +706,114 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
             </>
           )}
         </section>
+
+        {transferMedico && visitadorSel && (
+          <div
+            className="vt-overlay"
+            onClick={() => {
+              if (!savingRef.current) {
+                setTransferMedico(null)
+                setTransferDestinoId('')
+              }
+            }}
+            style={{ zIndex: 3000 }}
+          >
+            <div
+              className="vt-modal cartera-admin-transfer-modal"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="vt-modal-head">
+                <h3>Transferir Médico de Cartera</h3>
+                <button
+                  className="vt-modal-close"
+                  onClick={() => {
+                    if (!savingRef.current) {
+                      setTransferMedico(null)
+                      setTransferDestinoId('')
+                    }
+                  }}
+                  aria-label="Cerrar"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <form onSubmit={handleConfirmTransferSingle} className="vt-form cartera-admin-transfer-form">
+                <div className="cartera-admin-transfer-summary">
+                  <span className="cartera-admin-avatar cartera-admin-avatar--lg" style={avatarStyle(transferMedico.nombre)} aria-hidden>
+                    {getInitials(transferMedico.nombre)}
+                  </span>
+                  <div className="cartera-admin-medico-text">
+                    <span className="cartera-admin-transfer-tag">Médico a transferir</span>
+                    <span className="cartera-admin-medico-name cartera-admin-medico-name--lg">{transferMedico.nombre}</span>
+                    <span className="cartera-admin-medico-sub">
+                      {transferMedico.especialidad} · Matrícula: {transferMedico.matricula}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="cartera-admin-transfer-fields">
+                  <label className="cartera-admin-transfer-field">
+                    <span>Cartera actual (Visitador origen)</span>
+                    <input
+                      value={nombreVisitador(visitadorSel)}
+                      disabled
+                      className="cartera-admin-input-disabled"
+                    />
+                  </label>
+
+                  <div className="cartera-admin-transfer-arrow" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <path d="M12 5v14" />
+                      <path d="M19 12l-7 7-7-7" />
+                    </svg>
+                  </div>
+
+                  <label className="cartera-admin-transfer-field">
+                    <span>
+                      Transferir a nueva cartera (Visitador destino) <span style={reqLabelStyle}>* obligatorio</span>
+                    </span>
+                    <select
+                      required
+                      value={transferDestinoId}
+                      onChange={(e) => setTransferDestinoId(e.target.value)}
+                    >
+                      <option value="">Seleccione visitador destino…</option>
+                      {visitadoresDestino.map((v) => {
+                        const c = carterasCache[v.persona_id]?.length ?? v.total_medicos ?? 0
+                        return (
+                          <option key={v.persona_id} value={String(v.persona_id)}>
+                            {nombreVisitador(v)} ({c} médicos)
+                          </option>
+                        )
+                      })}
+                    </select>
+                  </label>
+                </div>
+
+                <div className="vt-form-actions cartera-admin-transfer-actions">
+                  <button
+                    type="button"
+                    className="vt-btn-cancel"
+                    onClick={() => {
+                      setTransferMedico(null)
+                      setTransferDestinoId('')
+                    }}
+                    disabled={transferring}
+                  >
+                    Cancelar
+                  </button>
+                  <button type="submit" className="vt-btn-submit cartera-admin-btn-confirm" disabled={transferring || !transferDestinoId}>
+                    {transferring ? 'Transfiriendo…' : 'Confirmar Transferencia'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {editing && editForm && (
           <div className="vt-overlay" onClick={() => { if (!savingRef.current) { setEditing(false); setEditForm(null) } }} style={{ zIndex: 3000 }}>
@@ -445,6 +825,16 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
                 </button>
               </div>
               <form onSubmit={handleSaveEdit} className="vt-form">
+                <label style={{ gridColumn: '1 / -1' }}>Cartera / Visitador asignado <span style={reqLabelStyle}>* obligatorio</span>
+                  <select required value={editForm.visitadorId} onChange={e => setEditForm({ ...editForm, visitadorId: e.target.value })}>
+                    <option value="">Seleccione visitador</option>
+                    {visitadoresOrdenados.map(v => (
+                      <option key={v.persona_id} value={String(v.persona_id)}>
+                        {nombreVisitador(v)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label>Nombre <span style={reqLabelStyle}>* obligatorio</span><input required value={editForm.nombre} onChange={e => setEditForm({ ...editForm, nombre: e.target.value })} placeholder="Ej. Juan" /></label>
                 <label>Primer Apellido <span style={reqLabelStyle}>* obligatorio</span><input required value={editForm.primerApellido} onChange={e => setEditForm({ ...editForm, primerApellido: e.target.value })} placeholder="Ej. Pérez" /></label>
                 <label>Segundo Apellido <span style={optLabelStyle}>(opcional)</span><input value={editForm.segundoApellido} onChange={e => setEditForm({ ...editForm, segundoApellido: e.target.value })} placeholder="Ej. López" /></label>
@@ -505,10 +895,10 @@ export const CarteraAdminView: React.FC<Props> = ({ currentView, onNavigate, onL
           </div>
         )}
 
-        {(loadingEdit || saving) && (
+        {(loadingEdit || saving || transferring) && (
           <div className="medicos-busy" role="status" aria-live="polite">
             <span className="medicos-busy-spinner" />
-            <span>{saving ? 'Guardando…' : 'Cargando datos…'}</span>
+            <span>{transferring ? 'Transfiriendo…' : saving ? 'Guardando…' : 'Cargando datos…'}</span>
           </div>
         )}
 

@@ -142,6 +142,134 @@
   box-shadow: 0 0 0 3px rgba(45, 156, 156, 0.12);
 }
 
+.cartera-admin-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cartera-admin-btn-mode {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid #c8ecec;
+  background: #eef6f6;
+  color: #1f7a7a;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.cartera-admin-btn-mode:hover {
+  background: #dff0f0;
+  border-color: #a6e0e0;
+}
+
+.cartera-admin-btn-mode.active {
+  background: #fff1f1;
+  border-color: #f5c6c6;
+  color: #c93b3b;
+}
+
+.cartera-admin-transfer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  margin-right: 8px;
+  border-radius: 12px;
+  background: #f4f9f9;
+  border: 1px solid #d2ebeb;
+  flex-shrink: 0;
+}
+
+.cartera-admin-transfer-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cartera-admin-check-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1b2a4e;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cartera-admin-check-all input[type="checkbox"],
+.cartera-admin-medico-check {
+  width: 16px;
+  height: 16px;
+  accent-color: #2d9c9c;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cartera-admin-transfer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cartera-admin-transfer-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1b2a4e;
+}
+
+.cartera-admin-transfer-select {
+  height: 34px;
+  min-width: 210px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 12px;
+  color: #1b2a4e;
+  background: #fff;
+  color-scheme: light;
+  outline: none;
+}
+
+.cartera-admin-transfer-select:focus {
+  border-color: #2d9c9c;
+  box-shadow: 0 0 0 2px rgba(45, 156, 156, 0.15);
+}
+
+.cartera-admin-transfer-submit {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: none;
+  background: #2d9c9c;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.cartera-admin-transfer-submit:hover:not(:disabled) {
+  background: #238282;
+}
+
+.cartera-admin-transfer-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .cartera-admin-detail-body {
   flex: 1;
   min-height: 0;
@@ -257,7 +385,7 @@
   margin: 0;
   padding: 2px 2px 10px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 10px;
 }
 
@@ -276,6 +404,149 @@
   border-color: #dbe4ee;
   background: #fff;
   box-shadow: 0 2px 8px rgba(27, 42, 78, 0.05);
+}
+
+.cartera-admin-medico.selected {
+  border-color: #2d9c9c;
+  background: #f0fafa;
+}
+
+.cartera-admin-medico-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cartera-admin-btn-transfer {
+  height: 28px;
+  font-size: 11.5px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #c8ecec;
+  background: #eef6f6;
+  color: #1f7a7a;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.cartera-admin-btn-transfer:hover {
+  background: #dff0f0;
+  border-color: #a6e0e0;
+}
+
+/* Modal de Transferencia de Cartera */
+.vt-modal.cartera-admin-transfer-modal {
+  width: min(580px, calc(100vw - 32px));
+  max-width: 580px;
+}
+
+.vt-modal .vt-form.cartera-admin-transfer-form {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 18px !important;
+  padding: 24px 26px !important;
+}
+
+.cartera-admin-transfer-summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f4f9f9;
+  border: 1px solid #d2ebeb;
+}
+
+.cartera-admin-avatar--lg {
+  width: 48px;
+  height: 48px;
+  font-size: 15px;
+}
+
+.cartera-admin-transfer-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #2d9c9c;
+  margin-bottom: 2px;
+}
+
+.cartera-admin-medico-name--lg {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.cartera-admin-transfer-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cartera-admin-transfer-field {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  color: #1b2a4e !important;
+}
+
+.cartera-admin-transfer-field input,
+.cartera-admin-transfer-field select {
+  height: 42px !important;
+  font-size: 13.5px !important;
+  padding: 0 12px !important;
+  border-radius: 10px !important;
+}
+
+.cartera-admin-input-disabled {
+  background: #f4f6f9 !important;
+  color: #5a6a85 !important;
+  font-weight: 600;
+  cursor: not-allowed;
+}
+
+.cartera-admin-transfer-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2d9c9c;
+  padding: 2px 0;
+}
+
+.cartera-admin-transfer-actions {
+  margin-top: 6px !important;
+  padding-top: 14px;
+  border-top: 1px solid #f1f4f8;
+  gap: 10px !important;
+}
+
+.cartera-admin-transfer-actions .vt-btn-cancel,
+.cartera-admin-transfer-actions .vt-btn-submit {
+  height: 40px;
+  padding: 0 18px;
+  font-size: 13px;
+  border-radius: 10px;
+}
+
+.cartera-admin-btn-confirm {
+  background: #2d9c9c !important;
+}
+
+.cartera-admin-btn-confirm:hover:not(:disabled) {
+  background: #238282 !important;
+}
+
+.cartera-admin-btn-confirm:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .cartera-admin-status {
